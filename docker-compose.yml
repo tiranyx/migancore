@@ -72,7 +72,7 @@ services:
     restart: unless-stopped
     profiles: ["memory"]
     environment:
-      LETTA_PG_URI: postgresql://ado:${PG_PASSWORD}@postgres:5432/letta_db
+      LETTA_PG_URI: postgresql://ado_app:${PG_PASSWORD}@postgres:5432/letta_db
       LETTA_OLLAMA_BASE_URL: http://ollama:11434
       LETTA_SERVER_PASSWORD: ${LETTA_PASSWORD}
       SECURE: "true"
@@ -89,7 +89,7 @@ services:
     ports:
       - "127.0.0.1:18000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://ado:${PG_PASSWORD}@postgres:5432/ado
+      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
@@ -111,7 +111,7 @@ services:
     restart: unless-stopped
     profiles: ["workers"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://ado:${PG_PASSWORD}@postgres:5432/ado
+      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
@@ -128,7 +128,7 @@ services:
     restart: unless-stopped
     profiles: ["workers"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://ado:${PG_PASSWORD}@postgres:5432/ado
+      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
@@ -145,7 +145,7 @@ services:
     restart: unless-stopped
     profiles: ["workers"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://ado:${PG_PASSWORD}@postgres:5432/ado
+      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
@@ -163,7 +163,7 @@ services:
     ports:
       - "127.0.0.1:13001:3000"
     environment:
-      DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/langfuse
+      DATABASE_URL: postgresql://ado_app:${PG_PASSWORD}@postgres:5432/langfuse
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
       NEXTAUTH_URL: https://lab.migancore.com
       SALT: ${LANGFUSE_SALT}

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     JWT_AUDIENCE: str = "migancore-api"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://ado:changeme@postgres:5432/ado"
+    DATABASE_URL: str = "postgresql+asyncpg://ado_app:changeme@postgres:5432/ado"
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
 
