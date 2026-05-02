@@ -58,7 +58,7 @@ services:
     image: letta/letta:0.6.0
     restart: unless-stopped
     environment:
-      LETTA_PG_URI: postgresql://ado:${PG_PASSWORD}@postgres:5432/ado
+      LETTA_PG_URI: postgresql://ado:${PG_PASSWORD}@postgres:5432/letta_db
       LETTA_OLLAMA_BASE_URL: http://ollama:11434
       LETTA_SERVER_PASSWORD: ${LETTA_PASSWORD}
       SECURE: "true"
