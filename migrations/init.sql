@@ -9,6 +9,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "vector";
 
+-- Letta database (created here so Letta container can connect immediately)
+CREATE DATABASE letta_db;
+GRANT ALL PRIVILEGES ON DATABASE letta_db TO ado_app;
+
 -- ============================================================
 -- MULTI-TENANCY FOUNDATION
 -- ============================================================

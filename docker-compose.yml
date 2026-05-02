@@ -105,56 +105,24 @@ services:
       resources:
         limits: { memory: 2G }
 
-  worker_code:
-    build: { context: ./api, dockerfile: Dockerfile }
-    command: celery -A app.celery worker -Q code -c 2 -l info
-    restart: unless-stopped
-    profiles: ["workers"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_API_KEY: ${QDRANT_API_KEY}
-      OLLAMA_URL: http://ollama:11434
-      LETTA_URL: http://letta:8283
-      LETTA_PASSWORD: ${LETTA_PASSWORD}
-    deploy:
-      resources:
-        limits: { memory: 1G }
-
-  worker_web:
-    build: { context: ./api, dockerfile: Dockerfile }
-    command: celery -A app.celery worker -Q web -c 2 -l info
-    restart: unless-stopped
-    profiles: ["workers"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_API_KEY: ${QDRANT_API_KEY}
-      OLLAMA_URL: http://ollama:11434
-      LETTA_URL: http://letta:8283
-      LETTA_PASSWORD: ${LETTA_PASSWORD}
-    deploy:
-      resources:
-        limits: { memory: 1G }
-
-  worker_research:
-    build: { context: ./api, dockerfile: Dockerfile }
-    command: celery -A app.celery worker -Q research,kb,training -c 1 -l info
-    restart: unless-stopped
-    profiles: ["workers"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://ado_app:${PG_PASSWORD}@postgres:5432/ado
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_API_KEY: ${QDRANT_API_KEY}
-      OLLAMA_URL: http://ollama:11434
-      LETTA_URL: http://letta:8283
-      LETTA_PASSWORD: ${LETTA_PASSWORD}
-    deploy:
-      resources:
-        limits: { memory: 1G }
+  # Celery workers DISABLED for seed stage — saves 4-6GB RAM.
+  # Use asyncio.create_task() for background jobs instead.
+  # Re-enable when training pipeline (Week 4+) needs distributed queues.
+  #
+  # worker_code:
+  #   build: { context: ./api, dockerfile: Dockerfile }
+  #   command: celery -A app.celery worker -Q code -c 2 -l info
+  #   ...
+  #
+  # worker_web:
+  #   build: { context: ./api, dockerfile: Dockerfile }
+  #   command: celery -A app.celery worker -Q web -c 2 -l info
+  #   ...
+  #
+  # worker_research:
+  #   build: { context: ./api, dockerfile: Dockerfile }
+  #   command: celery -A app.celery worker -Q research,kb,training -c 1 -l info
+  #   ...
 
   langfuse:
     image: langfuse/langfuse:2

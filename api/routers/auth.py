@@ -1,20 +1,30 @@
 """
 Authentication router: register, login, refresh, logout, me.
+
+Security features:
+- RS256 JWT with access (15min) + refresh (7d) rotation
+- Argon2id password hashing
+- Refresh token race-condition protection via atomic UPDATE
+- Rate limiting on auth endpoints (slowapi)
+- Audit logging with fire-and-forget async writer
 """
 
+import asyncio
 import hashlib
 import secrets
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from slowapi.util import get_remote_address
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
+from main import limiter
 from models import User, Tenant, RefreshToken
 from schemas.auth import (
     RegisterRequest,
@@ -31,6 +41,7 @@ from services.jwt import (
     decode_token,
 )
 from services.password import hash_password, verify_password
+from services.scope_resolver import resolve_scopes
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
@@ -48,7 +59,47 @@ def _client_info(request: Request) -> tuple[str | None, str | None]:
     return ip, ua
 
 
+async def _fire_audit(
+    db: AsyncSession,
+    event_type: str,
+    tenant_id: str | uuid.UUID | None,
+    user_id: str | uuid.UUID | None,
+    details: dict | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    """Fire audit event in a background task so it survives caller rollback."""
+    # Detach the event data from the current session/transaction
+    # and write via a fresh session in a background task.
+    asyncio.create_task(
+        _async_audit_write(
+            event_type=event_type,
+            tenant_id=str(tenant_id) if tenant_id else None,
+            user_id=str(user_id) if user_id else None,
+            details=details or {},
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    )
+
+
+async def _async_audit_write(**kwargs) -> None:
+    """Background task: write audit event with a fresh DB session."""
+    from models.base import AsyncSessionLocal
+    from services.audit import log_audit_event
+    if AsyncSessionLocal is None:
+        return
+    async with AsyncSessionLocal() as session:
+        try:
+            await log_audit_event(db=session, **kwargs)
+            await session.commit()
+        except Exception:
+            # Audit write failure must not crash the request
+            pass
+
+
 @router.post("/register", response_model=TokenPairResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def register(data: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Register a new tenant + owner user."""
     ip, ua = _client_info(request)
@@ -98,8 +149,8 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
             raise HTTPException(409, "Tenant slug already taken")
         raise HTTPException(409, "Registration conflict")
 
-    # Create token pair
-    scopes = "agents:read agents:write chat:write"
+    # Create token pair with role-derived scopes
+    scopes = resolve_scopes(user.role, tenant.plan)
     access_token = create_access_token(
         subject=str(user.id),
         tenant_id=str(tenant.id),
@@ -119,14 +170,14 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
         token_hash=_hash_token_plain(refresh_token),
         session_family=session_family,
         expires_at=expires_at,
+        ip_address=ip,
+        user_agent=ua,
     )
     db.add(rt)
     await db.commit()
 
-    # Set RLS context for audit event (tenant-scoped)
-    await set_tenant_context(db, str(tenant.id))
-    await log_audit_event(
-        db=db,
+    # Fire audit event (background, survives rollback)
+    await _fire_audit(
         event_type="auth.register",
         tenant_id=str(tenant.id),
         user_id=str(user.id),
@@ -134,7 +185,6 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
         ip_address=ip,
         user_agent=ua,
     )
-    await db.commit()
 
     return TokenPairResponse(
         access_token=access_token,
@@ -144,6 +194,7 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
 
 
 @router.post("/login", response_model=TokenPairResponse)
+@limiter.limit("10/minute")
 async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Authenticate user and issue token pair."""
     ip, ua = _client_info(request)
@@ -152,8 +203,7 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.password_hash):
-        await log_audit_event(
-            db=db,
+        await _fire_audit(
             event_type="security.suspicious_activity",
             tenant_id=None,
             user_id=None,
@@ -161,7 +211,6 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
             ip_address=ip,
             user_agent=ua,
         )
-        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -171,7 +220,12 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     # Update last login
     user.last_login_at = datetime.now(timezone.utc)
 
-    scopes = "agents:read agents:write chat:write"
+    # Derive scopes from role + plan
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    plan = tenant.plan if tenant else "free"
+    scopes = resolve_scopes(user.role, plan)
+
     access_token = create_access_token(
         subject=str(user.id),
         tenant_id=str(user.tenant_id),
@@ -190,14 +244,14 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
         token_hash=_hash_token_plain(refresh_token),
         session_family=session_family,
         expires_at=expires_at,
+        ip_address=ip,
+        user_agent=ua,
     )
     db.add(rt)
     await db.commit()
 
-    # Set RLS context for audit event (tenant-scoped)
-    await set_tenant_context(db, str(user.tenant_id))
-    await log_audit_event(
-        db=db,
+    # Fire audit event (background)
+    await _fire_audit(
         event_type="auth.login",
         tenant_id=str(user.tenant_id),
         user_id=str(user.id),
@@ -205,7 +259,6 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
         ip_address=ip,
         user_agent=ua,
     )
-    await db.commit()
 
     return TokenPairResponse(
         access_token=access_token,
@@ -215,8 +268,14 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
+@limiter.limit("10/minute")
 async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)):
-    """Rotate refresh token and issue new access token."""
+    """Rotate refresh token and issue new access token.
+
+    Uses atomic UPDATE ... WHERE revoked_at IS NULL to prevent race conditions
+    where two concurrent requests with the same refresh token both mint
+    replacement tokens.
+    """
     ip, ua = _client_info(request)
 
     try:
@@ -232,61 +291,70 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
     session_family = payload.get("session_family")
     token_hash = _hash_token_plain(data.refresh_token)
 
-    # Find token in DB
+    # ATOMIC UPDATE: revoke the token only if it hasn't been revoked yet.
+    # This prevents concurrent refresh requests from both succeeding.
+    now = datetime.now(timezone.utc)
     result = await db.execute(
-        select(RefreshToken).where(
+        update(RefreshToken)
+        .where(
             RefreshToken.token_hash == token_hash,
             RefreshToken.session_family == session_family,
+            RefreshToken.revoked_at.is_(None),
         )
+        .values(revoked_at=now)
+        .returning(RefreshToken)
     )
     rt = result.scalar_one_or_none()
 
     if not rt:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
-
-    if rt.is_revoked or rt.is_expired:
-        # Token reuse detected — revoke entire session family
+        # Token was already revoked (concurrent refresh or reuse)
+        # Terminate entire session family
         await db.execute(
-            RefreshToken.__table__.update()
+            update(RefreshToken)
             .where(RefreshToken.session_family == session_family)
             .where(RefreshToken.revoked_at.is_(None))
-            .values(revoked_at=datetime.now(timezone.utc))
+            .values(revoked_at=now)
         )
         await db.commit()
 
-        await log_audit_event(
-            db=db,
+        await _fire_audit(
             event_type="security.session_terminated",
             tenant_id=None,
             user_id=uuid.UUID(user_id) if user_id else None,
-            details={"reason": "token_reuse", "session_family": session_family, "ip": ip},
+            details={"reason": "token_reuse_or_race", "session_family": session_family, "ip": ip},
             ip_address=ip,
             user_agent=ua,
         )
-        await db.commit()
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session terminated",
         )
 
-    # Load user
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
-    user = result.scalar_one_or_none()
-    if not user:
+    # Check expiration after atomic lock acquisition
+    if rt.is_expired:
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
-    # Revoke old refresh token
-    rt.revoked_at = datetime.now(timezone.utc)
+    # Load user
+    user_result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    # Derive scopes
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    plan = tenant.plan if tenant else "free"
+    scopes = resolve_scopes(user.role, plan)
 
     # Issue new token pair
-    scopes = "agents:read agents:write chat:write"
     access_token = create_access_token(
         subject=str(user.id),
         tenant_id=str(user.tenant_id),
@@ -306,14 +374,14 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
         session_family=session_family,
         expires_at=expires_at,
         replaced_by_token_hash=token_hash,
+        ip_address=ip,
+        user_agent=ua,
     )
     db.add(new_rt)
     await db.commit()
 
-    # Set RLS context for audit event (tenant-scoped)
-    await set_tenant_context(db, str(user.tenant_id))
-    await log_audit_event(
-        db=db,
+    # Fire audit event (background)
+    await _fire_audit(
         event_type="auth.refresh",
         tenant_id=str(user.tenant_id),
         user_id=str(user.id),
@@ -321,7 +389,6 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
         ip_address=ip,
         user_agent=ua,
     )
-    await db.commit()
 
     return TokenPairResponse(
         access_token=access_token,
@@ -342,31 +409,34 @@ async def logout(data: RefreshRequest, request: Request, db: AsyncSession = Depe
 
     user_id = payload.get("sub")
     token_hash = _hash_token_plain(data.refresh_token)
+
+    # Atomic update: revoke only if not already revoked
+    now = datetime.now(timezone.utc)
     result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        update(RefreshToken)
+        .where(RefreshToken.token_hash == token_hash)
+        .where(RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=now)
+        .returning(RefreshToken)
     )
     rt = result.scalar_one_or_none()
 
-    if rt and not rt.is_revoked:
-        rt.revoked_at = datetime.now(timezone.utc)
+    if rt and not rt.is_expired:
         await db.commit()
 
-        # Find user to get tenant_id for RLS context
-        user_result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+        # Find user for tenant context
+        user_result = await db.execute(select(User).where(User.id == rt.user_id))
         user = user_result.scalar_one_or_none()
-        if user:
-            await set_tenant_context(db, str(user.tenant_id))
+        tenant_id = str(user.tenant_id) if user else None
 
-        await log_audit_event(
-            db=db,
+        await _fire_audit(
             event_type="auth.logout",
-            tenant_id=str(user.tenant_id) if user else None,
+            tenant_id=tenant_id,
             user_id=uuid.UUID(user_id) if user_id else None,
             details={"token_jti": payload.get("jti")},
             ip_address=ip,
             user_agent=ua,
         )
-        await db.commit()
 
     return LogoutResponse(message="Logged out successfully")
 

@@ -1,0 +1,183 @@
+{
+  "version": "1.0.0",
+  "description": "Skill registry for MiganCore — declarative tool definitions with permission model.",
+  "skills": [
+    {
+      "id": "web_search",
+      "name": "Web Search",
+      "description": "Search the web for current information using Tavily or SerpAPI",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 5,
+            "description": "Max results"
+          }
+        },
+        "required": ["query"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "~$0.001 per call"
+    },
+    {
+      "id": "python_repl",
+      "name": "Python REPL",
+      "description": "Execute Python code in a sandboxed environment",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Python code to execute"
+          },
+          "timeout": {
+            "type": "integer",
+            "default": 30,
+            "description": "Execution timeout in seconds"
+          }
+        },
+        "required": ["code"]
+      },
+      "permissions": ["sandbox.execute"],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    },
+    {
+      "id": "memory_write",
+      "name": "Memory Write",
+      "description": "Write a fact to long-term memory",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Memory key"
+          },
+          "value": {
+            "type": "string",
+            "description": "Memory value"
+          },
+          "namespace": {
+            "type": "string",
+            "default": "default",
+            "description": "Memory namespace"
+          }
+        },
+        "required": ["key", "value"]
+      },
+      "permissions": ["memory.write"],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    },
+    {
+      "id": "memory_search",
+      "name": "Memory Search",
+      "description": "Search long-term memory semantically via Qdrant",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Semantic search query"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 5,
+            "description": "Max results"
+          }
+        },
+        "required": ["query"]
+      },
+      "permissions": ["memory.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    },
+    {
+      "id": "spawn_agent",
+      "name": "Spawn Agent",
+      "description": "Create a new child agent with inherited persona",
+      "handler": "builtin",
+      "mcp_compatible": false,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "description": "Agent template ID from agents.json"
+          },
+          "name": {
+            "type": "string",
+            "description": "Agent name"
+          },
+          "persona_overrides": {
+            "type": "object",
+            "description": "Custom persona modifications"
+          }
+        },
+        "required": ["name"]
+      },
+      "permissions": ["agent.spawn"],
+      "npc_assignable": false,
+      "requires_approval": true,
+      "cost_estimate": "free (compute only)"
+    },
+    {
+      "id": "read_file",
+      "name": "Read File",
+      "description": "Read contents of a file from the workspace",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path"
+          }
+        },
+        "required": ["path"]
+      },
+      "permissions": ["fs.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    },
+    {
+      "id": "http_get",
+      "name": "HTTP GET",
+      "description": "Make an HTTP GET request to an external API",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL to fetch"
+          },
+          "headers": {
+            "type": "object",
+            "description": "Optional headers"
+          }
+        },
+        "required": ["url"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    }
+  ]
+}

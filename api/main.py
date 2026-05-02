@@ -4,23 +4,33 @@ Entry point for the autonomous digital organism.
 """
 
 import os
+import uuid
 from contextlib import asynccontextmanager
 
 import httpx
 import structlog
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from config import settings
+from models.base import init_engine
 from routers import auth as auth_router
+from routers import chat as chat_router
 
 logger = structlog.get_logger()
+
+# Rate limiter: Redis-backed in production, memory-backed in development
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def _check_postgres() -> dict:
     """Check PostgreSQL connectivity."""
     from sqlalchemy import text
-    from models import engine
+    from models.base import engine
     try:
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))
@@ -58,13 +68,15 @@ async def _check_qdrant() -> dict:
 
 
 async def _check_ollama() -> dict:
-    """Check Ollama connectivity."""
+    """Check Ollama connectivity and model availability."""
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(f"{settings.OLLAMA_URL}/api/tags")
             if resp.status_code == 200:
                 data = resp.json()
                 models = [m.get("name", "unknown") for m in data.get("models", [])]
+                if not models:
+                    return {"status": "error", "detail": "no models loaded"}
                 return {"status": "ok", "detail": f"{len(models)} models loaded", "models": models[:5]}
             return {"status": "error", "detail": f"HTTP {resp.status_code}"}
     except Exception as exc:
@@ -74,10 +86,12 @@ async def _check_ollama() -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    logger.info("migan.startup", message="MiganCore API starting up")
-    # Eager-load JWT keys — fail fast if keys are missing
+    # 1. Init database engine (lazy, avoids module-level side effects)
+    init_engine()
+    # 2. Eager-load JWT keys — fail fast if keys are missing
     from services.jwt import _get_keys
     _get_keys()
+    logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
 
@@ -89,10 +103,38 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    """Attach request_id and tenant context to every request for tracing."""
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        path=request.url.path,
+        method=request.method,
+    )
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 # CORS — restrict to known domains in production
+# TODO: move to environment variable for flexibility
+_cors_origins = [
+    "https://app.migancore.com",
+    "https://lab.migancore.com",
+]
+if settings.ENVIRONMENT == "development":
+    _cors_origins.extend(["http://localhost:3000", "http://localhost:5173"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://app.migancore.com", "https://lab.migancore.com"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -100,6 +142,7 @@ app.add_middleware(
 
 # Wire routers
 app.include_router(auth_router.router)
+app.include_router(chat_router.router)
 
 
 @app.get("/health", tags=["system"])

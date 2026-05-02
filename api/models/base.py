@@ -1,5 +1,8 @@
 """
 SQLAlchemy async base configuration for MiganCore.
+
+Engine is created lazily via init_engine() to avoid module-level side effects
+and connection pool corruption on process fork (e.g. Celery workers).
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -13,25 +16,41 @@ class Base(DeclarativeBase):
     pass
 
 
-# Create async engine
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    echo=settings.ENVIRONMENT == "development",
-)
+# Engine and session factory are initialized lazily via init_engine()
+engine = None
+AsyncSessionLocal = None
 
-# Session factory
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-)
+
+def init_engine():
+    """Create the async engine and session factory.
+
+    Must be called once during application startup (lifespan).
+    """
+    global engine, AsyncSessionLocal
+    if engine is not None:
+        return
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        pool_size=settings.DATABASE_POOL_SIZE,
+        max_overflow=settings.DATABASE_MAX_OVERFLOW,
+        pool_pre_ping=True,
+        echo=settings.ENVIRONMENT == "development",
+    )
+    AsyncSessionLocal = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
 
 
 async def get_db() -> AsyncSession:
-    """Dependency: yield an async DB session."""
+    """Dependency: yield an async DB session.
+
+    NOTE: This is a convenience fallback. For tenant-scoped endpoints,
+    use deps.db.get_db or deps.db.tenant_session instead.
+    """
+    if AsyncSessionLocal is None:
+        raise RuntimeError("Database engine not initialized. Call init_engine() first.")
     async with AsyncSessionLocal() as session:
         yield session

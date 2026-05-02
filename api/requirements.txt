@@ -31,6 +31,9 @@ redis==5.1.0
 structlog==24.4.0
 langfuse==2.53.0
 
+# Rate Limiting
+slowapi==0.1.9
+
 # Utilities
 pydantic[email]==2.9.0
 pydantic-settings==2.5.0
