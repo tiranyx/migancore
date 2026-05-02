@@ -403,6 +403,7 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
     new_refresh_token, new_refresh_jti, expires_at = create_refresh_token(
         subject=str(user.id),
         session_family=session_family,
+        tenant_id=str(user.tenant_id),
     )
 
     # Store new refresh token
