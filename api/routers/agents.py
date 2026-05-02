@@ -56,6 +56,8 @@ async def create_agent(
     )
     db.add(agent)
     await db.commit()
+    # Re-set tenant context before refresh since SET LOCAL is cleared on commit
+    await set_tenant_context(db, str(current_user.tenant_id))
     await db.refresh(agent)
 
     return AgentResponse(
