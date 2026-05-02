@@ -28,7 +28,7 @@ async def set_tenant_context(session: AsyncSession, tenant_id: str) -> None:
     Uses SET LOCAL so the setting is automatically cleared on transaction end.
     """
     await session.execute(
-        text("SET LOCAL app.current_tenant = :tid"),
+        text("SELECT set_config('app.current_tenant', :tid, true)"),
         {"tid": tenant_id},
     )
 
