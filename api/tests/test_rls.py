@@ -56,10 +56,6 @@ async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]
         )
         session.add(user)
         await session.commit()
-
-        # Refresh to get IDs
-        await session.refresh(tenant)
-        await session.refresh(user)
         return user, tenant
 
 
