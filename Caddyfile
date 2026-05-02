@@ -1,0 +1,15 @@
+api.mighan.com {
+  reverse_proxy api:8000
+}
+
+app.mighan.com {
+  reverse_proxy frontend:3000
+}
+
+lab.sidixlab.com {
+  reverse_proxy langfuse:3000
+}
+
+tiranyx.com, www.tiranyx.com {
+  reverse_proxy landing:3000
+}

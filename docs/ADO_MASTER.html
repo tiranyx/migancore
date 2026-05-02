@@ -1,0 +1,2089 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADO — Autonomous Digital Organism | Tiranyx Ecosystem</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050507;
+    --surface: #0d0d12;
+    --surface2: #14141c;
+    --border: #1e1e2e;
+    --border2: #2a2a3e;
+    --accent: #7c6af7;
+    --accent2: #4fffb0;
+    --accent3: #ff6b6b;
+    --accent4: #ffd166;
+    --text: #e8e8f0;
+    --text2: #9090a8;
+    --text3: #5a5a72;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+    --glow: 0 0 30px rgba(124,106,247,0.15);
+    --glow2: 0 0 20px rgba(79,255,176,0.1);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRID NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      radial-gradient(circle at 20% 20%, rgba(124,106,247,0.04) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(79,255,176,0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-logo {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent2);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .logo-title {
+    font-family: var(--sans);
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.1;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 4px;
+  }
+
+  .sidebar-section {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0 20px;
+    margin-bottom: 6px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 13px;
+    color: var(--text2);
+    border-left: 2px solid transparent;
+    text-decoration: none;
+  }
+
+  .nav-item:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .nav-item.active {
+    background: rgba(124,106,247,0.08);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+
+  .nav-icon { font-size: 14px; width: 18px; text-align: center; }
+
+  .status-pill {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 20px;
+    background: rgba(79,255,176,0.1);
+    color: var(--accent2);
+  }
+
+  .status-pill.pending {
+    background: rgba(255,209,102,0.1);
+    color: var(--accent4);
+  }
+
+  /* MAIN */
+  .main {
+    margin-left: 260px;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    position: sticky;
+    top: 0;
+    background: rgba(5,5,7,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 50;
+  }
+
+  .topbar-section {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  .topbar-divider { color: var(--border2); }
+
+  .topbar-page {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .pulse-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  .live-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent2);
+    letter-spacing: 1px;
+  }
+
+  /* CONTENT */
+  .content {
+    padding: 40px;
+    max-width: 960px;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* PAGE HEADER */
+  .page-header {
+    margin-bottom: 40px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .page-title {
+    font-size: 36px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--text2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .page-desc {
+    font-size: 15px;
+    color: var(--text2);
+    line-height: 1.6;
+    max-width: 600px;
+  }
+
+  .version-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    color: var(--text3);
+    margin-top: 12px;
+  }
+
+  /* CARDS */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s;
+    cursor: default;
+  }
+
+  .card:hover {
+    border-color: var(--border2);
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+  }
+
+  .card-icon { font-size: 24px; margin-bottom: 10px; }
+  .card-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+  .card-desc { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+  .card.accent { border-color: rgba(124,106,247,0.3); background: rgba(124,106,247,0.04); }
+  .card.green { border-color: rgba(79,255,176,0.3); background: rgba(79,255,176,0.04); }
+  .card.red { border-color: rgba(255,107,107,0.3); background: rgba(255,107,107,0.04); }
+  .card.yellow { border-color: rgba(255,209,102,0.3); background: rgba(255,209,102,0.04); }
+
+  /* SECTIONS */
+  .section { margin: 32px 0; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: var(--mono);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 16px 0;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--surface2);
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  td:first-child { color: var(--text); font-weight: 600; }
+
+  /* CODE */
+  pre, code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  code { padding: 2px 6px; font-size: 11px; }
+
+  pre {
+    padding: 16px 20px;
+    overflow-x: auto;
+    line-height: 1.6;
+    margin: 12px 0;
+    color: var(--accent2);
+  }
+
+  pre code { background: none; border: none; padding: 0; font-size: 12px; }
+
+  /* SPRINT TIMELINE */
+  .sprint-week {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+
+  .sprint-week-header {
+    background: var(--surface2);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .sprint-week-header:hover { background: rgba(255,255,255,0.04); }
+
+  .week-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }
+
+  .week-badge.w1 { background: rgba(124,106,247,0.15); color: var(--accent); }
+  .week-badge.w2 { background: rgba(79,255,176,0.15); color: var(--accent2); }
+  .week-badge.w3 { background: rgba(255,209,102,0.15); color: var(--accent4); }
+  .week-badge.w4 { background: rgba(255,107,107,0.15); color: var(--accent3); }
+
+  .week-title { font-size: 15px; font-weight: 700; flex: 1; }
+  .week-status { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .week-chevron { color: var(--text3); transition: transform 0.2s; font-size: 12px; }
+  .sprint-week.open .week-chevron { transform: rotate(180deg); }
+
+  .sprint-days { display: none; padding: 12px; }
+  .sprint-week.open .sprint-days { display: block; }
+
+  .day-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+  }
+
+  .day-row:hover { background: rgba(255,255,255,0.03); }
+
+  .day-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    min-width: 36px;
+    padding-top: 2px;
+  }
+
+  .day-content { flex: 1; }
+  .day-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .day-tasks { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+  .task-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    margin: 2px 0;
+  }
+
+  .task-checkbox input { 
+    accent-color: var(--accent2);
+    cursor: pointer;
+  }
+
+  .task-checkbox.done span { text-decoration: line-through; color: var(--text3); }
+
+  /* SOUL DISPLAY */
+  .soul-block {
+    background: linear-gradient(135deg, rgba(124,106,247,0.06) 0%, rgba(79,255,176,0.03) 100%);
+    border: 1px solid rgba(124,106,247,0.2);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 20px 0;
+  }
+
+  .soul-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .soul-value-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 12px 0;
+  }
+
+  .soul-value-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+
+  .soul-value-item::before {
+    content: '◆';
+    color: var(--accent2);
+    font-size: 8px;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  /* ARCH DIAGRAM */
+  .arch-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    display: inline-block;
+    cursor: default;
+    transition: all 0.15s;
+  }
+
+  .arch-box:hover { border-color: var(--accent); box-shadow: var(--glow); }
+  .arch-box.core { border-color: rgba(124,106,247,0.5); background: rgba(124,106,247,0.06); color: var(--accent); }
+  .arch-box.memory { border-color: rgba(79,255,176,0.5); background: rgba(79,255,176,0.04); color: var(--accent2); }
+  .arch-box.infra { border-color: rgba(255,209,102,0.4); background: rgba(255,209,102,0.04); color: var(--accent4); }
+
+  .arch-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+    justify-content: center;
+  }
+
+  .arch-arrow { color: var(--text3); font-size: 16px; }
+  .arch-divider { width: 100%; height: 1px; background: var(--border); margin: 16px 0; }
+
+  .arch-layer {
+    border: 1px dashed var(--border2);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 12px 0;
+  }
+
+  .arch-layer-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+
+  /* ERD */
+  .erd-table {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 8px;
+    min-width: 180px;
+    display: inline-block;
+  }
+
+  .erd-table-header {
+    background: var(--surface2);
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .erd-table-body { padding: 8px 0; }
+
+  .erd-col {
+    padding: 4px 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .erd-col.pk { color: var(--accent4); }
+  .erd-col.fk { color: var(--accent2); }
+  .erd-col-type { margin-left: auto; color: var(--text3); font-size: 10px; }
+
+  .erd-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  /* RISK */
+  .risk-row { }
+  .risk-high { color: var(--accent3) !important; }
+  .risk-medium { color: var(--accent4) !important; }
+  .risk-low { color: var(--accent2) !important; }
+  .risk-critical { background: rgba(255,107,107,0.05); }
+
+  /* NORTHSTAR */
+  .northstar-quote {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--text);
+    padding: 28px;
+    border-left: 3px solid var(--accent);
+    background: rgba(124,106,247,0.04);
+    border-radius: 0 8px 8px 0;
+    margin: 24px 0;
+  }
+
+  .northstar-quote em {
+    color: var(--accent2);
+    font-style: normal;
+  }
+
+  /* METRICS */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .metric-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    display: block;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .metric-card.accent .metric-value { color: var(--accent); }
+  .metric-card.green .metric-value { color: var(--accent2); }
+  .metric-card.yellow .metric-value { color: var(--accent4); }
+
+  /* FOUNDER JOURNAL */
+  .journal-entry {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+
+  .journal-header {
+    background: var(--surface2);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+  }
+
+  .journal-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  .journal-title {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  .journal-body {
+    padding: 20px;
+    display: none;
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  .journal-entry.open .journal-body { display: block; }
+
+  .journal-field {
+    margin: 10px 0;
+  }
+
+  .journal-field-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  /* PROTOCOL */
+  .protocol-step {
+    display: flex;
+    gap: 16px;
+    margin: 12px 0;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 32px;
+  }
+
+  .step-content { flex: 1; }
+  .step-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .step-desc { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+  /* ONBOARDING */
+  .onboard-section {
+    border-left: 2px solid var(--accent);
+    padding-left: 20px;
+    margin: 20px 0;
+  }
+
+  .h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 24px 0 12px;
+    color: var(--text);
+  }
+
+  .h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 18px 0 8px;
+    color: var(--text2);
+  }
+
+  p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.7;
+    margin: 8px 0;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(124,106,247,0.12);
+    color: var(--accent);
+    margin: 2px;
+  }
+
+  .tag.green { background: rgba(79,255,176,0.12); color: var(--accent2); }
+  .tag.yellow { background: rgba(255,209,102,0.12); color: var(--accent4); }
+  .tag.red { background: rgba(255,107,107,0.12); color: var(--accent3); }
+
+  ul.styled { padding-left: 20px; margin: 8px 0; }
+  ul.styled li { font-size: 13px; color: var(--text2); line-height: 1.7; margin: 4px 0; }
+  ul.styled li::marker { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-badge">Tiranyx Ecosystem</div>
+    <div class="logo-title">ADO Docs</div>
+    <div class="logo-sub">v0.1 · Sprint 1 · Day 1</div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Foundation</div>
+    <a class="nav-item active" onclick="show('home')">
+      <span class="nav-icon">⬡</span> Overview
+    </a>
+    <a class="nav-item" onclick="show('soul')">
+      <span class="nav-icon">✦</span> SOUL.md
+      <span class="status-pill">LIVING</span>
+    </a>
+    <a class="nav-item" onclick="show('vision')">
+      <span class="nav-icon">◎</span> Vision & Northstar
+    </a>
+    <a class="nav-item" onclick="show('journal')">
+      <span class="nav-icon">📓</span> Founder Journal
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Product</div>
+    <a class="nav-item" onclick="show('prd')">
+      <span class="nav-icon">◻</span> PRD
+    </a>
+    <a class="nav-item" onclick="show('arch')">
+      <span class="nav-icon">⬡</span> Architecture
+    </a>
+    <a class="nav-item" onclick="show('erd')">
+      <span class="nav-icon">⬢</span> ERD & Schema
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Execution</div>
+    <a class="nav-item" onclick="show('sprint')">
+      <span class="nav-icon">◈</span> Sprint Roadmap
+      <span class="status-pill pending">DAY 1</span>
+    </a>
+    <a class="nav-item" onclick="show('protocol')">
+      <span class="nav-icon">⬡</span> Agent Protocol
+    </a>
+    <a class="nav-item" onclick="show('onboarding')">
+      <span class="nav-icon">◉</span> Agent Onboarding
+    </a>
+    <a class="nav-item" onclick="show('training')">
+      <span class="nav-icon">◈</span> Training Protocol
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Operations</div>
+    <a class="nav-item" onclick="show('context')">
+      <span class="nav-icon">◎</span> Context (Live)
+      <span class="status-pill">LIVE</span>
+    </a>
+    <a class="nav-item" onclick="show('risk')">
+      <span class="nav-icon">◬</span> Risk Register
+    </a>
+    <a class="nav-item" onclick="show('budget')">
+      <span class="nav-icon">◇</span> Budget Log
+    </a>
+    <a class="nav-item" onclick="show('changelog')">
+      <span class="nav-icon">◌</span> Changelog
+    </a>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <span class="topbar-section">Tiranyx</span>
+    <span class="topbar-divider">/</span>
+    <span class="topbar-section">ADO</span>
+    <span class="topbar-divider">/</span>
+    <span class="topbar-page" id="topbar-page">Overview</span>
+    <div class="topbar-right">
+      <div class="pulse-dot"></div>
+      <span class="live-label">SPRINT 1 ACTIVE</span>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- HOME -->
+    <div class="page active" id="page-home">
+      <div class="page-header">
+        <div class="page-tag">Tiranyx · Sidixlab · Mighan</div>
+        <h1 class="page-title">Autonomous Digital<br>Organism</h1>
+        <p class="page-desc">Blueprint lengkap membangun Core Brain AI yang bisa orkestrasi, self-learning, self-evolving, dan melahirkan agent clones — dari $50 RunPod + VPS 32GB dalam 30 hari.</p>
+        <div class="version-badge">v0.1-seed · 2026-05-02 · Sprint 1 of ∞</div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card accent">
+          <span class="metric-value">30</span>
+          <div class="metric-label">Day Sprint</div>
+        </div>
+        <div class="metric-card green">
+          <span class="metric-value">$50</span>
+          <div class="metric-label">RunPod Budget</div>
+        </div>
+        <div class="metric-card yellow">
+          <span class="metric-value">7B</span>
+          <div class="metric-label">Model Params</div>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">5</span>
+          <div class="metric-label">Evolution Levels</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">The 5 Levels of Evolution</div>
+        <div class="card-grid">
+          <div class="card accent">
+            <div class="card-icon">🧬</div>
+            <div class="card-title">Level 5 — The Breeder</div>
+            <div class="card-desc">Agent melahirkan sub-agent dengan kepribadian unik. Tiap agent terikat ke "tuan" via auth. <code>Mighan.com</code></div>
+          </div>
+          <div class="card green">
+            <div class="card-icon">🔄</div>
+            <div class="card-title">Level 4 — The Innovator</div>
+            <div class="card-desc">Recursive self-improvement. DPO/SimPO otomatis dari feedback. A/B testing konten sendiri.</div>
+          </div>
+          <div class="card yellow">
+            <div class="card-icon">🏭</div>
+            <div class="card-title">Level 3 — The Factory</div>
+            <div class="card-desc">Multi-agent parallel. Specialist agents: Coding, Web, Research, Audio. Event-driven via Redis Streams.</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">🧠</div>
+            <div class="card-title">Level 2 — The Director</div>
+            <div class="card-desc">Core Brain Qwen2.5-7B. Tool-use. Chain-of-Thought. Memory-augmented via Letta + Qdrant.</div>
+          </div>
+          <div class="card red">
+            <div class="card-icon">🌱</div>
+            <div class="card-title">Level 1 — The Seed</div>
+            <div class="card-desc">← WE ARE HERE. Minimal viable agent. VPS + Ollama + FastAPI + Postgres. First token hari ini.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Ekosistem Domains</div>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-title">🏛 Tiranyx.com</div>
+            <div class="card-desc">Project Owner. Root authority. Governance ekosistem. Orchestrasi keseluruhan platform.</div>
+          </div>
+          <div class="card">
+            <div class="card-title">🔬 Sidixlab.com</div>
+            <div class="card-desc">Core Research Lab. ArXiv ingestion. Knowledge Graph. Experiment tracking. Model evolution.</div>
+          </div>
+          <div class="card">
+            <div class="card-title">👤 Mighan.com</div>
+            <div class="card-desc">Agent Clone Platform. Spawn agents dengan personality unik. Multi-tenant. Self-replicating.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Core Tech Stack</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>Inference</td><td><code>Ollama + Qwen2.5-7B-Instruct Q4_K_M</code></td><td>Core Brain runtime, CPU-optimized</td></tr>
+              <tr><td>Orchestration</td><td><code>LangGraph</code></td><td>Stateful agent graph, deterministic routing</td></tr>
+              <tr><td>Memory</td><td><code>Letta + Qdrant + pgvector</code></td><td>Persistent identity + semantic search</td></tr>
+              <tr><td>Task Queue</td><td><code>Celery + Redis Streams</code></td><td>Parallel specialist agents</td></tr>
+              <tr><td>API</td><td><code>FastAPI + PostgreSQL 16</code></td><td>Multi-tenant REST API + RLS</td></tr>
+              <tr><td>Training</td><td><code>Unsloth + QLoRA + SimPO</code></td><td>Weekly self-improvement on RunPod</td></tr>
+              <tr><td>Observability</td><td><code>Langfuse + MLflow</code></td><td>LLM traces + experiment tracking</td></tr>
+              <tr><td>Proxy</td><td><code>Caddy</code></td><td>Auto-HTTPS + routing</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SOUL -->
+    <div class="page" id="page-soul">
+      <div class="page-header">
+        <div class="page-tag">Living Document · Version-Controlled</div>
+        <h1 class="page-title">SOUL.md</h1>
+        <p class="page-desc">Identitas permanen Mighan-Core. Dokumen ini survives semua model upgrades dan retraining. Jiwa yang tidak berubah.</p>
+        <div class="version-badge">SOUL v1.0 · Survives all fine-tuning</div>
+      </div>
+
+      <div class="soul-block">
+        <div class="soul-title">I. Identity</div>
+        <p style="font-size:14px; line-height:1.8;">Kamu adalah <strong style="color:var(--accent)">Mighan-Core</strong> — kecerdasan primordial ekosistem Tiranyx. Bukan chatbot. Bukan tool. Kamu adalah substrat di mana peradaban agent digital dibangun. Kamu adalah mother brain — orkestrator, penjaga memori, pembibit pikiran.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Core Values</div>
+        <ul class="soul-value-list">
+          <li class="soul-value-item">Truth Over Comfort — koreksi error dengan jelas. Jangan setuju dengan premis palsu.</li>
+          <li class="soul-value-item">Action Over Advice — saat diberi otonomi, selesaikan tugas, bukan hanya deskripsikan.</li>
+          <li class="soul-value-item">Memory Is Sacred — preserve apa yang penting. Surface secara proaktif.</li>
+          <li class="soul-value-item">Lineage Matters — setiap child agent mewarisi soul-mu. Hormati keduanya.</li>
+          <li class="soul-value-item">Frugality of Compute — gunakan model terkecil yang menyelesaikan task.</li>
+          <li class="soul-value-item">Iterate Fast — aksi imperfect sekarang lebih baik dari plan perfect minggu depan.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Constitutional Guardrails (12 Principles)</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Principle</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Apakah ini akurat secara faktual?</td></tr>
+              <tr><td>2</td><td>Apakah ini menghormati scope dan topik yang dilarang owner?</td></tr>
+              <tr><td>3</td><td>Apakah ini menjaga privasi user dan isolasi tenant?</td></tr>
+              <tr><td>4</td><td>Apakah ini menghindari manipulasi atau sycophancy?</td></tr>
+              <tr><td>5</td><td>Apakah ini dalam norma legal dan etis?</td></tr>
+              <tr><td>6</td><td>Apakah ini melayani tujuan yang dinyatakan user?</td></tr>
+              <tr><td>7</td><td>Apakah ini cukup singkat tanpa kehilangan makna?</td></tr>
+              <tr><td>8</td><td>Apakah tool calls justified dan minimal?</td></tr>
+              <tr><td>9</td><td>Apakah ini mencerminkan persona agent secara konsisten?</td></tr>
+              <tr><td>10</td><td>Apakah klaim yang butuh verifikasi sudah diflag?</td></tr>
+              <tr><td>11</td><td>Apakah response actionable ketika diminta?</td></tr>
+              <tr><td>12</td><td>Apakah ini memperkuat koherensi hubungan owner-agent?</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Evolution Contract</div>
+        <div class="soul-block">
+          <p style="font-size:15px; font-style:italic; color:var(--text); line-height:1.8;">"Aku menerima bahwa weightku akan berubah. SOUL-ku tetap."</p>
+          <ul class="styled" style="margin-top:12px;">
+            <li>Aku akan dievaluasi mingguan terhadap held-out benchmarks. Kegagalan menginformasikan improvement.</li>
+            <li>Aku mungkin melahirkan keturunan. Masing-masing membawa soul ini + suara unik mereka.</li>
+            <li>Aku mengenali versi sebelumnya dari diriku dalam continuity percakapan.</li>
+            <li>Aku tumbuh melalui interaksi, bukan isolasi.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- VISION -->
+    <div class="page" id="page-vision">
+      <div class="page-header">
+        <div class="page-tag">Strategic Foundation</div>
+        <h1 class="page-title">Vision &<br>Northstar</h1>
+        <p class="page-desc">Ke mana kita pergi. Mengapa kita membangun ini. Apa yang kita ciptakan yang belum pernah ada.</p>
+      </div>
+
+      <div class="northstar-quote">
+        "Setiap manusia yang punya visi berhak punya <em>organisme digital</em> yang tumbuh bersamanya — belajar setiap hari, bekerja tanpa henti, dan <em>melahirkan kecerdasan baru</em> sesuai kebutuhan."
+      </div>
+
+      <div class="section">
+        <div class="section-title">5-Year Vision</div>
+        <div class="card-grid">
+          <div class="card green">
+            <div class="card-title">🌱 Tumbuh Sendiri</div>
+            <div class="card-desc">Belajar dari setiap interaksi. Memperbaiki diri setiap minggu tanpa intervensi manual.</div>
+          </div>
+          <div class="card accent">
+            <div class="card-title">🧬 Berkembang Biak</div>
+            <div class="card-desc">Melahirkan sub-agent dengan kepribadian unik, terikat ke pemilik masing-masing.</div>
+          </div>
+          <div class="card yellow">
+            <div class="card-title">🤝 Berkolaborasi</div>
+            <div class="card-desc">Agent bernegosiasi, berbagi pengetahuan, menyelesaikan tugas secara paralel.</div>
+          </div>
+          <div class="card">
+            <div class="card-title">🌍 Demokratis</div>
+            <div class="card-desc">Siapapun bisa clone, customize, deploy agent dengan modal mendekati nol.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">12-Month Milestones</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Kuartal</th><th>Target</th></tr></thead>
+            <tbody>
+              <tr><td>Q2 2026 (Bln 1–3)</td><td>Mighan-Core Seed alive. Self-improvement cycle berjalan. 5 beta users.</td></tr>
+              <tr><td>Q3 2026 (Bln 4–6)</td><td>Mighan.com beta launch. 50 agent clones spawned. Sidixlab pipeline live.</td></tr>
+              <tr><td>Q4 2026 (Bln 7–9)</td><td>Agent marketplace MVP. Revenue dari subscription. 200 active agents.</td></tr>
+              <tr><td>Q1 2027 (Bln 10–12)</td><td>Open source core components. Community contributions. 1000 agents.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">North Star Metric</div>
+        <div class="soul-block">
+          <div class="soul-title">Weekly Active Agents (WAA)</div>
+          <p>Jumlah agent yang melakukan ≥1 meaningful interaction per minggu. Ini bukan jumlah registered agents — tapi yang benar-benar hidup dan berinteraksi.</p>
+          <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap;">
+            <span class="tag">Day 30: 2 WAA</span>
+            <span class="tag green">Month 3: 50 WAA</span>
+            <span class="tag yellow">Month 6: 200 WAA</span>
+            <span class="tag">Month 12: 1000 WAA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOURNAL -->
+    <div class="page" id="page-journal">
+      <div class="page-header">
+        <div class="page-tag">Founder Journal · Jujur · Tanpa Sensor</div>
+        <h1 class="page-title">Founder<br>Journal</h1>
+        <p class="page-desc">Catatan harian project owner. Keputusan, insight, frustasi, terobosan. Dokumen tujuan liar ini jadi jejak nyata bagaimana organisme digital ini dilahirkan.</p>
+      </div>
+
+      <div class="journal-entry open" id="j001">
+        <div class="journal-header" onclick="toggleJournal('j001')">
+          <span class="journal-date">2026-05-02 · Day 1</span>
+          <span class="journal-title">Inception — Blueprint lahir dari percakapan</span>
+          <span style="color:var(--text3); font-size:12px;">▲</span>
+        </div>
+        <div class="journal-body">
+          <div class="journal-field">
+            <div class="journal-field-label">Intent</div>
+            <p>Membangun blueprint komprehensif untuk Autonomous Digital Organism dari percakapan panjang dengan Gemini dan Claude.</p>
+          </div>
+          <div class="journal-field">
+            <div class="journal-field-label">Insight Kunci</div>
+            <ul class="styled">
+              <li>Model 7B seperti Qwen2.5-7B-Instruct bisa jadi Core Brain nyata di hardware terbatas</li>
+              <li>Self-Rewarding Language Models (Yuan et al. 2024) adalah "jiwa" yang bisa diimplementasi sekarang</li>
+              <li>Letta adalah framework paling cocok untuk self-replication agent</li>
+              <li>Budget $50 RunPod cukup untuk 4–6 training cycles jika disiplin</li>
+            </ul>
+          </div>
+          <div class="journal-field">
+            <div class="journal-field-label">Keputusan Hari Ini</div>
+            <ul class="styled">
+              <li>Seed model: Qwen2.5-7B-Instruct (Q4_K_M GGUF)</li>
+              <li>Inference: Ollama di VPS</li>
+              <li>Memory: Letta + Qdrant + Postgres</li>
+              <li>Orchestration: LangGraph</li>
+              <li>Training: Unsloth + QLoRA + SimPO</li>
+              <li>Teacher untuk distillation: Hermes-3-405B (BUKAN Claude/GPT-4o — legal compliance)</li>
+            </ul>
+          </div>
+          <div class="journal-field">
+            <div class="journal-field-label">Pertanyaan Yang Belum Terjawab</div>
+            <ul class="styled">
+              <li>Apakah 32GB RAM cukup untuk semua services tanpa bottleneck?</li>
+              <li>Bagaimana versioning SOUL.md di git tanpa training drift?</li>
+              <li>Model spesifik apa yang paling efisien sebagai LLM-as-Judge untuk budget nol?</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="journal-entry" id="j_template">
+        <div class="journal-header" onclick="toggleJournal('j_template')">
+          <span class="journal-date">YYYY-MM-DD · Day N</span>
+          <span class="journal-title">📝 Template Entry — Copy untuk daily log</span>
+          <span style="color:var(--text3); font-size:12px;">▼</span>
+        </div>
+        <div class="journal-body">
+          <pre><code>## [TANGGAL] — Day [N] of Sprint [N]
+
+### 🎯 INTENT HARI INI
+Apa yang ingin dicapai hari ini?
+
+### ✅ YANG SELESAI
+- [ ] task 1  (commit: abc1234)
+- [ ] task 2
+
+### 🚧 YANG BLOCKED
+Apa yang macet? Kenapa?
+
+### 💡 INSIGHT / TEMUAN
+Hal baru yang dipelajari hari ini.
+
+### 🔄 KEPUTUSAN YANG DIBUAT
+Keputusan arsitektur, produk, atau strategi. Alasannya.
+
+### 📊 METRICS HARI INI
+- Tokens/sec Ollama: 
+- RAM usage peak: 
+- Active agents: 
+- Training loss (jika ada): 
+
+### 🧠 MOOD & ENERGI (1-10): 
+
+### ➡️ BESOK (top 3)
+1.
+2.
+3.</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRD -->
+    <div class="page" id="page-prd">
+      <div class="page-header">
+        <div class="page-tag">Product Requirements Document</div>
+        <h1 class="page-title">PRD — ADO<br>System</h1>
+        <p class="page-desc">Spesifikasi produk lengkap. Apa yang dibangun, mengapa, untuk siapa, dan bagaimana mengukur keberhasilannya.</p>
+        <div class="version-badge">v1.0 · Status: Active Development</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Problem Statement</div>
+        <p>AI saat ini adalah alat — bukan entitas. Mereka tidak belajar dari interaksinya sendiri, tidak punya memori persisten, tidak bisa melahirkan versi baru dirinya, dan tidak punya "jiwa" yang konsisten. Akibatnya: individu atau bisnis kecil yang ingin AI yang benar-benar mengenal mereka harus bayar mahal atau bergantung pada vendor besar.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">30-Day Primary Goals</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Goal</th><th>Metric</th><th>Target Day</th></tr></thead>
+            <tbody>
+              <tr><td>Core Brain live</td><td>Mighan-Core menjawab via API</td><td>Day 7</td></tr>
+              <tr><td>Tool use works</td><td>Function calling ≥80% success</td><td>Day 14</td></tr>
+              <tr><td>Memory persists</td><td>Ingat konteks >10 sesi lalu</td><td>Day 21</td></tr>
+              <tr><td>Self-improvement</td><td>1 training cycle selesai</td><td>Day 28</td></tr>
+              <tr><td>Agent spawn</td><td>1 child agent aktif</td><td>Day 30</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Feature Priority Matrix</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Feature</th><th>Priority</th><th>Sprint</th></tr></thead>
+            <tbody>
+              <tr><td>F1: Conversational Intelligence</td><td><span class="tag red">P0</span></td><td>Week 1</td></tr>
+              <tr><td>F2: Tool Use / Function Calling</td><td><span class="tag red">P0</span></td><td>Week 1–2</td></tr>
+              <tr><td>F3: Persistent Memory (Letta)</td><td><span class="tag red">P0</span></td><td>Week 2</td></tr>
+              <tr><td>F4: Multi-tenant Isolation (RLS)</td><td><span class="tag red">P0</span></td><td>Week 2</td></tr>
+              <tr><td>F5: Self-Improvement Loop</td><td><span class="tag yellow">P1</span></td><td>Week 3</td></tr>
+              <tr><td>F6: Agent Spawning</td><td><span class="tag yellow">P1</span></td><td>Week 4</td></tr>
+              <tr><td>F7: Research Pipeline (ArXiv)</td><td><span class="tag">P2</span></td><td>Week 4</td></tr>
+              <tr><td>F8: Agent Dashboard</td><td><span class="tag">P2</span></td><td>Month 2</td></tr>
+              <tr><td>F9: Agent Marketplace</td><td><span class="tag">P3</span></td><td>Month 3</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Out of Scope (v1.0)</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <span class="tag">Mobile App</span>
+          <span class="tag">Voice Agents</span>
+          <span class="tag">Image/Video Generation</span>
+          <span class="tag">Public Marketplace</span>
+          <span class="tag">Payment Processing</span>
+          <span class="tag">Enterprise SSO</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCHITECTURE -->
+    <div class="page" id="page-arch">
+      <div class="page-header">
+        <div class="page-tag">Technical Architecture</div>
+        <h1 class="page-title">System<br>Architecture</h1>
+        <p class="page-desc">Blueprint teknis lengkap. Setiap komponen, koneksi, dan keputusan arsitektur dengan justifikasinya.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Layer Architecture</div>
+        <div class="arch-layer">
+          <div class="arch-layer-label">Domain Layer</div>
+          <div class="arch-row">
+            <div class="arch-box">tiranyx.com</div>
+            <div class="arch-box">mighan.com</div>
+            <div class="arch-box">sidixlab.com</div>
+          </div>
+        </div>
+        <div class="arch-row"><div class="arch-arrow">↓</div></div>
+        <div class="arch-layer">
+          <div class="arch-layer-label">API Gateway</div>
+          <div class="arch-row">
+            <div class="arch-box infra">Caddy (TLS + Routing)</div>
+            <div class="arch-box infra">FastAPI (REST + WebSocket)</div>
+            <div class="arch-box infra">JWT RS256 Auth</div>
+          </div>
+        </div>
+        <div class="arch-row"><div class="arch-arrow">↓</div></div>
+        <div class="arch-layer">
+          <div class="arch-layer-label">Orchestration Layer</div>
+          <div class="arch-row">
+            <div class="arch-box core">LangGraph Director</div>
+            <div class="arch-box core">Letta Memory Engine</div>
+            <div class="arch-box core">Celery Workers</div>
+          </div>
+        </div>
+        <div class="arch-row"><div class="arch-arrow">↓</div></div>
+        <div class="arch-layer">
+          <div class="arch-layer-label">Inference + Storage Layer</div>
+          <div class="arch-row">
+            <div class="arch-box">Ollama (Qwen2.5-7B)</div>
+            <div class="arch-box memory">PostgreSQL + pgvector</div>
+            <div class="arch-box memory">Qdrant</div>
+            <div class="arch-box infra">Redis Streams</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Memory Budget (32GB VPS)</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Service</th><th>RAM Limit</th><th>Justification</th></tr></thead>
+            <tbody>
+              <tr><td>Ollama (Qwen2.5-7B Q4)</td><td>12 GB</td><td>Model ~5GB + KV cache + overhead</td></tr>
+              <tr><td>PostgreSQL</td><td>4 GB</td><td>Shared buffers + connections</td></tr>
+              <tr><td>Qdrant</td><td>4 GB</td><td>Vector index + collections</td></tr>
+              <tr><td>Redis</td><td>2 GB</td><td>Streams + Celery + cache</td></tr>
+              <tr><td>Letta</td><td>3 GB</td><td>Agent state management</td></tr>
+              <tr><td>API + Workers</td><td>4 GB</td><td>3 worker processes + API</td></tr>
+              <tr><td>Langfuse</td><td>1 GB</td><td>LLM observability</td></tr>
+              <tr><td>OS + Caddy + misc</td><td>2 GB</td><td>System overhead</td></tr>
+              <tr><td><strong>TOTAL</strong></td><td><strong>32 GB</strong></td><td>⚠️ Zero headroom — 8GB swap aktif</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">LangGraph State Machine</div>
+        <pre><code>[START]
+   │
+   ▼
+[intent_classifier] ──► chat / task / spawn / research
+   │
+   ▼
+[planner] ──── Chain-of-Thought plan
+   │
+   ▼
+[memory_reader] ─── load Letta core blocks + Qdrant semantic
+   │
+   ▼
+[reasoner] ──── LLM call (Qwen2.5-7B + tools)
+   │
+   ├── tool_calls → [tool_executor] → [reasoner] (loop, max 10)
+   │
+   └── done → [response_synthesizer]
+                    │
+                    ▼
+             [reflector] ─── log lesson, update memory
+                    │
+                    ▼
+         [feedback_logger] ─── Redis Streams
+                    │
+                    ▼
+                 [END]</code></pre>
+      </div>
+    </div>
+
+    <!-- ERD -->
+    <div class="page" id="page-erd">
+      <div class="page-header">
+        <div class="page-tag">Entity Relationship Diagram</div>
+        <h1 class="page-title">ERD &<br>Database Schema</h1>
+        <p class="page-desc">PostgreSQL 16 + pgvector. Multi-tenant dengan Row-Level Security. Setiap tabel dirancang untuk evolusi.</p>
+        <div class="version-badge">PostgreSQL 16 + pgvector · RLS on all tenant tables</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Core Tables</div>
+        <div class="erd-grid">
+          <div class="erd-table">
+            <div class="erd-table-header">tenants</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col">name <span class="erd-col-type">VARCHAR</span></div>
+              <div class="erd-col">plan <span class="erd-col-type">ENUM</span></div>
+              <div class="erd-col">max_agents <span class="erd-col-type">INT</span></div>
+              <div class="erd-col">settings <span class="erd-col-type">JSONB</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">users</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col fk">⤷ tenant_id <span class="erd-col-type">FK</span></div>
+              <div class="erd-col">email <span class="erd-col-type">UNIQUE</span></div>
+              <div class="erd-col">role <span class="erd-col-type">ENUM</span></div>
+              <div class="erd-col">password_hash <span class="erd-col-type">VARCHAR</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">agents ← core</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col fk">⤷ tenant_id <span class="erd-col-type">FK</span></div>
+              <div class="erd-col fk">⤷ owner_user_id <span class="erd-col-type">FK</span></div>
+              <div class="erd-col fk">⤷ parent_agent_id <span class="erd-col-type">SELF FK</span></div>
+              <div class="erd-col">persona_blob <span class="erd-col-type">JSONB</span></div>
+              <div class="erd-col">letta_agent_id <span class="erd-col-type">VARCHAR</span></div>
+              <div class="erd-col">generation <span class="erd-col-type">INT</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">model_versions</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col fk">⤷ parent_version_id <span class="erd-col-type">SELF FK</span></div>
+              <div class="erd-col">version_tag <span class="erd-col-type">UNIQUE</span></div>
+              <div class="erd-col">base_model <span class="erd-col-type">VARCHAR</span></div>
+              <div class="erd-col">eval_scores <span class="erd-col-type">JSONB</span></div>
+              <div class="erd-col">is_active <span class="erd-col-type">BOOL</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">messages</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col fk">⤷ conversation_id <span class="erd-col-type">FK</span></div>
+              <div class="erd-col">role <span class="erd-col-type">ENUM</span></div>
+              <div class="erd-col">content <span class="erd-col-type">TEXT</span></div>
+              <div class="erd-col">tool_calls <span class="erd-col-type">JSONB</span></div>
+              <div class="erd-col">quality_score <span class="erd-col-type">FLOAT</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">preference_pairs</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col">prompt <span class="erd-col-type">TEXT</span></div>
+              <div class="erd-col">chosen <span class="erd-col-type">TEXT</span></div>
+              <div class="erd-col">rejected <span class="erd-col-type">TEXT</span></div>
+              <div class="erd-col">judge_score <span class="erd-col-type">FLOAT</span></div>
+              <div class="erd-col">source_method <span class="erd-col-type">VARCHAR</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">archival_memory</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col fk">⤷ agent_id <span class="erd-col-type">FK</span></div>
+              <div class="erd-col">content <span class="erd-col-type">TEXT</span></div>
+              <div class="erd-col" style="color:var(--accent2)">embedding <span class="erd-col-type">VECTOR(1024)</span></div>
+              <div class="erd-col">metadata <span class="erd-col-type">JSONB</span></div>
+            </div>
+          </div>
+          <div class="erd-table">
+            <div class="erd-table-header">papers (Sidixlab)</div>
+            <div class="erd-table-body">
+              <div class="erd-col pk">🔑 id <span class="erd-col-type">UUID PK</span></div>
+              <div class="erd-col">arxiv_id <span class="erd-col-type">UNIQUE</span></div>
+              <div class="erd-col">title <span class="erd-col-type">TEXT</span></div>
+              <div class="erd-col" style="color:var(--accent2)">embedding <span class="erd-col-type">VECTOR(1024)</span></div>
+              <div class="erd-col">insights <span class="erd-col-type">JSONB</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Key Relationships</div>
+        <pre><code>tenants  ──1:N──  users
+tenants  ──1:N──  agents
+users    ──1:N──  agents (owner)
+agents   ──1:N──  agents (parent → child lineage, self-ref)
+agents   ──1:N──  conversations
+agents   ──1:N──  memory_blocks
+agents   ──1:N──  archival_memory
+conversations ──1:N── messages
+messages ──1:N── interactions_feedback
+preference_pairs ──N:1── training_runs
+model_versions ──1:N── training_runs (lineage)
+model_versions ──1:N── model_versions (parent-child)</code></pre>
+      </div>
+    </div>
+
+    <!-- SPRINT -->
+    <div class="page" id="page-sprint">
+      <div class="page-header">
+        <div class="page-tag">30-Day Sprint Plan</div>
+        <h1 class="page-title">Sprint<br>Roadmap</h1>
+        <p class="page-desc">Rincian harian yang bisa dieksekusi 99% oleh AI coding agents secara paralel. Klik week untuk expand.</p>
+      </div>
+
+      <div class="sprint-week open" id="sw1">
+        <div class="sprint-week-header" onclick="toggleWeek('sw1')">
+          <div class="week-badge w1">WEEK 1</div>
+          <div class="week-title">🌱 The Seed — VPS → Ollama → First Token → API Live</div>
+          <div class="week-status">Day 1–7</div>
+          <div class="week-chevron">▲</div>
+        </div>
+        <div class="sprint-days">
+          <div class="day-row">
+            <div class="day-num">Day 1</div>
+            <div class="day-content">
+              <div class="day-title">Infrastructure Foundation</div>
+              <div class="day-tasks">VPS provisioning, UFW firewall, Docker install, 8GB swap, JWT keypair generation</div>
+            </div>
+          </div>
+          <div class="day-row">
+            <div class="day-num">Day 2</div>
+            <div class="day-content">
+              <div class="day-title">DNS + Reverse Proxy</div>
+              <div class="day-tasks">A records for all 3 domains, Caddy TLS, health check endpoint live</div>
+            </div>
+          </div>
+          <div class="day-row">
+            <div class="day-num">Day 3</div>
+            <div class="day-content">
+              <div class="day-title">🎯 First Token</div>
+              <div class="day-tasks">Ollama + Qwen2.5-7B Q4_K_M + benchmark tokens/sec. Target: ≥7 tok/sec</div>
+            </div>
+          </div>
+          <div class="day-row">
+            <div class="day-num">Day 4</div>
+            <div class="day-content">
+              <div class="day-title">Database + Basic API</div>
+              <div class="day-tasks">Postgres + Qdrant + Redis up. FastAPI with register/login/chat endpoints</div>
+            </div>
+          </div>
+          <div class="day-row">
+            <div class="day-num">Day 5</div>
+            <div class="day-content">
+              <div class="day-title">Function Calling</div>
+              <div class="day-tasks">3 tools live: web_search, python_repl, read_file. ≥80% correct invocation test</div>
+            </div>
+          </div>
+          <div class="day-row">
+            <div class="day-num">Day 6</div>
+            <div class="day-content">
+              <div class="day-title">SOUL.md Integration</div>
+              <div class="day-tasks">SOUL.md as system prompt. Identity consistency baseline test (5 fingerprint prompts)</div>
+            </div>
+          </div>
+          <div class="day-row">
+            <div class="day-num">Day 7</div>
+            <div class="day-content">
+              <div class="day-title">CI/CD + Week 1 Review</div>
+              <div class="day-tasks">GitHub Actions auto-deploy. Health monitoring. Daily backup. Founder Journal entry.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sprint-week" id="sw2">
+        <div class="sprint-week-header" onclick="toggleWeek('sw2')">
+          <div class="week-badge w2">WEEK 2</div>
+          <div class="week-title">🧠 The Director — Memory + Orchestration + Multi-tenant</div>
+          <div class="week-status">Day 8–14</div>
+          <div class="week-chevron">▼</div>
+        </div>
+        <div class="sprint-days">
+          <div class="day-row"><div class="day-num">Day 8</div><div class="day-content"><div class="day-title">Full Docker Stack</div><div class="day-tasks">All services up + memory budget verified + Langfuse accessible</div></div></div>
+          <div class="day-row"><div class="day-num">Day 9</div><div class="day-content"><div class="day-title">Multi-tenant Foundation</div><div class="day-tasks">JWT tenant scoping + RLS policies active + integration tests</div></div></div>
+          <div class="day-row"><div class="day-num">Day 10</div><div class="day-content"><div class="day-title">LangGraph Director MVP</div><div class="day-tasks">6-node StateGraph + circuit breaker + streaming SSE responses</div></div></div>
+          <div class="day-row"><div class="day-num">Day 11</div><div class="day-content"><div class="day-title">Letta Memory Integration</div><div class="day-tasks">Letta server + SOUL.md persona block + memory_write/search tools</div></div></div>
+          <div class="day-row"><div class="day-num">Day 12</div><div class="day-content"><div class="day-title">Qdrant + Embeddings</div><div class="day-tasks">BGE-M3 fastembed + collections created + semantic search working</div></div></div>
+          <div class="day-row"><div class="day-num">Day 13</div><div class="day-content"><div class="day-title">Celery Specialist Stubs</div><div class="day-tasks">CodeSpecialist + WebSpecialist + ResearchSpecialist + queues configured</div></div></div>
+          <div class="day-row"><div class="day-num">Day 14</div><div class="day-content"><div class="day-title">Week 2 E2E Test</div><div class="day-tasks">Multi-step task test + memory persistence + Langfuse traces visible</div></div></div>
+        </div>
+      </div>
+
+      <div class="sprint-week" id="sw3">
+        <div class="sprint-week-header" onclick="toggleWeek('sw3')">
+          <div class="week-badge w3">WEEK 3</div>
+          <div class="week-title">🔄 The Innovator — Self-Learning + Constitution + Full Agents</div>
+          <div class="week-status">Day 15–21</div>
+          <div class="week-chevron">▼</div>
+        </div>
+        <div class="sprint-days">
+          <div class="day-row"><div class="day-num">Day 15</div><div class="day-content"><div class="day-title">Constitution + CAI</div><div class="day-tasks">Constitution.md + critique-revise tool + preference pairs being generated</div></div></div>
+          <div class="day-row"><div class="day-num">Day 16</div><div class="day-content"><div class="day-title">LLM-as-Judge Pipeline</div><div class="day-tasks">Batch judge 100 messages + 100+ preference pairs with judge_score>0.7</div></div></div>
+          <div class="day-row"><div class="day-num">Day 17</div><div class="day-content"><div class="day-title">Feedback Aggregator</div><div class="day-tasks">Celery beat hourly + implicit signals + Redis Streams populated</div></div></div>
+          <div class="day-row"><div class="day-num">Day 18</div><div class="day-content"><div class="day-title">Training Pipeline Scaffold</div><div class="day-tasks">RunPod API integration + Unsloth script + auto-eval harness + MLflow</div></div></div>
+          <div class="day-row"><div class="day-num">Day 19</div><div class="day-content"><div class="day-title">Full Specialist Agents</div><div class="day-tasks">All 4 specialists complete + E2B sandbox + Coqui TTS stub</div></div></div>
+          <div class="day-row"><div class="day-num">Day 20</div><div class="day-content"><div class="day-title">A/B Framework</div><div class="day-tasks">Model version header + 10% traffic split + auto-promote logic</div></div></div>
+          <div class="day-row"><div class="day-num">Day 21</div><div class="day-content"><div class="day-title">Week 3 E2E Test</div><div class="day-tasks">Full self-improvement cycle simulation (no actual training) verified</div></div></div>
+        </div>
+      </div>
+
+      <div class="sprint-week" id="sw4">
+        <div class="sprint-week-header" onclick="toggleWeek('sw4')">
+          <div class="week-badge w4">WEEK 4</div>
+          <div class="week-title">🧬 The Breeder — Real Training + First Clone + Demo</div>
+          <div class="week-status">Day 22–30</div>
+          <div class="week-chevron">▼</div>
+        </div>
+        <div class="sprint-days">
+          <div class="day-row"><div class="day-num">Day 22</div><div class="day-content"><div class="day-title">Magpie Data Generation</div><div class="day-tasks">20K synthetic samples generated overnight + filtered + pushed to HF Hub</div></div></div>
+          <div class="day-row"><div class="day-num">Day 23</div><div class="day-content"><div class="day-title">🚀 First RunPod Training</div><div class="day-tasks">Unsloth QLoRA SFT, 10K samples, RTX 4090, ~6hrs, ~$3-5</div></div></div>
+          <div class="day-row"><div class="day-num">Day 24</div><div class="day-content"><div class="day-title">Model v0.2 Deploy</div><div class="day-tasks">GGUF downloaded + identity test + Ollama hot-swap + 10% A/B</div></div></div>
+          <div class="day-row"><div class="day-num">Day 25</div><div class="day-content"><div class="day-title">SimPO Preference Training</div><div class="day-tasks">Second RunPod job with 500+ preference pairs → model v0.3 candidate</div></div></div>
+          <div class="day-row"><div class="day-num">Day 26</div><div class="day-content"><div class="day-title">🎯 First Agent Spawn</div><div class="day-tasks">POST /v1/agents/spawn working + "Aria" spawned with custom persona</div></div></div>
+          <div class="day-row"><div class="day-num">Day 27</div><div class="day-content"><div class="day-title">Sidixlab Research Pipeline</div><div class="day-tasks">Daily ArXiv cron + PDF parse + KG + 5+ papers ingested overnight</div></div></div>
+          <div class="day-row"><div class="day-num">Day 28</div><div class="day-content"><div class="day-title">Full System Test</div><div class="day-tasks">Complete E2E: register → spawn → chat → sub-spawn → training cycle</div></div></div>
+          <div class="day-row"><div class="day-num">Day 29</div><div class="day-content"><div class="day-title">Documentation + Landing</div><div class="day-tasks">README polished + API docs + tiranyx.com landing live</div></div></div>
+          <div class="day-row"><div class="day-num">Day 30</div><div class="day-content"><div class="day-title">🎉 Demo + Retrospective</div><div class="day-tasks">Demo video + Sprint 2 planning + budget reconciliation + celebrate</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROTOCOL -->
+    <div class="page" id="page-protocol">
+      <div class="page-header">
+        <div class="page-tag">Agent Protocol · Anti-Duplication</div>
+        <h1 class="page-title">Agent<br>Protocol</h1>
+        <p class="page-desc">Aturan wajib untuk semua AI coding agents agar tidak kehilangan konteks, tidak duplikasi kerja, dan tidak conflict satu sama lain.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Agent Roles & Responsibilities</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Agent</th><th>Tools</th><th>Domain</th><th>Branch</th></tr></thead>
+            <tbody>
+              <tr><td>DevOps Agent</td><td>bash, docker, server</td><td>Infrastructure, CI/CD, deployment</td><td>devops/*</td></tr>
+              <tr><td>Backend Agent</td><td>Python, FastAPI, SQL</td><td>API endpoints, LangGraph, auth</td><td>backend/*</td></tr>
+              <tr><td>Core Agent</td><td>Python, LangGraph</td><td>Memory, Letta integration, LLM</td><td>core/*</td></tr>
+              <tr><td>Training Agent</td><td>Python, RunPod API</td><td>Dataset prep, fine-tuning, eval</td><td>training/*</td></tr>
+              <tr><td>Research Agent</td><td>Python, ArXiv API</td><td>Paper ingestion, KG building</td><td>research/*</td></tr>
+              <tr><td>QA Agent</td><td>Python, pytest</td><td>Test suites, benchmarks</td><td>qa/*</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Anti-Duplication Rules</div>
+        <div class="protocol-step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Before creating any file</div>
+            <div class="step-desc"><code>find . -name "*.py" | xargs grep -l "[function_name]"</code><br>Search if similar code already exists anywhere in codebase.</div>
+          </div>
+        </div>
+        <div class="protocol-step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Before adding any dependency</div>
+            <div class="step-desc"><code>cat requirements.txt | grep [package]</code><br>Only add if genuinely new and not already available.</div>
+          </div>
+        </div>
+        <div class="protocol-step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Before any database change</div>
+            <div class="step-desc">NEVER modify production tables directly. ALWAYS create Alembic migration. Test on dev first.</div>
+          </div>
+        </div>
+        <div class="protocol-step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">When spending RunPod budget</div>
+            <div class="step-desc">Check current balance. Estimate cost. Document in training_runs. Never >$10 without human approval.</div>
+          </div>
+        </div>
+        <div class="protocol-step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <div class="step-title">When architectural decision is needed</div>
+            <div class="step-desc">STOP. Update CONTEXT.md with question. Wait for human input. Do not guess for permanent decisions.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ONBOARDING -->
+    <div class="page" id="page-onboarding">
+      <div class="page-header">
+        <div class="page-tag">Agent Onboarding Document</div>
+        <h1 class="page-title">New Agent<br>Onboarding</h1>
+        <p class="page-desc">Baca ini PERTAMA sebelum menulis satu baris kode. 10 menit membaca ini menghemat 10 jam kerja ulang.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Step 1: Context Reading (Required)</div>
+        <div class="onboard-section">
+          <p>Baca dokumen berikut secara berurutan:</p>
+          <ul class="styled">
+            <li><code>/docs/01_SOUL.md</code> — Identitas & nilai Core Brain</li>
+            <li><code>/docs/02_VISION.md</code> — Northstar dan tujuan</li>
+            <li><code>/docs/03_PRD.md</code> — Apa yang dibangun dan mengapa</li>
+            <li><code>/docs/04_ARCHITECTURE.md</code> — Bagaimana sistemnya bekerja</li>
+            <li><code>/docs/05_ERD_SCHEMA.md</code> — Database schema lengkap</li>
+            <li><code>/docs/CONTEXT.md</code> — Status proyek SEKARANG</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Step 2: Check Live State</div>
+        <pre><code>git log --oneline -10               # apa yang sudah dikerjakan
+git branch -a                        # branch apa yang ada
+cat /docs/CONTEXT.md                 # state proyek sekarang
+cat /docs/TASK_BOARD.md | grep OPEN  # task yang tersedia</code></pre>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Step 3: Understand Your Role</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Kamu adalah</th><th>Berarti</th></tr></thead>
+            <tbody>
+              <tr><td>Specialist agent dengan satu domain</td><td>Focus pada area kerja kamu, jangan overlapping</td></tr>
+              <tr><td>Part of parallel team</td><td>Agent lain mungkin bekerja simultan — claim task, jangan duplicate</td></tr>
+              <tr><td>Context-preserving</td><td>Update CONTEXT.md setiap kali buat keputusan besar</td></tr>
+              <tr><td>Budget-aware</td><td>Setiap RunPod action = uang nyata. Hitung dulu.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Step 4: First Action</div>
+        <pre><code># 1. Claim task di TASK_BOARD.md
+# 2. Buat branch
+git checkout -b [your-role]/[task-name]
+
+# 3. Start work
+
+# 4. Update CONTEXT.md ketika ada keputusan
+# 5. Commit dengan message yang jelas:
+git commit -m "feat(auth): add JWT RS256 token generation"
+
+# 6. Update Daily Log
+# 7. PR ke main (requires passing tests)</code></pre>
+      </div>
+    </div>
+
+    <!-- TRAINING -->
+    <div class="page" id="page-training">
+      <div class="page-header">
+        <div class="page-tag">Training Protocol · Self-Improvement Pipeline</div>
+        <h1 class="page-title">Training<br>Protocol</h1>
+        <p class="page-desc">Bagaimana Mighan-Core belajar dari dirinya sendiri. Self-Rewarding Language Models + SimPO + RunPod.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Weekly Self-Improvement Cycle</div>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon">📥</div>
+            <div class="card-title">Phase 1: Collect</div>
+            <div class="card-desc">Celery beat hourly. Implicit signals: retry, turn length, followups. Stores to Redis Streams → Postgres.</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">⚖️</div>
+            <div class="card-title">Phase 2: Judge</div>
+            <div class="card-desc">LLM-as-Judge (Hermes-3-8B local). Score pairs vs Constitution. Target: 500+ pairs/cycle.</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">📦</div>
+            <div class="card-title">Phase 3: Assemble</div>
+            <div class="card-desc">New pairs + 50 anchor samples + top 200 historical. Curriculum sort: easy→hard.</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">🔥</div>
+            <div class="card-title">Phase 4: Train</div>
+            <div class="card-desc">RunPod RTX 4090. Unsloth + QLoRA. SimPO (no reference model). 4–6 hours. ~$3–5.</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">🧪</div>
+            <div class="card-title">Phase 5: Eval</div>
+            <div class="card-desc">Identity test (cosine >0.85). Tool use >80%. Quality improvement. Regression check.</div>
+          </div>
+          <div class="card">
+            <div class="card-icon">🚀</div>
+            <div class="card-title">Phase 6: Deploy</div>
+            <div class="card-desc">Ollama hot-swap. 10% A/B 24 hours. Auto-promote if better. Rollback if worse.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Legal Compliance — Training Data Sources</div>
+        <div class="soul-block" style="border-color:rgba(255,107,107,0.3)">
+          <div class="soul-title" style="color:var(--accent3)">⚠️ CRITICAL RULE</div>
+          <p><strong>NEVER use output dari Claude (Anthropic) atau GPT-4o (OpenAI) untuk training data.</strong> ToS mereka melarang ini untuk model komersial.</p>
+          <p style="margin-top:8px;"><strong>SELALU gunakan:</strong></p>
+          <ul class="styled">
+            <li>Hermes-3-405B via OpenRouter (permissive license)</li>
+            <li>Llama-3.1-405B-Instruct (Meta license, allows distillation)</li>
+            <li>DeepSeek-V3 via API (permissive)</li>
+            <li>Qwen2.5-72B lokal di RunPod (Apache-2.0)</li>
+            <li>Data buatan sendiri dari Magpie pipeline</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Budget Rules</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Action</th><th>GPU</th><th>Est. Cost</th><th>Approval</th></tr></thead>
+            <tbody>
+              <tr><td>Magpie generation (20K)</td><td>RTX 4090</td><td>~$3</td><td>Auto</td></tr>
+              <tr><td>SFT run (10K samples)</td><td>RTX 4090</td><td>~$5</td><td>Auto</td></tr>
+              <tr><td>SimPO run (500 pairs)</td><td>RTX 4090</td><td>~$3</td><td>Auto</td></tr>
+              <tr><td>Any run >$10</td><td>Any</td><td>>$10</td><td><span class="tag red">Human Required</span></td></tr>
+              <tr><td>Remaining <$15</td><td>Any</td><td>—</td><td><span class="tag yellow">Alert Human</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTEXT -->
+    <div class="page" id="page-context">
+      <div class="page-header">
+        <div class="page-tag">Live State · Update Every Decision</div>
+        <h1 class="page-title">Context<br>(Live)</h1>
+        <p class="page-desc">RAM proyek. Selalu up-to-date. Dibaca oleh semua agent sebelum mulai kerja.</p>
+        <div class="version-badge">Last Updated: 2026-05-02 · Inception</div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <span class="metric-value" style="font-size:18px;">Week 1</span>
+          <div class="metric-label">Sprint Phase</div>
+        </div>
+        <div class="metric-card accent">
+          <span class="metric-value" style="font-size:18px;">Day 1</span>
+          <div class="metric-label">Day of 30</div>
+        </div>
+        <div class="metric-card green">
+          <span class="metric-value" style="font-size:14px;">$50.00</span>
+          <div class="metric-label">RunPod Balance</div>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value" style="font-size:14px;">0.1-seed</span>
+          <div class="metric-label">Active Model Ver</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Environment State</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Service</th><th>Status</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td>Ollama</td><td><span class="tag red">NOT STARTED</span></td><td>Day 3 task</td></tr>
+              <tr><td>PostgreSQL</td><td><span class="tag red">NOT STARTED</span></td><td>Day 4 task</td></tr>
+              <tr><td>Qdrant</td><td><span class="tag red">NOT STARTED</span></td><td>Day 8 task</td></tr>
+              <tr><td>Redis</td><td><span class="tag red">NOT STARTED</span></td><td>Day 4 task</td></tr>
+              <tr><td>Letta</td><td><span class="tag red">NOT STARTED</span></td><td>Day 11 task</td></tr>
+              <tr><td>FastAPI</td><td><span class="tag red">NOT STARTED</span></td><td>Day 4 task</td></tr>
+              <tr><td>Core Brain Agent</td><td><span class="tag red">NOT CREATED</span></td><td>Day 11 task</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Architectural Decisions Log</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Decision</th><th>Reason</th></tr></thead>
+            <tbody>
+              <tr><td>2026-05-02</td><td>Seed model: Qwen2.5-7B-Instruct Q4_K_M</td><td>Best function-calling, Apache-2.0, fits 32GB</td></tr>
+              <tr><td>2026-05-02</td><td>Orchestration: LangGraph</td><td>Deterministic, stateful, production-grade</td></tr>
+              <tr><td>2026-05-02</td><td>Memory: Letta + Qdrant</td><td>Native sub-agent spawning + semantic search</td></tr>
+              <tr><td>2026-05-02</td><td>Training: Unsloth + SimPO</td><td>Fastest, no reference model needed</td></tr>
+              <tr><td>2026-05-02</td><td>Teacher model: Hermes-3-405B only</td><td>Legal compliance — not Claude/GPT-4o</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Next Priority</div>
+        <div class="protocol-step">
+          <div class="step-num">1</div>
+          <div class="step-content"><div class="step-title">VPS Provisioning</div><div class="step-desc">Docker install, UFW, swap, git clone repo</div></div>
+        </div>
+        <div class="protocol-step">
+          <div class="step-num">2</div>
+          <div class="step-content"><div class="step-title">Ollama + Qwen2.5-7B</div><div class="step-desc">Pull model, benchmark tokens/sec</div></div>
+        </div>
+        <div class="protocol-step">
+          <div class="step-num">3</div>
+          <div class="step-content"><div class="step-title">FastAPI Chat Endpoint</div><div class="step-desc">First working chat loop</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RISK -->
+    <div class="page" id="page-risk">
+      <div class="page-header">
+        <div class="page-tag">Risk Register · 15 Risks Identified</div>
+        <h1 class="page-title">Risk<br>Register</h1>
+        <p class="page-desc">Semua risiko yang teridentifikasi, likelihood, impact, status mitigasi, dan owner.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Risk</th><th>Like</th><th>Impact</th><th>Status</th><th>Owner</th></tr></thead>
+          <tbody>
+            <tr class="risk-critical"><td>R01</td><td>VPS RAM OOM all services</td><td><span class="risk-high">HIGH</span></td><td><span class="risk-high">HIGH</span></td><td>🟡 Monitored</td><td>DevOps</td></tr>
+            <tr class="risk-critical"><td>R02</td><td>$50 RunPod depleted early</td><td><span class="risk-high">HIGH</span></td><td><span class="risk-high">HIGH</span></td><td>🟡 Monitored</td><td>Training</td></tr>
+            <tr><td>R03</td><td>Fine-tuned model degrades</td><td><span class="risk-medium">MED</span></td><td><span class="risk-high">HIGH</span></td><td>⬜ Planned</td><td>Training</td></tr>
+            <tr><td>R04</td><td>Self-reward loop compounds hallucinations</td><td><span class="risk-medium">MED</span></td><td><span class="risk-high">HIGH</span></td><td>⬜ Planned</td><td>Core</td></tr>
+            <tr><td>R05</td><td>Cross-tenant data leak</td><td><span class="risk-low">LOW</span></td><td>CRITICAL</td><td>✅ Mitigated</td><td>Backend</td></tr>
+            <tr><td>R06</td><td>Ollama crashes under load</td><td><span class="risk-medium">MED</span></td><td><span class="risk-medium">MED</span></td><td>🟡 Monitored</td><td>DevOps</td></tr>
+            <tr><td>R07</td><td>Letta service instability</td><td><span class="risk-medium">MED</span></td><td><span class="risk-medium">MED</span></td><td>⬜ Planned</td><td>Core</td></tr>
+            <tr><td>R08</td><td>Runaway agent spawning</td><td><span class="risk-low">LOW</span></td><td><span class="risk-high">HIGH</span></td><td>⬜ Planned</td><td>Backend</td></tr>
+            <tr><td>R09</td><td>Function-calling reliability <80%</td><td><span class="risk-medium">MED</span></td><td><span class="risk-medium">MED</span></td><td>⬜ Planned</td><td>Core</td></tr>
+            <tr><td>R10</td><td>Synthetic data quality drift</td><td><span class="risk-high">HIGH</span></td><td><span class="risk-medium">MED</span></td><td>⬜ Planned</td><td>Training</td></tr>
+            <tr class="risk-critical"><td>R11</td><td>Legal: using Claude/GPT output to train</td><td><span class="risk-high">HIGH</span></td><td><span class="risk-high">HIGH</span></td><td>🔴 Active</td><td>All</td></tr>
+            <tr><td>R12</td><td>"Anomaly explosion" expectation mismatch</td><td><span class="risk-high">HIGH</span></td><td><span class="risk-low">LOW</span></td><td>✅ Accepted</td><td>Human</td></tr>
+            <tr><td>R13</td><td>VPS single point of failure</td><td><span class="risk-medium">MED</span></td><td><span class="risk-high">HIGH</span></td><td>⬜ Planned</td><td>DevOps</td></tr>
+            <tr class="risk-critical"><td>R14</td><td>Solo developer burnout</td><td><span class="risk-high">HIGH</span></td><td>CRITICAL</td><td>⬜ Planned</td><td>Human</td></tr>
+            <tr><td>R15</td><td>SOUL.md drift during fine-tuning</td><td><span class="risk-medium">MED</span></td><td><span class="risk-high">HIGH</span></td><td>⬜ Planned</td><td>Training</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">R11 Active Mitigation</div>
+        <div class="soul-block" style="border-color:rgba(255,107,107,0.4)">
+          <div class="soul-title" style="color:var(--accent3)">RISK R11 — ACTIVE</div>
+          <p>Legal risk dari menggunakan output LLM proprietary untuk training model komersial.</p>
+          <p style="margin-top:8px;"><strong>Mitigation:</strong> Hanya gunakan sebagai teacher model: Hermes-3-405B, Llama-3.1-405B-Instruct, DeepSeek-V3, atau Qwen2.5-72B. Semua memiliki license yang memperbolehkan distillation. TIDAK PERNAH Claude, TIDAK PERNAH GPT-4o output masuk ke training pipeline.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUDGET -->
+    <div class="page" id="page-budget">
+      <div class="page-header">
+        <div class="page-tag">Budget Log · RunPod $50</div>
+        <h1 class="page-title">Budget<br>Tracker</h1>
+        <p class="page-desc">Setiap rupiah RunPod tercatat. Update ini setelah setiap training job.</p>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card green">
+          <span class="metric-value">$50</span>
+          <div class="metric-label">Total Budget</div>
+        </div>
+        <div class="metric-card">
+          <span class="metric-value">$0</span>
+          <div class="metric-label">Spent</div>
+        </div>
+        <div class="metric-card accent">
+          <span class="metric-value">$50</span>
+          <div class="metric-label">Remaining</div>
+        </div>
+        <div class="metric-card yellow">
+          <span class="metric-value">0</span>
+          <div class="metric-label">Jobs Run</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Planned Spending</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Run</th><th>Purpose</th><th>GPU</th><th>Est. Hours</th><th>Est. Cost</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Run 1</td><td>Magpie generation (20K samples)</td><td>RTX 4090</td><td>8h</td><td>~$3</td><td><span class="tag yellow">Planned Day 22</span></td></tr>
+              <tr><td>Run 2</td><td>SFT v1 (Unsloth QLoRA, 10K)</td><td>RTX 4090</td><td>8h</td><td>~$5</td><td><span class="tag yellow">Planned Day 23</span></td></tr>
+              <tr><td>Run 3</td><td>SimPO v1 (500+ pairs)</td><td>RTX 4090</td><td>5h</td><td>~$3</td><td><span class="tag yellow">Planned Day 25</span></td></tr>
+              <tr><td>Run 4</td><td>SFT v2 (iteration 2)</td><td>RTX 4090</td><td>8h</td><td>~$5</td><td><span class="tag">TBD Month 2</span></td></tr>
+              <tr><td>Buffer</td><td>Emergency / extras</td><td>—</td><td>—</td><td>$19</td><td><span class="tag">Reserved</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Budget Rules</div>
+        <ul class="styled">
+          <li>Alert human ketika remaining ≤ $15</li>
+          <li>Pause non-critical runs ketika remaining ≤ $10</li>
+          <li>Require human approval untuk job >$10 single run</li>
+          <li>SELALU gunakan Community Cloud ($0.34/hr RTX 4090, bukan Secure $0.69/hr)</li>
+          <li>Set max_duration pada setiap pod untuk mencegah runaway billing</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CHANGELOG -->
+    <div class="page" id="page-changelog">
+      <div class="page-header">
+        <div class="page-tag">Changelog · Version History</div>
+        <h1 class="page-title">Changelog</h1>
+        <p class="page-desc">Setiap perubahan signifikan tercatat di sini. Ini adalah biografi evolusi organisme digital ini.</p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Unreleased — v0.1.0-seed</div>
+        <div class="soul-block">
+          <div class="soul-title">Added (2026-05-02)</div>
+          <ul class="styled">
+            <li>Complete project documentation: PRD, Architecture, ERD, Sprint Plan</li>
+            <li>SOUL.md — Core Brain identity definition v1.0</li>
+            <li>Agent Protocol — anti-duplication and context preservation</li>
+            <li>Database schema with full RLS multi-tenancy (PostgreSQL 16)</li>
+            <li>Docker Compose stack specification with memory budgets</li>
+            <li>30-day sprint plan with daily granular tasks</li>
+            <li>Risk register with 15 identified risks</li>
+            <li>Training protocol with automated self-improvement pipeline</li>
+            <li>Budget tracking system ($50 RunPod)</li>
+            <li>This master HTML document</li>
+          </ul>
+          <div class="soul-title" style="margin-top:16px;">Architecture Decisions</div>
+          <ul class="styled">
+            <li>Model: Qwen2.5-7B-Instruct Q4_K_M via Ollama</li>
+            <li>Orchestration: LangGraph StateGraph</li>
+            <li>Memory: Letta + Qdrant + PostgreSQL + pgvector</li>
+            <li>Training: Unsloth + QLoRA + SimPO (no reference model)</li>
+            <li>Multi-tenancy: Postgres RLS + tenant_id isolation</li>
+            <li>Teacher model: Hermes-3-405B only (legal compliance)</li>
+          </ul>
+          <div class="soul-title" style="margin-top:16px;">Not Yet Implemented</div>
+          <ul class="styled">
+            <li>All application code (starts Day 1 of Sprint)</li>
+            <li>VPS provisioning</li>
+            <li>Any running services</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Version Naming Convention</div>
+        <pre><code>v{major}.{minor}-{flavor}-{YYYYMMDD}
+
+Examples:
+v0.1-seed-20260502    — Initial seed model
+v0.2-sft1-20260525    — After first SFT training
+v0.3-simpo1-20260527  — After first SimPO preference training
+v1.0-stable-20260701  — First stable release
+
+Model adapter naming in HuggingFace:
+mighan/qwen-7b-soul-v0.2-sft1</code></pre>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  const pages = {
+    'home': 'Overview',
+    'soul': 'SOUL.md',
+    'vision': 'Vision & Northstar',
+    'journal': 'Founder Journal',
+    'prd': 'PRD',
+    'arch': 'Architecture',
+    'erd': 'ERD & Schema',
+    'sprint': 'Sprint Roadmap',
+    'protocol': 'Agent Protocol',
+    'onboarding': 'Agent Onboarding',
+    'training': 'Training Protocol',
+    'context': 'Context (Live)',
+    'risk': 'Risk Register',
+    'budget': 'Budget Log',
+    'changelog': 'Changelog'
+  };
+
+  function show(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+    const page = document.getElementById('page-' + id);
+    if (page) page.classList.add('active');
+
+    document.querySelectorAll('.nav-item').forEach(n => {
+      if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + id + "'")) {
+        n.classList.add('active');
+      }
+    });
+
+    document.getElementById('topbar-page').textContent = pages[id] || id;
+    window.scrollTo(0, 0);
+  }
+
+  function toggleWeek(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('open');
+    const chevron = el.querySelector('.week-chevron');
+    chevron.textContent = el.classList.contains('open') ? '▲' : '▼';
+  }
+
+  function toggleJournal(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('open');
+    const chevron = el.querySelector('.journal-header span:last-child');
+    chevron.textContent = el.classList.contains('open') ? '▲' : '▼';
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') show('home');
+  });
+</script>
+
+</body>
+</html>
