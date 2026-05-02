@@ -43,9 +43,12 @@ async def create_agent(
     """Create a new agent for the current tenant."""
     await set_tenant_context(db, str(current_user.tenant_id))
 
+    import secrets
     agent = Agent(
         tenant_id=current_user.tenant_id,
+        owner_user_id=current_user.id,
         name=data.name,
+        slug=secrets.token_urlsafe(8),
         description=data.description,
         model_version=data.model_version,
         system_prompt=data.system_prompt,
