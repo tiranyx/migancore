@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from deps.auth import get_current_user
-from models import get_db, User, Tenant, RefreshToken
+from deps.db import get_db, set_tenant_context
+from models import User, Tenant, RefreshToken
 from schemas.auth import (
     RegisterRequest,
     LoginRequest,
@@ -122,6 +123,8 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
     db.add(rt)
     await db.commit()
 
+    # Set RLS context for audit event (tenant-scoped)
+    await set_tenant_context(db, str(tenant.id))
     await log_audit_event(
         db=db,
         event_type="auth.register",
@@ -191,6 +194,8 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     db.add(rt)
     await db.commit()
 
+    # Set RLS context for audit event (tenant-scoped)
+    await set_tenant_context(db, str(user.tenant_id))
     await log_audit_event(
         db=db,
         event_type="auth.login",
@@ -305,6 +310,8 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
     db.add(new_rt)
     await db.commit()
 
+    # Set RLS context for audit event (tenant-scoped)
+    await set_tenant_context(db, str(user.tenant_id))
     await log_audit_event(
         db=db,
         event_type="auth.refresh",
@@ -344,10 +351,16 @@ async def logout(data: RefreshRequest, request: Request, db: AsyncSession = Depe
         rt.revoked_at = datetime.now(timezone.utc)
         await db.commit()
 
+        # Find user to get tenant_id for RLS context
+        user_result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+        user = user_result.scalar_one_or_none()
+        if user:
+            await set_tenant_context(db, str(user.tenant_id))
+
         await log_audit_event(
             db=db,
             event_type="auth.logout",
-            tenant_id=None,
+            tenant_id=str(user.tenant_id) if user else None,
             user_id=uuid.UUID(user_id) if user_id else None,
             details={"token_jti": payload.get("jti")},
             ip_address=ip,
