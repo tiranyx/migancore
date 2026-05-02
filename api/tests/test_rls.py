@@ -9,7 +9,10 @@ Or run directly:
 """
 
 import asyncio
+import sys
 import uuid
+
+sys.path.insert(0, "/app")
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
