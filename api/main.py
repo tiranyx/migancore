@@ -6,11 +6,70 @@ Entry point for the autonomous digital organism.
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 import structlog
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from config import settings
+from routers import auth as auth_router
+
 logger = structlog.get_logger()
+
+
+async def _check_postgres() -> dict:
+    """Check PostgreSQL connectivity."""
+    from sqlalchemy import text
+    from models import engine
+    try:
+        from sqlalchemy.ext.asyncio import AsyncConnection
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT 1"))
+            await result.fetchone()
+        return {"status": "ok", "detail": "connected"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+
+async def _check_redis() -> dict:
+    """Check Redis connectivity."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=3)
+        await r.ping()
+        await r.aclose()
+        return {"status": "ok", "detail": "connected"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+
+async def _check_qdrant() -> dict:
+    """Check Qdrant connectivity."""
+    try:
+        headers = {}
+        if settings.QDRANT_API_KEY:
+            headers["api-key"] = settings.QDRANT_API_KEY
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{settings.QDRANT_URL}/collections", headers=headers)
+            if resp.status_code == 200:
+                return {"status": "ok", "detail": "connected"}
+            return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+
+async def _check_ollama() -> dict:
+    """Check Ollama connectivity."""
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{settings.OLLAMA_URL}/api/tags")
+            if resp.status_code == 200:
+                data = resp.json()
+                models = [m.get("name", "unknown") for m in data.get("models", [])]
+                return {"status": "ok", "detail": f"{len(models)} models loaded", "models": models[:5]}
+            return {"status": "error", "detail": f"HTTP {resp.status_code}"}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
 
 
 @asynccontextmanager
@@ -24,7 +83,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -37,6 +96,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Wire routers
+app.include_router(auth_router.router)
+
 
 @app.get("/health", tags=["system"])
 async def health_check():
@@ -44,21 +106,31 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "migancore-api",
-        "version": "0.1.0",
+        "version": "0.2.0",
     }
 
 
 @app.get("/ready", tags=["system"])
 async def readiness_check():
     """Readiness probe — checks downstream dependencies."""
-    # TODO: check postgres, redis, qdrant connectivity
+    checks = {
+        "postgres": await _check_postgres(),
+        "redis": await _check_redis(),
+        "qdrant": await _check_qdrant(),
+        "ollama": await _check_ollama(),
+    }
+
+    all_ok = all(c["status"] == "ok" for c in checks.values())
+
+    if not all_ok:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "not_ready", "checks": checks},
+        )
+
     return {
         "status": "ready",
-        "checks": {
-            "postgres": "pending",
-            "redis": "pending",
-            "qdrant": "pending",
-        },
+        "checks": checks,
     }
 
 
@@ -67,23 +139,16 @@ async def root():
     """API root — returns service metadata."""
     return {
         "name": "MiganCore",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "tagline": "Every vision deserves a digital organism.",
         "endpoints": {
             "health": "/health",
             "ready": "/ready",
             "docs": "/docs",
+            "auth": "/v1/auth",
         },
     }
 
-
-# Placeholder router imports — uncomment as modules are built
-# from routers import auth, agents, conversations, tools, training
-# app.include_router(auth.router, prefix="/auth", tags=["auth"])
-# app.include_router(agents.router, prefix="/agents", tags=["agents"])
-# app.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
-# app.include_router(tools.router, prefix="/tools", tags=["tools"])
-# app.include_router(training.router, prefix="/training", tags=["training"])
 
 if __name__ == "__main__":
     import uvicorn

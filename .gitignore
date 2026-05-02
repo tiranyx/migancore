@@ -62,10 +62,10 @@ logs/
 .coverage
 htmlcov/
 
-# ML artifacts
-models/
-checkpoints/
-lora_adapters/
-datasets/
+# ML artifacts (root only — api/models/ is SQLAlchemy ORM)
+/models/
+/checkpoints/
+/lora_adapters/
+/datasets/
 *.gguf
 *.safetensors
