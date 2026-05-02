@@ -22,10 +22,9 @@ async def _check_postgres() -> dict:
     from sqlalchemy import text
     from models import engine
     try:
-        from sqlalchemy.ext.asyncio import AsyncConnection
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))
-            await result.fetchone()
+            result.fetchone()
         return {"status": "ok", "detail": "connected"}
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
