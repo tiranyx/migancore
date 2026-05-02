@@ -2,15 +2,17 @@
 Authentication and authorization dependencies.
 """
 
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import get_db, User
-from services.jwt import decode_token
+from services.jwt import decode_token, get_token_jti
 
 security = HTTPBearer(auto_error=False)
+logger = structlog.get_logger()
 
 
 async def get_current_user(
@@ -28,9 +30,14 @@ async def get_current_user(
     try:
         payload = decode_token(credentials.credentials, token_type="access")
     except Exception as exc:
+        logger.warning(
+            "auth.token_invalid",
+            error=str(exc),
+            jti=get_token_jti(credentials.credentials),
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {exc}",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -40,7 +47,7 @@ async def get_current_user(
     if not user_id or not tenant_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token missing required claims",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -50,15 +57,21 @@ async def get_current_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+            detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     # Defense-in-depth: verify tenant match
     if str(user.tenant_id) != tenant_id:
+        logger.warning(
+            "auth.tenant_mismatch",
+            user_id=user_id,
+            token_tenant=tenant_id,
+            user_tenant=str(user.tenant_id),
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tenant mismatch",
+            detail="Access denied",
         )
 
     return user

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -56,16 +57,15 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
             detail="Tenant slug already taken",
         )
 
-    # Create tenant
+    # Create tenant + user atomically
     tenant = Tenant(
         name=data.tenant_name,
         slug=data.tenant_slug,
         plan="free",
     )
     db.add(tenant)
-    await db.flush()  # Get tenant.id
+    await db.flush()
 
-    # Create user
     user = User(
         tenant_id=tenant.id,
         email=data.email,
@@ -74,7 +74,17 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
         display_name=data.display_name,
     )
     db.add(user)
-    await db.flush()  # Get user.id
+
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        err = str(exc.orig)
+        if "users_email_key" in err or "users.email" in err:
+            raise HTTPException(409, "Email already registered")
+        if "tenants_slug_key" in err or "tenants.slug" in err:
+            raise HTTPException(409, "Tenant slug already taken")
+        raise HTTPException(409, "Registration conflict")
 
     # Create token pair
     scopes = "agents:read agents:write chat:write"
@@ -159,10 +169,10 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     """Rotate refresh token and issue new access token."""
     try:
         payload = decode_token(data.refresh_token, token_type="refresh")
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid refresh token: {exc}",
+            detail="Invalid or expired refresh token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -186,13 +196,7 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
         )
 
     if rt.is_revoked or rt.is_expired:
-        # Token reuse detected? Revoke entire session family
-        await db.execute(
-            select(RefreshToken)
-            .where(RefreshToken.session_family == session_family)
-            .where(RefreshToken.revoked_at.is_(None))
-        )
-        # Revoke all tokens in family
+        # Token reuse detected — revoke entire session family
         await db.execute(
             RefreshToken.__table__.update()
             .where(RefreshToken.session_family == session_family)
@@ -202,7 +206,7 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token revoked or expired — session terminated",
+            detail="Session terminated",
         )
 
     # Load user

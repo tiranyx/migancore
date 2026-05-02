@@ -75,6 +75,9 @@ async def _check_ollama() -> dict:
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     logger.info("migan.startup", message="MiganCore API starting up")
+    # Eager-load JWT keys — fail fast if keys are missing
+    from services.jwt import _get_keys
+    _get_keys()
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
 

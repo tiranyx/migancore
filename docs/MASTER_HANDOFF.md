@@ -1,7 +1,7 @@
 # MASTER HANDOFF — MiganCore Project
-**Version:** 1.0  
+**Version:** 1.1  
 **Last Updated:** 2026-05-03 by Kimi Code CLI  
-**Status:** Day 0 → Day 1 Transition  
+**Status:** Day 4 Complete → Day 5 Pending (RLS + Tenant Safety)  
 **Critical Rule:** AGENT YANG MELANJUTKAN WAJIB MEMBACA DOKUMEN INI SEBELUM MULAI KERJA.
 
 ---
@@ -405,7 +405,9 @@ alembic revision --autogenerate -m "add_column_X_to_agents"
 |---|---|---|
 | 2026-05-02 | Claude + Gemini | Initial blueprint, 8 master docs created |
 | 2026-05-03 | Kimi Code CLI | Repo scaffold, GitHub setup, architecture revision (migancore.com = central hub), DNS config, Day 1 guide |
-| 2026-05-03 | ??? | Day 1 VPS provisioning (SSH, Docker, swap, JWT) |
+| 2026-05-03 | Kimi Code CLI | Day 1 VPS provisioning (SSH, Docker, swap, JWT), Day 2 infra (Postgres, Redis, Qdrant, Ollama, Letta), Day 3 deploy (FastAPI live at api.migancore.com) |
+| 2026-05-03 | Kimi Code CLI | Deep research pause: GPT-5.5 consultation on LangGraph, Letta, SimPO, JWT. SIDIX archive research. 2 research docs created. |
+| 2026-05-03 | Kimi Code CLI | **Day 4 Auth Foundation**: RS256 JWT, Argon2id, refresh token rotation, real /ready checks, migration 004. All endpoints tested and passing. |
 
 ---
 
