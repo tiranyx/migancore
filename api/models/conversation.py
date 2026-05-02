@@ -34,4 +34,4 @@ class Conversation(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    meta: Mapped[dict] = mapped_column("metadata", JSON, nullable=False, default=dict)
