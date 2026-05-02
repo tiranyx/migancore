@@ -14,12 +14,8 @@ services:
     deploy:
       resources:
         limits: { memory: 12G }
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:11434/ >/dev/null 2>&1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
+    # Note: No healthcheck — ollama image lacks curl/wget.
+    # Health verified externally via ollama list or API call.
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -67,8 +63,8 @@ services:
       LETTA_SERVER_PASSWORD: ${LETTA_PASSWORD}
       SECURE: "true"
     depends_on:
-      postgres: { condition: service_healthy }
-      ollama: { condition: service_healthy }
+      - postgres
+      - ollama
     deploy:
       resources:
         limits: { memory: 3G }
