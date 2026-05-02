@@ -129,6 +129,9 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
     db.add(tenant)
     await db.flush()
 
+    # Set RLS tenant context so the user insert is allowed
+    await set_tenant_context(db, str(tenant.id))
+
     user = User(
         tenant_id=tenant.id,
         email=data.email,
@@ -199,6 +202,35 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     """Authenticate user and issue token pair."""
     ip, ua = _client_info(request)
 
+    # Login must bypass RLS because we don't know tenant_id yet.
+    # Use the SECURITY DEFINER lookup function to find tenant_id,
+    # then set tenant context and load the ORM user normally.
+    from sqlalchemy import text
+    lookup_result = await db.execute(
+        text("SELECT * FROM auth_lookup_user_by_email(:email)"),
+        {"email": data.email},
+    )
+    row = lookup_result.mappings().first()
+
+    if row is None:
+        await _fire_audit(
+            event_type="security.suspicious_activity",
+            tenant_id=None,
+            user_id=None,
+            details={"reason": "failed_login", "email": data.email, "ip": ip},
+            ip_address=ip,
+            user_agent=ua,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Set RLS context so subsequent ORM queries work
+    await set_tenant_context(db, str(row["tenant_id"]))
+
+    # Load ORM-attached user for updates
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
