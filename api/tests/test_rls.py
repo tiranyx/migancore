@@ -22,6 +22,22 @@ from deps.db import set_tenant_context
 from services.password import hash_password
 
 
+TEST_EMAIL_A = "rls_test_a@migancore.com"
+TEST_EMAIL_B = "rls_test_b@migancore.com"
+TEST_SLUG_A = "rls-test-a"
+TEST_SLUG_B = "rls-test-b"
+
+
+async def _cleanup_legacy():
+    """Remove any leftover test data from prior runs."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("SET LOCAL app.current_tenant = '00000000-0000-0000-0000-000000000000'"))
+        await session.execute(text(f"DELETE FROM agents WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
+        await session.execute(text(f"DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
+        await session.execute(text(f"DELETE FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}')"))
+        await session.commit()
+
+
 async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]:
     """Create a test user + tenant directly in the DB."""
     async with AsyncSessionLocal() as session:
@@ -66,9 +82,12 @@ async def test_rls_isolation():
     """Main RLS test: Tenant A cannot see Tenant B's data."""
     print("\n=== RLS ISOLATION TEST ===\n")
 
+    # Cleanup first to handle dirty state from previous interrupted runs
+    await _cleanup_legacy()
+
     # Setup: create two tenants
-    user_a, tenant_a = await _create_test_user("rls_test_a@migancore.com", "rls-test-a")
-    user_b, tenant_b = await _create_test_user("rls_test_b@migancore.com", "rls-test-b")
+    user_a, tenant_a = await _create_test_user(TEST_EMAIL_A, TEST_SLUG_A)
+    user_b, tenant_b = await _create_test_user(TEST_EMAIL_B, TEST_SLUG_B)
     print(f"Tenant A: {tenant_a.id} ({tenant_a.slug})")
     print(f"Tenant B: {tenant_b.id} ({tenant_b.slug})")
 
@@ -123,7 +142,7 @@ async def test_rls_isolation():
     # Test 4: Users table RLS — Tenant B cannot see Tenant A's user
     async with AsyncSessionLocal() as session:
         await set_tenant_context(session, str(tenant_b.id))
-        result = await session.execute(select(User).where(User.email == "rls_test_a@migancore.com"))
+        result = await session.execute(select(User).where(User.email == TEST_EMAIL_A))
         user = result.scalar_one_or_none()
         if user is None:
             print("TEST 4 PASS: Tenant B cannot find Tenant A's user")
