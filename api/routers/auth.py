@@ -164,6 +164,7 @@ async def register(data: RegisterRequest, request: Request, db: AsyncSession = D
     refresh_token, refresh_jti, expires_at = create_refresh_token(
         subject=str(user.id),
         session_family=session_family,
+        tenant_id=str(tenant.id),
     )
 
     # Store refresh token hash
@@ -268,6 +269,7 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     refresh_token, refresh_jti, expires_at = create_refresh_token(
         subject=str(user.id),
         session_family=session_family,
+        tenant_id=str(user.tenant_id),
     )
 
     rt = RefreshToken(
@@ -319,8 +321,13 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
         )
 
     user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     session_family = payload.get("session_family")
     token_hash = _hash_token_plain(data.refresh_token)
+
+    # Set RLS tenant context before any queries on tenant-scoped tables
+    if tenant_id:
+        await set_tenant_context(db, tenant_id)
 
     # ATOMIC UPDATE: revoke the token only if it hasn't been revoked yet.
     # This prevents concurrent refresh requests from both succeeding.
@@ -350,7 +357,7 @@ async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Dep
 
         await _fire_audit(
             event_type="security.session_terminated",
-            tenant_id=None,
+            tenant_id=tenant_id,
             user_id=uuid.UUID(user_id) if user_id else None,
             details={"reason": "token_reuse_or_race", "session_family": session_family, "ip": ip},
             ip_address=ip,
@@ -439,6 +446,7 @@ async def logout(data: RefreshRequest, request: Request, db: AsyncSession = Depe
         return LogoutResponse(message="Logged out successfully")
 
     user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
     token_hash = _hash_token_plain(data.refresh_token)
 
     # Atomic update: revoke only if not already revoked
@@ -454,11 +462,6 @@ async def logout(data: RefreshRequest, request: Request, db: AsyncSession = Depe
 
     if rt and not rt.is_expired:
         await db.commit()
-
-        # Find user for tenant context
-        user_result = await db.execute(select(User).where(User.id == rt.user_id))
-        user = user_result.scalar_one_or_none()
-        tenant_id = str(user.tenant_id) if user else None
 
         await _fire_audit(
             event_type="auth.logout",

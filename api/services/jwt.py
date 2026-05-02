@@ -56,7 +56,7 @@ def create_access_token(
     return jwt.encode(payload, private_key, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_refresh_token(subject: str, session_family: str) -> tuple[str, str, datetime]:
+def create_refresh_token(subject: str, session_family: str, tenant_id: str) -> tuple[str, str, datetime]:
     """Create a signed RS256 refresh token.
 
     Returns: (token, jti, expires_at)
@@ -75,6 +75,7 @@ def create_refresh_token(subject: str, session_family: str) -> tuple[str, str, d
         "nbf": now,
         "iat": now,
         "jti": jti,
+        "tenant_id": tenant_id,
         "session_family": session_family,
         "type": "refresh",
     }
