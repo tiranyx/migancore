@@ -6,11 +6,12 @@ declarations from the repo root config/ directory.
 """
 
 import json
+import os
 from pathlib import Path
 from functools import lru_cache
 
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
+CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/app/config"))
 
 
 @lru_cache()
