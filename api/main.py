@@ -19,6 +19,7 @@ from config import settings
 from deps.rate_limit import limiter
 from models.base import init_engine
 from routers import auth as auth_router
+from routers import agents as agents_router
 from routers import chat as chat_router
 
 logger = structlog.get_logger()
@@ -139,6 +140,7 @@ app.add_middleware(
 
 # Wire routers
 app.include_router(auth_router.router)
+app.include_router(agents_router.router)
 app.include_router(chat_router.router)
 
 
