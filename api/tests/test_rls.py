@@ -45,6 +45,9 @@ async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]
         session.add(tenant)
         await session.flush()
 
+        # Set tenant context before creating user (RLS enforced)
+        await set_tenant_context(session, str(tenant.id))
+
         user = User(
             tenant_id=tenant.id,
             email=email,
@@ -91,7 +94,7 @@ async def test_rls_isolation():
     print(f"Tenant A: {tenant_a.id} ({tenant_a.slug})")
     print(f"Tenant B: {tenant_b.id} ({tenant_b.slug})")
 
-    # Create an agent for Tenant A (bypass RLS for setup)
+    # Create an agent for Tenant A (with RLS context)
     async with AsyncSessionLocal() as session:
         await set_tenant_context(session, str(tenant_a.id))
         agent = Agent(
@@ -127,7 +130,7 @@ async def test_rls_isolation():
             print(f"TEST 2 FAIL: Tenant B sees {len(agents)} agents — DATA LEAK!")
             failures.append("TEST 2")
 
-    # Test 3: Query without SET LOCAL should fail/return nothing
+    # Test 3: Query without tenant context should return nothing
     async with AsyncSessionLocal() as session:
         try:
             result = await session.execute(select(Agent))
