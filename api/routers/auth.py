@@ -7,7 +7,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ from schemas.auth import (
     UserResponse,
     LogoutResponse,
 )
+from services.audit import log_audit_event
 from services.jwt import (
     create_access_token,
     create_refresh_token,
@@ -38,9 +39,19 @@ def _hash_token_plain(plain_token: str) -> str:
     return hashlib.sha256(plain_token.encode()).hexdigest()
 
 
+def _client_info(request: Request) -> tuple[str | None, str | None]:
+    """Extract client IP and user agent from request."""
+    forwarded = request.headers.get("x-forwarded-for")
+    ip = forwarded.split(",")[0].strip() if forwarded else request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    return ip, ua
+
+
 @router.post("/register", response_model=TokenPairResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(data: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Register a new tenant + owner user."""
+    ip, ua = _client_info(request)
+
     # Check email uniqueness
     existing = await db.execute(select(User).where(User.email == data.email))
     if existing.scalar_one_or_none():
@@ -111,6 +122,17 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
     db.add(rt)
     await db.commit()
 
+    await log_audit_event(
+        db=db,
+        event_type="auth.register",
+        tenant_id=str(tenant.id),
+        user_id=str(user.id),
+        details={"email": data.email, "tenant_slug": data.tenant_slug},
+        ip_address=ip,
+        user_agent=ua,
+    )
+    await db.commit()
+
     return TokenPairResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -119,12 +141,24 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenPairResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Authenticate user and issue token pair."""
+    ip, ua = _client_info(request)
+
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.password_hash):
+        await log_audit_event(
+            db=db,
+            event_type="security.suspicious_activity",
+            tenant_id=None,
+            user_id=None,
+            details={"reason": "failed_login", "email": data.email, "ip": ip},
+            ip_address=ip,
+            user_agent=ua,
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -157,6 +191,17 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     db.add(rt)
     await db.commit()
 
+    await log_audit_event(
+        db=db,
+        event_type="auth.login",
+        tenant_id=str(user.tenant_id),
+        user_id=str(user.id),
+        details={"method": "password"},
+        ip_address=ip,
+        user_agent=ua,
+    )
+    await db.commit()
+
     return TokenPairResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -165,8 +210,10 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
-async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
+async def refresh(data: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Rotate refresh token and issue new access token."""
+    ip, ua = _client_info(request)
+
     try:
         payload = decode_token(data.refresh_token, token_type="refresh")
     except Exception:
@@ -192,7 +239,7 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     if not rt:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not recognized",
+            detail="Invalid or expired refresh token",
         )
 
     if rt.is_revoked or rt.is_expired:
@@ -204,6 +251,18 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
             .values(revoked_at=datetime.now(timezone.utc))
         )
         await db.commit()
+
+        await log_audit_event(
+            db=db,
+            event_type="security.session_terminated",
+            tenant_id=None,
+            user_id=uuid.UUID(user_id) if user_id else None,
+            details={"reason": "token_reuse", "session_family": session_family, "ip": ip},
+            ip_address=ip,
+            user_agent=ua,
+        )
+        await db.commit()
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session terminated",
@@ -215,7 +274,7 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+            detail="Invalid or expired refresh token",
         )
 
     # Revoke old refresh token
@@ -246,6 +305,17 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
     db.add(new_rt)
     await db.commit()
 
+    await log_audit_event(
+        db=db,
+        event_type="auth.refresh",
+        tenant_id=str(user.tenant_id),
+        user_id=str(user.id),
+        details={"session_family": session_family},
+        ip_address=ip,
+        user_agent=ua,
+    )
+    await db.commit()
+
     return TokenPairResponse(
         access_token=access_token,
         refresh_token=new_refresh_token,
@@ -254,14 +324,16 @@ async def refresh(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/logout", response_model=LogoutResponse)
-async def logout(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
+async def logout(data: RefreshRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Revoke a refresh token (logout)."""
+    ip, ua = _client_info(request)
+
     try:
         payload = decode_token(data.refresh_token, token_type="refresh")
     except Exception:
-        # Even if token is invalid, return 200 for security (don't leak info)
         return LogoutResponse(message="Logged out successfully")
 
+    user_id = payload.get("sub")
     token_hash = _hash_token_plain(data.refresh_token)
     result = await db.execute(
         select(RefreshToken).where(RefreshToken.token_hash == token_hash)
@@ -270,6 +342,17 @@ async def logout(data: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
     if rt and not rt.is_revoked:
         rt.revoked_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        await log_audit_event(
+            db=db,
+            event_type="auth.logout",
+            tenant_id=None,
+            user_id=uuid.UUID(user_id) if user_id else None,
+            details={"token_jti": payload.get("jti")},
+            ip_address=ip,
+            user_agent=ua,
+        )
         await db.commit()
 
     return LogoutResponse(message="Logged out successfully")

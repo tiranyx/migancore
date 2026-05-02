@@ -3,12 +3,13 @@ Authentication and authorization dependencies.
 """
 
 import structlog
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import get_db, User
+from deps.db import get_db, set_tenant_context
+from models import User
 from services.jwt import decode_token, get_token_jti
 
 security = HTTPBearer(auto_error=False)
@@ -16,10 +17,15 @@ logger = structlog.get_logger()
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Validate access token and return the authenticated user."""
+    """Validate access token and return the authenticated user.
+
+    Also sets PostgreSQL RLS tenant context so subsequent queries
+    on tenant-scoped tables are automatically filtered.
+    """
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -51,6 +57,9 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Activate RLS tenant context BEFORE querying tenant-scoped tables
+    await set_tenant_context(db, tenant_id)
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
@@ -73,6 +82,10 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
         )
+
+    # Store tenant_id on request.state for downstream use
+    request.state.tenant_id = tenant_id
+    request.state.user_id = user_id
 
     return user
 
