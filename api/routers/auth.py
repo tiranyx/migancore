@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
-from main import limiter
+from deps.rate_limit import limiter
 from models import User, Tenant, RefreshToken
 from schemas.auth import (
     RegisterRequest,

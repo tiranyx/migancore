@@ -12,19 +12,16 @@ import structlog
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from config import settings
+from deps.rate_limit import limiter
 from models.base import init_engine
 from routers import auth as auth_router
 from routers import chat as chat_router
 
 logger = structlog.get_logger()
-
-# Rate limiter: Redis-backed in production, memory-backed in development
-limiter = Limiter(key_func=get_remote_address)
 
 
 async def _check_postgres() -> dict:
