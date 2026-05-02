@@ -9,47 +9,47 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        TIRANYX ECOSYSTEM                            │
+│                     MIGANCORE.COM — CENTRAL HUB                     │
+│              (Development + Production + Core Services)             │
 │                                                                     │
-│  ┌──────────────┐    ┌──────────────────┐    ┌───────────────────┐ │
-│  │ sidixlab.com │    │   mighan.com     │    │   tiranyx.com     │ │
-│  │  Research    │    │  Clone Platform  │    │   Project Owner   │ │
-│  │    Lab       │    │                  │    │   / Governance    │ │
-│  └──────┬───────┘    └────────┬─────────┘    └────────┬──────────┘ │
-│         │                    │                         │            │
-│         └────────────────────┼─────────────────────────┘            │
-│                              │                                      │
-│                    ┌─────────▼──────────┐                          │
-│                    │   API GATEWAY      │                          │
-│                    │  (FastAPI + Caddy) │                          │
-│                    └─────────┬──────────┘                          │
-│                              │                                      │
-│         ┌────────────────────┼─────────────────────┐               │
-│         │                   │                       │               │
-│  ┌──────▼──────┐   ┌────────▼────────┐   ┌────────▼──────────┐   │
-│  │  LANGGRAPH  │   │     LETTA       │   │     CELERY        │   │
-│  │  Director   │   │  Memory Engine  │   │  Worker Queues    │   │
-│  │  (Core      │   │  + Sub-agent    │   │  code/web/        │   │
-│  │   Brain)    │   │   Spawning      │   │  research/audio   │   │
-│  └──────┬──────┘   └────────┬────────┘   └────────┬──────────┘   │
-│         │                   │                       │               │
-│         └────────────────────┼─────────────────────┘               │
-│                              │                                      │
-│         ┌────────────────────┼─────────────────────┐               │
-│         │                   │                       │               │
-│  ┌──────▼──────┐   ┌────────▼────────┐   ┌────────▼──────────┐   │
-│  │   OLLAMA    │   │   POSTGRESQL    │   │     QDRANT        │   │
-│  │  Qwen2.5-7B │   │  + pgvector    │   │   Vector Store    │   │
-│  │  Inference  │   │  + RLS         │   │   Archival Mem    │   │
-│  └─────────────┘   └─────────────────┘   └───────────────────┘   │
-│                              │                                      │
-│                    ┌─────────▼──────────┐                          │
-│                    │      REDIS         │                          │
-│                    │  Cache + Streams   │                          │
-│                    │  + Celery Broker   │                          │
-│                    └────────────────────┘                          │
+│  ┌──────────────┐  ┌──────────────────┐  ┌─────────────────────┐   │
+│  │ api.         │  │ app.             │  │ lab.                │   │
+│  │ migancore    │  │ migancore        │  │ migancore           │   │
+│  │ (API GW)     │  │ (Dashboard)      │  │ (Observability)     │   │
+│  └──────┬───────┘  └──────────────────┘  └─────────────────────┘   │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                    CORE SERVICE LAYER                        │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  │   │
+│  │  │ LANGGRAPH│  │  LETTA   │  │  CELERY  │  │  QDRANT    │  │   │
+│  │  │ Director │  │ Memory   │  │ Workers  │  │  Vectors   │  │   │
+│  │  │ (Brain)  │  │+ Spawner │  │          │  │            │  │   │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────┬──────┘  │   │
+│  │       │             │             │              │         │   │
+│  │  ┌────┴─────────────┴─────────────┴──────────────┴──────┐  │   │
+│  │  │              POSTGRESQL + REDIS + OLLAMA              │  │   │
+│  │  │         (Data + Cache + Qwen2.5-7B Inference)         │  │   │
+│  │  └───────────────────────────────────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ API Calls (api.migancore.com)
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+   ┌────▼─────┐        ┌──────▼──────┐       ┌─────▼──────┐
+   │sidixlab  │        │  mighan     │       │  tiranyx   │
+   │.com      │        │  .com       │       │  .com      │
+   │(Research │        │  (Platform  │       │  (Project  │
+   │Consumer) │        │  Consumer)  │       │  Owner)    │
+   └──────────┘        └─────────────┘       └────────────┘
 ```
+
+**Keterangan Arsitektur:**
+- **migancore.com** = Satu-satunya lokasi development & deployment. Semua backend, model, memory, dan training berjalan di sini.
+- **sidixlab.com** = Consumer channel untuk research. Frontend/UI yang consume API di `api.migancore.com`.
+- **mighan.com** = Consumer channel untuk clone platform. Frontend/UI yang consume API di `api.migancore.com`.
+- **tiranyx.com** = Consumer channel untuk governance. Frontend/UI yang consume API di `api.migancore.com`.
 
 ---
 
@@ -541,20 +541,28 @@ networks:
 ### 6.2 Caddyfile
 
 ```caddyfile
-api.mighan.com {
+# MIGANCORE.COM — Central Hub Reverse Proxy
+# Semua core services berjalan di migancore.com
+# sidixlab.com, mighan.com, tiranyx.com = consumer (external)
+
+api.migancore.com {
   reverse_proxy api:8000
 }
 
-app.mighan.com {
+app.migancore.com {
   reverse_proxy frontend:3000
 }
 
-lab.sidixlab.com {
+lab.migancore.com {
   reverse_proxy langfuse:3000
 }
 
-tiranyx.com, www.tiranyx.com {
-  reverse_proxy landing:3000
+studio.migancore.com {
+  reverse_proxy studio:3000
+}
+
+migancore.com, www.migancore.com {
+  redir https://app.migancore.com{uri}
 }
 ```
 

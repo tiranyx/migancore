@@ -38,26 +38,29 @@ Mighan-Core menjadi **inti (ruh + akal) dari ekosistem agent digital** yang:
 
 ## STRATEGIC PILLARS
 
-### Pillar 1: The Brain (Sidixlab.com)
-Laboratorium riset dan training. Di sini Mighan-Core lahir, dilatih, dan berevolusi.
+### Pillar 1: The Brain (migancore.com/lab)
+Laboratorium riset dan training. Semua development Mighan-Core berlangsung di migancore.com.
 - Self-supervised training pipeline
 - ArXiv research ingestion & KG building
 - Model versioning & experiment tracking
 - Constitutional AI refinement
+- **Consumer:** sidixlab.com mengakses via API migancore.com
 
-### Pillar 2: The Platform (Mighan.com)
-Marketplace & runtime untuk agent clones.
+### Pillar 2: The Platform (migancore.com/app)
+Marketplace & runtime untuk agent clones. Berjalan di core migancore.com.
 - Agent spawning dengan personality customization
 - Multi-tenant isolation
 - Ownership authentication
 - Agent genealogy visualization
+- **Consumer:** mighan.com mengakses via API migancore.com
 
-### Pillar 3: The Ecosystem (Tiranyx.com)
-Induk ekosistem. Orchestrasi keseluruhan.
+### Pillar 3: The Ecosystem (migancore.com)
+Induk ekosistem dan governance. Central hub di migancore.com.
 - Project ownership & governance
 - Cross-platform integrations
 - Developer APIs & SDK
 - Community & documentation
+- **Consumer:** tiranyx.com mengakses via API migancore.com
 
 ---
 

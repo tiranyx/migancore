@@ -147,7 +147,7 @@ services:
     environment:
       DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/langfuse
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
-      NEXTAUTH_URL: https://lab.sidixlab.com
+      NEXTAUTH_URL: https://lab.migancore.com
       SALT: ${LANGFUSE_SALT}
     depends_on: [postgres]
     deploy:

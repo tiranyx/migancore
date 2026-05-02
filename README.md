@@ -6,7 +6,9 @@
 
 > **Open Core Engine for Self-Evolving AI Agents**
 
-MiganCore adalah inti dari ekosistem Tiranyx — sebuah *Autonomous Digital Organism* yang bisa berorkestrasi, belajar dari setiap interaksi, memperbaiki dirinya sendiri setiap minggu, dan melahirkan child agents dengan kepribadian unik.
+MiganCore adalah **pusat pengembangan dan produksi** ekosistem Tiranyx — sebuah *Autonomous Digital Organism* yang bisa berorkestrasi, belajar dari setiap interaksi, memperbaiki dirinya sendiri setiap minggu, dan melahirkan child agents dengan kepribadian unik.
+
+**Semua development berlangsung di `migancore.com`.** Domain lain (`sidixlab.com`, `mighan.com`, `tiranyx.com`) adalah **consumer/distribution channel** yang mengakses produk ini via API.
 
 ---
 
@@ -26,33 +28,47 @@ MiganCore adalah inti dari ekosistem Tiranyx — sebuah *Autonomous Digital Orga
 ## 🗺️ Arsitektur
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  sidixlab   │     │   mighan    │     │   tiranyx   │
-│  .com       │     │   .com      │     │   .com      │
-│  (Research) │     │  (Platform) │     │ (Governance)│
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                    │
-       └───────────────────┼────────────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │     API GATEWAY         │
-              │   (FastAPI + Caddy)     │
-              └────────────┬────────────┘
-                           │
-    ┌──────────┬───────────┼───────────┬──────────┐
-    │          │           │           │          │
-┌───▼───┐ ┌────▼────┐ ┌───▼───┐ ┌────▼────┐ ┌───▼────┐
-│LangGraph│ │ Letta   │ │ Celery│ │ Qdrant  │ │ Postgres│
-│Director │ │ Memory  │ │Workers│ │ Vectors │ │ +pgvector│
-└───┬────┘ └────┬────┘ └───┬───┘ └────┬────┘ └───┬────┘
-    │           │          │          │          │
-    └───────────┴──────────┴──────────┴──────────┘
-                           │
-                    ┌──────▼──────┐
-                    │   Ollama    │
-                    │ Qwen2.5-7B  │
-                    └─────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     MIGANCORE.COM — CENTRAL HUB                     │
+│              (Development + Production + Core Services)             │
+│                                                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │
+│  │ api.        │  │ app.        │  │ lab.        │  │ studio.   │ │
+│  │ migancore   │  │ migancore   │  │ migancore   │  │ migancore │ │
+│  │ (API GW)    │  │ (Dashboard) │  │ (Observab.) │  │ (Training)│ │
+│  └──────┬──────┘  └─────────────┘  └─────────────┘  └───────────┘ │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                    CORE SERVICE LAYER                        │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  │   │
+│  │  │LangGraph │  │  Letta   │  │  Celery  │  │  Qdrant    │  │   │
+│  │  │Director  │  │ Memory   │  │ Workers  │  │  Vectors   │  │   │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────┬──────┘  │   │
+│  │       │             │             │              │         │   │
+│  │  ┌────┴─────────────┴─────────────┴──────────────┴──────┐  │   │
+│  │  │              POSTGRESQL + REDIS + OLLAMA              │  │   │
+│  │  │         (Data + Cache + Qwen2.5-7B Inference)         │  │   │
+│  │  └───────────────────────────────────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ API Calls
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+   ┌────▼─────┐        ┌──────▼──────┐       ┌─────▼──────┐
+   │sidixlab  │        │  mighan     │       │  tiranyx   │
+   │.com      │        │  .com       │       │  .com      │
+   │(Research │        │  (Platform  │       │  (Project  │
+   │Consumer) │        │  Consumer)  │       │  Owner)    │
+   └──────────┘        └─────────────┘       └────────────┘
 ```
+
+**Penjelasan:**
+- **migancore.com** = Satu-satunya tempat development & deployment. Semua backend, model, memory, dan training berjalan di sini.
+- **sidixlab.com** = Consumer untuk research lab. Frontend/UI yang consume `api.migancore.com`.
+- **mighan.com** = Consumer untuk clone platform. Frontend/UI yang consume `api.migancore.com`.
+- **tiranyx.com** = Consumer untuk project governance. Frontend/UI yang consume `api.migancore.com`.
 
 ---
 
@@ -151,11 +167,16 @@ Lihat [LICENSE](LICENSE) untuk detail lengkap.
 
 ## 🌐 Ekosistem
 
-| Repo | Visibility | License | Isi |
+| Repo | Visibility | License | Peran |
 |---|---|---|---|
-| `tiranyx/migancore` | **Public** | Apache 2.0 | Core engine (repo ini) |
-| `tiranyx/migancore-platform` | **Private** | Proprietary | Hosted service, billing, dashboard |
+| `tiranyx/migancore` | **Public** | Apache 2.0 | **Central Hub** — engine, API, training, memory |
+| `tiranyx/migancore-platform` | **Private** | Proprietary | Dashboard, billing, analytics UI (consumer of migancore) |
 | `tiranyx/migancore-community` | **Public** | MIT | Templates, plugins, datasets |
+
+**Consumer Channels** (mengakses `api.migancore.com`):
+- 🔬 **sidixlab.com** — Research lab distribution
+- 🧬 **mighan.com** — Clone platform distribution
+- 🏠 **tiranyx.com** — Project owner / governance distribution
 
 ---
 
@@ -167,8 +188,9 @@ Kami menerima kontribusi! Lihat [docs/07_AGENT_PROTOCOL.md](docs/07_AGENT_PROTOC
 
 ## 🔗 Links
 
-- 🌐 **Website:** [migancore.com](https://migancore.com)
-- 🔬 **Research Lab:** [sidixlab.com](https://sidixlab.com)
+- 🌐 **Development Hub:** [migancore.com](https://migancore.com)
+- 🔬 **Research Consumer:** [sidixlab.com](https://sidixlab.com)
+- 🧬 **Platform Consumer:** [mighan.com](https://mighan.com)
 - 🏠 **Project Owner:** [tiranyx.com](https://tiranyx.com)
 
 ---

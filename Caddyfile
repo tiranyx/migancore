@@ -1,15 +1,31 @@
-api.mighan.com {
+# ============================================
+# MIGANCORE.COM — Central Hub Reverse Proxy
+# ============================================
+# Semua development & core services berjalan di migancore.com
+# sidixlab.com, mighan.com, tiranyx.com = consumer/distribution
+#   yang mengakses API via api.migancore.com
+
+# API Gateway — entry point untuk semua consumer
+api.migancore.com {
   reverse_proxy api:8000
 }
 
-app.mighan.com {
+# Main Dashboard — development & management UI
+app.migancore.com {
   reverse_proxy frontend:3000
 }
 
-lab.sidixlab.com {
+# Research Lab — Langfuse observability & experiment tracking
+lab.migancore.com {
   reverse_proxy langfuse:3000
 }
 
-tiranyx.com, www.tiranyx.com {
-  reverse_proxy landing:3000
+# Training Studio — MLflow, model registry, training jobs
+studio.migancore.com {
+  reverse_proxy studio:3000
+}
+
+# Root domain redirect
+migancore.com, www.migancore.com {
+  redir https://app.migancore.com{uri}
 }
