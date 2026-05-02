@@ -23,13 +23,13 @@ echo "=========================================="
 # --- Step 1: Navigate to project ---
 cd /opt/ado
 
-# --- Step 2: Start Core Infrastructure (WITHOUT Letta — needs Ollama first) ---
+# --- Step 2: Start Core Infrastructure ---
 echo ""
-echo "[1/6] Starting PostgreSQL, Qdrant, Redis..."
-docker compose up -d postgres qdrant redis
+echo "[1/6] Starting PostgreSQL, Qdrant, Redis, Ollama..."
+docker compose up -d postgres qdrant redis ollama
 sleep 10
 
-for service in postgres qdrant redis; do
+for service in postgres qdrant redis ollama; do
     if docker compose ps $service | grep -q "running"; then
         log "$service is running"
     else
@@ -37,29 +37,25 @@ for service in postgres qdrant redis; do
     fi
 done
 
-# --- Step 3: Start Ollama ---
+# --- Step 3: Wait for Ollama readiness ---
 echo ""
-echo "[2/6] Starting Ollama..."
-docker compose up -d ollama
-sleep 5
-
-# Wait for Ollama to be healthy (max 60s)
+echo "[2/6] Waiting for Ollama to be ready..."
 for i in {1..12}; do
-    if docker compose ps ollama | grep -q "healthy"; then
-        log "Ollama is healthy"
+    if docker compose exec -T ollama ollama list >/dev/null 2>&1; then
+        log "Ollama is responding"
         break
     fi
     if [ "$i" -eq 12 ]; then
-        error "Ollama did not become healthy within 60s"
+        error "Ollama did not become ready within 60s"
     fi
-    info "Waiting for Ollama to be healthy... ($i/12)"
+    info "Waiting for Ollama... ($i/12)"
     sleep 5
 done
 
-# --- Step 3.5: Start Letta (depends on Ollama healthy) ---
+# --- Step 3.5: Start Letta (profile: memory) ---
 echo ""
-echo "[2.5/6] Starting Letta (depends on Ollama)..."
-docker compose up -d letta
+echo "[2.5/6] Starting Letta (profile: memory)..."
+docker compose --profile memory up -d letta
 sleep 5
 
 if docker compose ps letta | grep -q "running"; then
@@ -121,9 +117,9 @@ docker compose exec -T ollama ollama list
 
 echo ""
 info "Next steps (Day 3-4):"
-echo "  1. Start API service: docker compose up -d api"
-echo "  2. Test: curl http://localhost:8000/health"
-echo "  3. Run database migrations"
-echo "  4. FastAPI hello-world endpoint"
+echo "  1. Build API image: docker compose up -d --build api"
+echo "  2. Test: curl http://127.0.0.1:18000/health"
+echo "  3. Add nginx vhost for api.migancore.com"
+echo "  4. Auth + JWT endpoints"
 echo ""
 log "Day 2 complete!"

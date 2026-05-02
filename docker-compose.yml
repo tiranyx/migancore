@@ -1,5 +1,17 @@
 # MIGANCORE Docker Compose Stack
 # Note: 'version' attribute removed (obsolete in Docker Compose v2+)
+#
+# Architecture: Nginx aaPanel = edge reverse proxy (ports 80/443)
+# MiganCore services bind to 127.0.0.1 only — never exposed to internet directly.
+# Caddy disabled on this VPS (profile: ingress) — nginx handles SSL.
+#
+# Profiles:
+#   default:    postgres, redis, qdrant, ollama, api (always on)
+#   memory:     letta
+#   workers:    celery workers
+#   observability: langfuse
+#   training:   mlflow/studio (future)
+#   ingress:    caddy (DISABLED — nginx aaPanel owns 80/443)
 
 services:
   ollama:
@@ -8,14 +20,15 @@ services:
     volumes:
       - ./data/ollama:/root/.ollama
     environment:
-      OLLAMA_NUM_PARALLEL: "2"
+      OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_MAX_QUEUE: "32"
     deploy:
       resources:
         limits: { memory: 12G }
     # Note: No healthcheck — ollama image lacks curl/wget.
-    # Health verified externally via ollama list or API call.
+    # Health verified externally via `docker compose exec ollama ollama list`.
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -57,6 +70,7 @@ services:
   letta:
     image: letta/letta:0.6.0
     restart: unless-stopped
+    profiles: ["memory"]
     environment:
       LETTA_PG_URI: postgresql://ado:${PG_PASSWORD}@postgres:5432/letta_db
       LETTA_OLLAMA_BASE_URL: http://ollama:11434
@@ -72,6 +86,8 @@ services:
   api:
     build: { context: ./api, dockerfile: Dockerfile }
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:18000:8000"
     environment:
       DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -84,7 +100,7 @@ services:
       JWT_PUBLIC_KEY_PATH: /etc/ado/keys/public.pem
     volumes:
       - /etc/ado/keys:/etc/ado/keys:ro
-    depends_on: [postgres, qdrant, redis, letta, ollama]
+    depends_on: [postgres, qdrant, redis, ollama]
     deploy:
       resources:
         limits: { memory: 2G }
@@ -93,6 +109,7 @@ services:
     build: { context: ./api, dockerfile: Dockerfile }
     command: celery -A app.celery worker -Q code -c 2 -l info
     restart: unless-stopped
+    profiles: ["workers"]
     environment:
       DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -109,6 +126,7 @@ services:
     build: { context: ./api, dockerfile: Dockerfile }
     command: celery -A app.celery worker -Q web -c 2 -l info
     restart: unless-stopped
+    profiles: ["workers"]
     environment:
       DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -125,6 +143,7 @@ services:
     build: { context: ./api, dockerfile: Dockerfile }
     command: celery -A app.celery worker -Q research,kb,training -c 1 -l info
     restart: unless-stopped
+    profiles: ["workers"]
     environment:
       DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/ado
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -140,6 +159,9 @@ services:
   langfuse:
     image: langfuse/langfuse:2
     restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "127.0.0.1:13001:3000"
     environment:
       DATABASE_URL: postgresql://ado:${PG_PASSWORD}@postgres:5432/langfuse
       NEXTAUTH_SECRET: ${LANGFUSE_SECRET}
@@ -150,9 +172,13 @@ services:
       resources:
         limits: { memory: 1G }
 
+  # Caddy is DISABLED on this VPS.
+  # nginx aaPanel owns ports 80/443. MiganCore services bind to 127.0.0.1 only.
+  # To enable Caddy (e.g., on a dedicated VPS), run: docker compose --profile ingress up -d
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    profiles: ["ingress"]
     ports:
       - "80:80"
       - "443:443"
