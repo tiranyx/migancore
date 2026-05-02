@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import AsyncSessionLocal
+from models import base as _base
 
 
 async def get_db() -> AsyncSession:
@@ -17,7 +17,9 @@ async def get_db() -> AsyncSession:
     RLS is not needed. For tenant-scoped endpoints, use get_db_tenant
     or call set_tenant_context() explicitly.
     """
-    async with AsyncSessionLocal() as session:
+    if _base.AsyncSessionLocal is None:
+        raise RuntimeError("Database engine not initialized. Call init_engine() first.")
+    async with _base.AsyncSessionLocal() as session:
         yield session
 
 
@@ -41,7 +43,9 @@ async def tenant_session(tenant_id: str | None):
         async with tenant_session(str(user.tenant_id)) as session:
             result = await session.execute(select(Agent))
     """
-    async with AsyncSessionLocal() as session:
+    if _base.AsyncSessionLocal is None:
+        raise RuntimeError("Database engine not initialized. Call init_engine() first.")
+    async with _base.AsyncSessionLocal() as session:
         if tenant_id:
             await set_tenant_context(session, tenant_id)
         yield session
