@@ -60,7 +60,6 @@ def _client_info(request: Request) -> tuple[str | None, str | None]:
 
 
 async def _fire_audit(
-    db: AsyncSession,
     event_type: str,
     tenant_id: str | uuid.UUID | None,
     user_id: str | uuid.UUID | None,
