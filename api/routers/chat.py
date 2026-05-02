@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,8 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     agent_id: str
     conversation_id: str
     response: str

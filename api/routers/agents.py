@@ -7,7 +7,7 @@ Day 6 MVP: POST /v1/agents (create agent)
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,8 @@ router = APIRouter(prefix="/v1/agents", tags=["agents"])
 
 
 class CreateAgentRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1024)
     model_version: str = Field(default="qwen2.5:7b-instruct-q4_K_M")
@@ -26,6 +28,8 @@ class CreateAgentRequest(BaseModel):
 
 
 class AgentResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     id: str
     name: str
     description: str | None
