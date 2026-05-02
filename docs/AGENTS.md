@@ -126,10 +126,34 @@ Every agent must complete this checklist before starting work:
 - Configured A records: www, app, api, lab → 72.62.125.6
 - VPS active: 72.62.125.6 (32GB RAM, aaPanel)
 
+### Phase 4: VPS Day 1 Setup (2026-05-03)
+**Agent:** Kimi Code CLI
+- Executed day1-setup.sh on VPS
+- Docker installed, UFW configured, fail2ban active
+- 8 GB swap created (later corrected from 4 GB)
+- JWT keys generated at `/etc/ado/keys/`
+- Repo cloned to `/opt/ado/`
+- `.env` auto-generated with random passwords
+
+### Phase 5: VPS Day 2 Setup + Deep Audit (2026-05-03)
+**Agent:** Kimi Code CLI
+- Started PostgreSQL, Qdrant, Redis, Ollama, Letta containers
+- Pulled Qwen2.5-7B-Instruct-Q4_K_M (4.7 GB) and Qwen2.5-0.5B (397 MB)
+- **CRITICAL DISCOVERY:** VPS hosts mature SIDIX/Ixonomic/Mighantect ecosystem
+- **Found:** Host Ollama (PID 106258) is PRODUCTION for SIDIX brain_qa — DO NOT STOP
+- **Fixed:** Letta isolated to own database (`letta_db`) with pgvector extension
+- **Fixed:** Removed obsolete `version:` from docker-compose.yml
+- **Fixed:** Ollama healthcheck removed (image lacks curl/wget)
+- **Fixed:** Letta depends_on simplified (no service_healthy condition)
+- **Security fix:** Swap resized 4 GB → 8 GB
+- **Security fix:** UFW rule 5432 (PostgreSQL public) removed
+- **Audit:** Complete VPS ecosystem map created — `docs/VPS_ECOSYSTEM_MAP.md`
+
 **TODO:**
 - Add A record: studio → 72.62.125.6
-- Run day1-setup.sh on VPS
 - Setup RunPod account + $50 deposit
+- Day 3–4: FastAPI scaffold, auth, migrations
+- Decision needed: Caddy vs nginx reverse proxy strategy
 
 ---
 
@@ -202,6 +226,10 @@ When you finish work, you MUST:
 | R05 | Data leak | RLS is non-negotiable. Test tenant isolation. |
 | R11 | Legal: using Claude/GPT output | NEVER. Use Hermes-3-405B/Llama-3.1-405B only. |
 | R14 | Developer burnout | You are the developer. The human only reviews. |
+| R21 | Break existing SIDIX/Ixonomic apps | NEVER touch `/opt/sidix/`, `/var/www/ixonomic/`, or host systemd services. |
+| R22 | Caddy vs nginx port conflict | Caddy CANNOT bind 80/443. Nginx aaPanel owns them. See Section 9. |
+| R23 | Accidentally use host Redis/PG | MiganCore MUST use container hostnames (`redis:6379`, `postgres:5432`), never `localhost`. |
+| R24 | Dual Ollama RAM pressure | Host Ollama (SIDIX) + container Ollama (MiganCore) = ~10 GB when both loaded. Monitor. |
 
 ---
 
@@ -217,7 +245,56 @@ When you finish work, you MUST:
 | Sprint plan? | `docs/06_SPRINT_ROADMAP.md` |
 | How to work with other agents? | `docs/07_AGENT_PROTOCOL.md` |
 | Complete project overview? | `docs/MASTER_HANDOFF.md` |
+| VPS ecosystem map? | `docs/VPS_ECOSYSTEM_MAP.md` |
 | VPS setup script? | `scripts/day1-setup.sh` |
+
+---
+
+## 9. VPS ECOSYSTEM AWARENESS (CRITICAL — Multi-Agent Safety)
+
+**This VPS is SHARED.** MiganCore lives alongside SIDIX, Ixonomic, and Mighantect. One mistake breaks production apps.
+
+### 🚫 FORBIDDEN ZONES (Never Touch)
+| Path | Owner | Why |
+|------|-------|-----|
+| `/opt/sidix/` | SIDIX AI | brain_qa, Raudah, Qalb, LoRA adapters |
+| `/var/www/ixonomic/` | Ixonomic | Banking, fintech, 10+ microservices |
+| `/www/server/panel/` | aaPanel | Hosting control panel core |
+| `/etc/nginx/sites-enabled/` | aaPanel | All existing website vhosts |
+| `/root/sidix/` | SIDIX | Deploy scripts, ecosystem configs |
+| `/var/lib/postgresql/14/` | Host PG14 | SIDIX/aaPanel database |
+
+### 🚫 FORBIDDEN PROCESSES (Never Stop)
+| Process | PID / Service | Who Uses It |
+|---------|--------------|-------------|
+| Host Ollama | `ollama.service` (PID ~106258) | SIDIX brain_qa — RAG inference |
+| Host Redis | `redis-server.service` (PID ~1369289) | Mighantect gateway + others |
+| Host Postgres | `postgresql@14-main` (PID ~1329833) | SIDIX/aaPanel |
+| nginx | aaPanel | All websites (80/443) |
+| MariaDB | aaPanel | Ixonomic + aaPanel apps |
+| Any PM2 process | `pm2 list` | 20+ production Node.js apps |
+
+### ✅ MIGANCORE ONLY ZONE
+| Path | Purpose |
+|------|---------|
+| `/opt/ado/` | The ONLY working directory for MiganCore |
+| `/opt/ado/docker-compose.yml` | Stack definition |
+| `/opt/ado/data/` | Container volumes (postgres, ollama, qdrant, redis, caddy) |
+| `/etc/ado/keys/` | JWT keys |
+| `tiranyx/migancore` | The ONLY GitHub repo for core engine |
+
+### 🔗 Caddy vs Nginx Warning
+**nginx aaPanel owns ports 80 and 443.** Caddy container in MiganCore docker-compose.yml **cannot start** as-is because of port conflict. Before starting Caddy, you MUST:
+1. Either remove Caddy from compose and use nginx aaPanel for reverse proxy
+2. Or reconfigure Caddy to listen on alternate ports (8080/8443) and nginx forwards to it
+3. See `docs/VPS_ECOSYSTEM_MAP.md` Section 7 for full decision analysis
+
+### 🧠 Memory Awareness
+When MiganCore Ollama loads Qwen 7B (~5 GB) alongside existing host Ollama (~5.4 GB), total Ollama RAM becomes ~10.5 GB. With all other services, projected total VPS usage: **15–18 GB / 31 GB**. Still safe, but monitor with `docker stats` and `free -h`.
+
+---
+
+> **"The seed is patient. The breeder will come."**
 
 ---
 
