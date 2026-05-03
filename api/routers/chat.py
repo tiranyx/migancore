@@ -1,33 +1,47 @@
 """
-Chat router — MiganCore agent conversation endpoint.
+Chat router — MiganCore agent conversation endpoints.
 
-Day 6 MVP: POST /v1/agents/{id}/chat
-- Loads agent persona from config/agents.json + SOUL.md
-- Queries last N messages from Postgres for context
-- Calls Ollama with system prompt + history + user message
-- Persists conversation and message to database
-
-Day 7 enhancement: inject conversation history into context.
-Day 8 enhancement: wire Letta for working memory blocks.
+Day 6: POST /v1/agents/{id}/chat (basic chat + Postgres persistence)
+Day 7: + rate limiting, SSE streaming, memory injection, conversation list
+Day 8: + function calling / tool use loop
+Day 9: + LangGraph director routing
 """
 
+import asyncio
+import json
 import uuid
 from datetime import datetime, timezone
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
+from deps.rate_limit import limiter
 from models import User, Agent, Conversation, Message
+from models.base import AsyncSessionLocal
 from services.config_loader import get_agent_config, load_soul_md
+from services.memory import memory_summary
+from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
+from services.tool_executor import ToolContext, build_ollama_tools_spec
 
+logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/agents", tags=["chat"])
 
+CONTEXT_WINDOW_MESSAGES = 5
+MAX_TOKENS = 1024
+MAX_TOOL_ITERATIONS = 5  # Circuit breaker — prevents infinite tool loops
+
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
 
 class ChatRequest(BaseModel):
     message: str
@@ -41,15 +55,24 @@ class ChatResponse(BaseModel):
     conversation_id: str
     response: str
     model_used: str
+    tool_calls_made: int = 0  # How many tool calls were executed this turn
 
 
-# Number of previous messages to include in context window
-CONTEXT_WINDOW_MESSAGES = 5
-# Max tokens for response
-MAX_TOKENS = 1024
+class ConversationSummary(BaseModel):
+    id: str
+    title: str | None
+    status: str
+    message_count: int
+    last_message_at: str | None
+    started_at: str
 
+
+# ---------------------------------------------------------------------------
+# POST /v1/agents/{agent_id}/chat  — synchronous (blocking) chat
+# ---------------------------------------------------------------------------
 
 @router.post("/{agent_id}/chat", response_model=ChatResponse)
+@limiter.limit("30/minute")
 async def chat(
     agent_id: str,
     data: ChatRequest,
@@ -57,51 +80,317 @@ async def chat(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Send a message to an agent and receive a response.
+    """Send a message to an agent and receive a synchronous response.
 
-    Loads the agent's persona from config/agents.json and SOUL.md,
-    injects recent conversation history, calls Ollama, and persists
-    the exchange to Postgres.
+    Injects: SOUL.md persona + Redis memory summary + conversation history.
+    Persists: user + assistant messages to Postgres.
+    Rate limited: 30 requests/minute per IP.
     """
     tenant_id = str(current_user.tenant_id)
     await set_tenant_context(db, tenant_id)
 
-    # Validate agent exists and belongs to tenant
-    agent_result = await db.execute(
+    agent = await _get_agent_or_404(db, agent_id, current_user.tenant_id)
+    agent_cfg = get_agent_config(agent_id)
+    soul_text, model = _load_persona(agent_cfg)
+    mem = await memory_summary(tenant_id, agent_id)
+    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem)
+
+    conversation, history = await _get_or_create_conversation(
+        db, data, agent, current_user
+    )
+
+    messages = _build_messages(system_prompt, history, data.message)
+
+    # Build tools spec from agent's declared tools in agents.json
+    agent_tools = agent_cfg.get("default_tools", []) if agent_cfg else []
+    tool_ctx = ToolContext(tenant_id=tenant_id, agent_id=agent_id)
+    tools_spec = build_ollama_tools_spec(agent_tools)
+
+    # Persist user message before calling Ollama
+    user_msg = Message(
+        conversation_id=conversation.id,
+        tenant_id=current_user.tenant_id,
+        role="user",
+        content=data.message,
+    )
+    db.add(user_msg)
+    await db.flush()
+
+    # Run LangGraph director (or plain chat if no tools)
+    assistant_content, all_tool_calls, reasoning_trace = await run_director(
+        model=model,
+        messages=messages,
+        tools_spec=tools_spec,
+        tool_ctx=tool_ctx,
+        options={"num_predict": MAX_TOKENS, "temperature": 0},
+    )
+    logger.info("chat.reasoning_trace", trace=reasoning_trace)
+
+    # Persist assistant message with tool call metadata
+    assistant_msg = Message(
+        conversation_id=conversation.id,
+        tenant_id=current_user.tenant_id,
+        role="assistant",
+        content=assistant_content,
+        tool_calls=all_tool_calls if all_tool_calls else None,
+    )
+    db.add(assistant_msg)
+
+    conversation.message_count = len(history) + 2
+    conversation.last_message_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    logger.info(
+        "chat.response",
+        agent_id=agent_id,
+        conversation_id=str(conversation.id),
+        response_len=len(assistant_content),
+        tool_calls=len(all_tool_calls),
+    )
+
+    return ChatResponse(
+        agent_id=agent_id,
+        conversation_id=str(conversation.id),
+        response=assistant_content,
+        model_used=model,
+        tool_calls_made=len(all_tool_calls),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/agents/{agent_id}/chat/stream  — SSE streaming chat
+# ---------------------------------------------------------------------------
+
+@router.post("/{agent_id}/chat/stream")
+@limiter.limit("20/minute")
+async def chat_stream(
+    agent_id: str,
+    data: ChatRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Stream agent response via Server-Sent Events.
+
+    SSE event format:
+      data: {"type": "start",  "conversation_id": "..."}
+      data: {"type": "chunk",  "content": "hello "}
+      data: {"type": "chunk",  "content": "world"}
+      data: {"type": "done",   "conversation_id": "..."}
+      data: {"type": "error",  "message": "..."}
+
+    Pre-flight DB ops (agent validation, conversation create, history load)
+    complete BEFORE streaming starts so errors return proper HTTP status codes.
+    Assistant message is persisted via asyncio.create_task after stream ends.
+    """
+    tenant_id = str(current_user.tenant_id)
+
+    # Phase 1: Pre-flight — all DB ops, session closed before streaming
+    if AsyncSessionLocal is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not initialized",
+        )
+
+    async with AsyncSessionLocal() as db:
+        await set_tenant_context(db, tenant_id)
+
+        agent = await _get_agent_or_404(db, agent_id, current_user.tenant_id)
+        agent_cfg = get_agent_config(agent_id)
+        soul_text, model = _load_persona(agent_cfg)
+        mem = await memory_summary(tenant_id, agent_id)
+        system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem)
+
+        conversation, history = await _get_or_create_conversation(
+            db, data, agent, current_user
+        )
+        conversation_id = conversation.id
+
+        # Persist user message immediately (before streaming)
+        user_msg = Message(
+            conversation_id=conversation_id,
+            tenant_id=current_user.tenant_id,
+            role="user",
+            content=data.message,
+        )
+        db.add(user_msg)
+        await db.commit()
+    # DB session closes here — before streaming starts
+
+    messages = _build_messages(
+        system_prompt,
+        history,  # history loaded before session closed
+        data.message,
+    )
+
+    # Phase 2: SSE generator
+    async def generate():
+        yield _sse({"type": "start", "conversation_id": str(conversation_id)})
+
+        full_response: list[str] = []
+        try:
+            async for chunk, done in OllamaClient().chat_stream(
+                model=model,
+                messages=messages,
+                options={"num_predict": MAX_TOKENS},
+            ):
+                if chunk:
+                    full_response.append(chunk)
+                    yield _sse({"type": "chunk", "content": chunk})
+                if done:
+                    break
+
+            full_text = "".join(full_response)
+            yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+
+            # Persist assistant message in background (non-blocking)
+            asyncio.create_task(
+                _persist_assistant_message(
+                    conversation_id=conversation_id,
+                    tenant_id=tenant_id,
+                    content=full_text,
+                    message_count=len(history) + 2,
+                )
+            )
+
+        except OllamaError as exc:
+            logger.error("chat.stream.ollama_error", error=str(exc))
+            yield _sse({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/agents/{agent_id}/conversations  — list conversations for agent
+# ---------------------------------------------------------------------------
+
+@router.get("/{agent_id}/conversations", response_model=list[ConversationSummary])
+async def list_agent_conversations(
+    agent_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    limit: int = 20,
+    offset: int = 0,
+):
+    """List conversations for a specific agent, scoped to current user."""
+    tenant_id = str(current_user.tenant_id)
+    await set_tenant_context(db, tenant_id)
+
+    await _get_agent_or_404(db, agent_id, current_user.tenant_id)
+
+    result = await db.execute(
+        select(Conversation)
+        .where(
+            Conversation.agent_id == uuid.UUID(agent_id),
+            Conversation.tenant_id == current_user.tenant_id,
+            Conversation.user_id == current_user.id,
+            Conversation.status != "archived",
+        )
+        .order_by(Conversation.last_message_at.desc().nullslast())
+        .limit(limit)
+        .offset(offset)
+    )
+    conversations = result.scalars().all()
+
+    return [
+        ConversationSummary(
+            id=str(c.id),
+            title=c.title,
+            status=c.status,
+            message_count=c.message_count,
+            last_message_at=c.last_message_at.isoformat() if c.last_message_at else None,
+            started_at=c.started_at.isoformat(),
+        )
+        for c in conversations
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+async def _get_agent_or_404(
+    db: AsyncSession,
+    agent_id: str,
+    tenant_id: uuid.UUID,
+) -> Agent:
+    result = await db.execute(
         select(Agent).where(
             Agent.id == uuid.UUID(agent_id),
-            Agent.tenant_id == current_user.tenant_id,
+            Agent.tenant_id == tenant_id,
         )
     )
-    agent = agent_result.scalar_one_or_none()
+    agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found",
         )
+    return agent
 
-    # Load agent configuration
-    agent_cfg = get_agent_config(agent_id)
+
+def _load_persona(agent_cfg: dict | None) -> tuple[str, str]:
+    """Return (soul_text, model) from agent config."""
     if agent_cfg:
-        soul_text = load_soul_md(agent_cfg.get("soul_md_path"))
-        model = agent_cfg.get("model_version", "qwen2.5:7b-instruct-q4_K_M")
-    else:
-        soul_text = load_soul_md(None)
-        model = "qwen2.5:7b-instruct-q4_K_M"
+        return (
+            load_soul_md(agent_cfg.get("soul_md_path")),
+            agent_cfg.get("model_version", settings.DEFAULT_MODEL),
+        )
+    return load_soul_md(None), settings.DEFAULT_MODEL
 
-    # Build system prompt from SOUL.md + agent persona
-    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg)
 
-    # Get or create conversation
+def _build_system_prompt(
+    agent: Agent,
+    soul_text: str,
+    agent_cfg: dict | None,
+    memory_summary_text: str,
+) -> str:
+    """Construct system prompt: SOUL.md + persona overrides + memory."""
+    parts = [soul_text.strip()]
+
+    if agent_cfg:
+        persona = agent_cfg.get("persona_overrides", {})
+        if persona.get("voice"):
+            parts.append(f"\nVoice: {persona['voice']}")
+        if persona.get("tone"):
+            parts.append(f"Tone: {persona['tone']}")
+        if persona.get("values"):
+            parts.append(f"Values: {', '.join(persona['values'])}")
+
+    parts.append(f"\nYou are currently operating as: {agent.name}")
+    parts.append("Always respond in character. Never break the fourth wall.")
+
+    if memory_summary_text:
+        parts.append(f"\n{memory_summary_text}")
+
+    return "\n".join(parts)
+
+
+async def _get_or_create_conversation(
+    db: AsyncSession,
+    data: ChatRequest,
+    agent: Agent,
+    current_user: User,
+) -> tuple[Conversation, list[Message]]:
+    """Get existing conversation or create a new one. Returns (conv, history)."""
     if data.conversation_id:
-        conv_result = await db.execute(
+        result = await db.execute(
             select(Conversation).where(
                 Conversation.id == uuid.UUID(data.conversation_id),
                 Conversation.tenant_id == current_user.tenant_id,
                 Conversation.agent_id == agent.id,
             )
         )
-        conversation = conv_result.scalar_one_or_none()
+        conversation = result.scalar_one_or_none()
         if not conversation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -117,89 +406,18 @@ async def chat(
         db.add(conversation)
         await db.flush()
 
-    # Load recent messages for context
-    history = await _load_recent_messages(db, conversation.id, limit=CONTEXT_WINDOW_MESSAGES)
-
-    # Build messages payload for Ollama /api/chat
-    messages = [{"role": "system", "content": system_prompt}]
-    for msg in history:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": data.message})
-
-    # Persist user message
-    user_message = Message(
-        conversation_id=conversation.id,
-        tenant_id=current_user.tenant_id,
-        role="user",
-        content=data.message,
+    history = await _load_recent_messages(
+        db, conversation.id, limit=CONTEXT_WINDOW_MESSAGES
     )
-    db.add(user_message)
-
-    # Call Ollama
-    try:
-        async with OllamaClient() as client:
-            ollama_resp = await client.chat(
-                model=model,
-                messages=messages,
-                options={"num_predict": MAX_TOKENS},
-            )
-        assistant_content = ollama_resp.get("message", {}).get("content", "").strip()
-        if not assistant_content:
-            assistant_content = "[No response from model]"
-    except OllamaError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Ollama error: {exc}",
-        )
-
-    # Persist assistant message
-    assistant_message = Message(
-        conversation_id=conversation.id,
-        tenant_id=current_user.tenant_id,
-        role="assistant",
-        content=assistant_content,
-    )
-    db.add(assistant_message)
-
-    # Update conversation metadata
-    conversation.message_count = len(history) + 2
-    conversation.last_message_at = datetime.now(timezone.utc)
-
-    await db.commit()
-
-    return ChatResponse(
-        agent_id=agent_id,
-        conversation_id=str(conversation.id),
-        response=assistant_content,
-        model_used=model,
-    )
+    return conversation, history
 
 
-def _build_system_prompt(agent: Agent, soul_text: str, agent_cfg: dict | None) -> str:
-    """Construct the system prompt from SOUL.md + agent configuration.
-
-    This is the personality injection layer — what makes Migan-Core
-    feel like Migan-Core instead of a generic Qwen response.
-    """
-    parts = [soul_text.strip()]
-
-    if agent_cfg:
-        persona = agent_cfg.get("persona_overrides", {})
-        if persona.get("voice"):
-            parts.append(f"\nVoice: {persona['voice']}")
-        if persona.get("tone"):
-            parts.append(f"Tone: {persona['tone']}")
-        if persona.get("values"):
-            parts.append(f"Values: {', '.join(persona['values'])}")
-
-    parts.append(f"\nYou are currently operating as: {agent.name}")
-    parts.append("Always respond in character. Never break the fourth wall.")
-
-    return "\n".join(parts)
-
-
-async def _load_recent_messages(db: AsyncSession, conversation_id: uuid.UUID, limit: int = 5):
-    """Load the most recent messages for a conversation."""
+async def _load_recent_messages(
+    db: AsyncSession,
+    conversation_id: uuid.UUID,
+    limit: int = 5,
+) -> list[Message]:
+    """Load last N messages in chronological order."""
     result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
@@ -207,5 +425,157 @@ async def _load_recent_messages(db: AsyncSession, conversation_id: uuid.UUID, li
         .limit(limit)
     )
     messages = result.scalars().all()
-    # Return in chronological order
     return list(reversed(messages))
+
+
+def _build_messages(
+    system_prompt: str,
+    history: list[Message],
+    user_message: str,
+) -> list[dict]:
+    """Build Ollama messages list from system prompt + history + new message."""
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in history:
+        messages.append({"role": msg.role, "content": msg.content})
+    messages.append({"role": "user", "content": user_message})
+    return messages
+
+
+async def _run_agentic_loop(
+    model: str,
+    messages: list[dict],
+    tools_spec: list[dict],
+    tool_ctx: ToolContext,
+) -> tuple[str, list[dict]]:
+    """ReAct loop: call Ollama → execute tools → re-call until done.
+
+    Circuit breaker: max MAX_TOOL_ITERATIONS tool-calling rounds.
+    Returns (final_assistant_content, list_of_all_tool_calls_executed).
+
+    Tool result message format (Ollama spec):
+      {"role": "tool", "content": "<json result string>"}
+    """
+    working_messages = list(messages)
+    all_tool_calls: list[dict] = []
+    executor = ToolExecutor(tool_ctx)
+
+    try:
+        async with OllamaClient() as client:
+            for iteration in range(MAX_TOOL_ITERATIONS + 1):
+                # Use tool-capable endpoint if tools available, otherwise plain chat
+                if tools_spec and iteration < MAX_TOOL_ITERATIONS:
+                    resp = await client.chat_with_tools(
+                        model=model,
+                        messages=working_messages,
+                        tools=tools_spec,
+                        options={"num_predict": MAX_TOKENS, "temperature": 0},
+                    )
+                else:
+                    resp = await client.chat(
+                        model=model,
+                        messages=working_messages,
+                        options={"num_predict": MAX_TOKENS},
+                    )
+
+                assistant_msg = resp.get("message", {})
+                tool_calls = assistant_msg.get("tool_calls", [])
+
+                # No tool calls → final response
+                if not tool_calls:
+                    content = assistant_msg.get("content", "").strip()
+                    return content or "[No response from model]", all_tool_calls
+
+                # Execute all tool calls in this round
+                # Add assistant's tool-call message to conversation
+                working_messages.append({
+                    "role": "assistant",
+                    "content": assistant_msg.get("content", ""),
+                    "tool_calls": tool_calls,
+                })
+
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    skill_id = fn.get("name", "")
+                    arguments = fn.get("arguments", {})
+                    if isinstance(arguments, str):
+                        try:
+                            arguments = json.loads(arguments)
+                        except json.JSONDecodeError:
+                            arguments = {}
+
+                    logger.info(
+                        "chat.tool_call",
+                        skill=skill_id,
+                        agent=tool_ctx.agent_id,
+                        iteration=iteration,
+                    )
+
+                    result = await executor.execute(skill_id, arguments)
+                    all_tool_calls.append({
+                        "skill_id": skill_id,
+                        "arguments": arguments,
+                        "result": result,
+                        "iteration": iteration,
+                    })
+
+                    # Inject tool result back into conversation
+                    working_messages.append({
+                        "role": "tool",
+                        "content": json.dumps(result.get("result") or {"error": result.get("error")}, ensure_ascii=False),
+                    })
+
+            # Circuit breaker: force final response without tools
+            resp = await client.chat(
+                model=model,
+                messages=working_messages,
+                options={"num_predict": MAX_TOKENS},
+            )
+            content = resp.get("message", {}).get("content", "").strip()
+            return content or "[No response from model]", all_tool_calls
+
+    except OllamaError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Ollama error: {exc}",
+        )
+
+
+async def _persist_assistant_message(
+    conversation_id: uuid.UUID,
+    tenant_id: str,
+    content: str,
+    message_count: int,
+) -> None:
+    """Persist assistant message after SSE streaming completes.
+
+    Runs as asyncio.create_task — failures are logged but not raised.
+    """
+    if AsyncSessionLocal is None:
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            await set_tenant_context(db, tenant_id)
+
+            assistant_msg = Message(
+                conversation_id=conversation_id,
+                tenant_id=uuid.UUID(tenant_id),
+                role="assistant",
+                content=content,
+            )
+            db.add(assistant_msg)
+
+            await db.execute(
+                text(
+                    "UPDATE conversations SET message_count = :mc, last_message_at = NOW() "
+                    "WHERE id = :conv_id"
+                ),
+                {"mc": message_count, "conv_id": conversation_id},
+            )
+            await db.commit()
+    except Exception as exc:
+        logger.error("chat.persist_assistant.failed", error=str(exc), conversation_id=str(conversation_id))
+
+
+def _sse(data: dict) -> str:
+    """Format a dict as an SSE data line."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"

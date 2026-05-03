@@ -21,6 +21,7 @@ from models.base import init_engine
 from routers import auth as auth_router
 from routers import agents as agents_router
 from routers import chat as chat_router
+from routers import conversations as conversations_router
 
 logger = structlog.get_logger()
 
@@ -97,7 +98,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -142,6 +143,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(agents_router.router)
 app.include_router(chat_router.router)
+app.include_router(conversations_router.router)
 
 
 @app.get("/health", tags=["system"])
@@ -150,7 +152,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "migancore-api",
-        "version": "0.2.0",
+        "version": "0.3.0",
     }
 
 
@@ -183,13 +185,15 @@ async def root():
     """API root — returns service metadata."""
     return {
         "name": "MiganCore",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "tagline": "Every vision deserves a digital organism.",
         "endpoints": {
             "health": "/health",
             "ready": "/ready",
             "docs": "/docs",
             "auth": "/v1/auth",
+            "agents": "/v1/agents",
+            "conversations": "/v1/conversations",
         },
     }
 
