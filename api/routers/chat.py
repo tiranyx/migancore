@@ -24,7 +24,6 @@ from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
 from deps.rate_limit import limiter
 from models import User, Agent, Conversation, Message
-from models.base import AsyncSessionLocal
 from services.config_loader import get_agent_config, load_soul_md
 from services.memory import memory_summary
 from services.director import run_director
@@ -186,6 +185,7 @@ async def chat_stream(
     tenant_id = str(current_user.tenant_id)
 
     # Phase 1: Pre-flight — all DB ops, session closed before streaming
+    from models.base import AsyncSessionLocal
     if AsyncSessionLocal is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -439,105 +439,6 @@ def _build_messages(
         messages.append({"role": msg.role, "content": msg.content})
     messages.append({"role": "user", "content": user_message})
     return messages
-
-
-async def _run_agentic_loop(
-    model: str,
-    messages: list[dict],
-    tools_spec: list[dict],
-    tool_ctx: ToolContext,
-) -> tuple[str, list[dict]]:
-    """ReAct loop: call Ollama → execute tools → re-call until done.
-
-    Circuit breaker: max MAX_TOOL_ITERATIONS tool-calling rounds.
-    Returns (final_assistant_content, list_of_all_tool_calls_executed).
-
-    Tool result message format (Ollama spec):
-      {"role": "tool", "content": "<json result string>"}
-    """
-    working_messages = list(messages)
-    all_tool_calls: list[dict] = []
-    executor = ToolExecutor(tool_ctx)
-
-    try:
-        async with OllamaClient() as client:
-            for iteration in range(MAX_TOOL_ITERATIONS + 1):
-                # Use tool-capable endpoint if tools available, otherwise plain chat
-                if tools_spec and iteration < MAX_TOOL_ITERATIONS:
-                    resp = await client.chat_with_tools(
-                        model=model,
-                        messages=working_messages,
-                        tools=tools_spec,
-                        options={"num_predict": MAX_TOKENS, "temperature": 0},
-                    )
-                else:
-                    resp = await client.chat(
-                        model=model,
-                        messages=working_messages,
-                        options={"num_predict": MAX_TOKENS},
-                    )
-
-                assistant_msg = resp.get("message", {})
-                tool_calls = assistant_msg.get("tool_calls", [])
-
-                # No tool calls → final response
-                if not tool_calls:
-                    content = assistant_msg.get("content", "").strip()
-                    return content or "[No response from model]", all_tool_calls
-
-                # Execute all tool calls in this round
-                # Add assistant's tool-call message to conversation
-                working_messages.append({
-                    "role": "assistant",
-                    "content": assistant_msg.get("content", ""),
-                    "tool_calls": tool_calls,
-                })
-
-                for tc in tool_calls:
-                    fn = tc.get("function", {})
-                    skill_id = fn.get("name", "")
-                    arguments = fn.get("arguments", {})
-                    if isinstance(arguments, str):
-                        try:
-                            arguments = json.loads(arguments)
-                        except json.JSONDecodeError:
-                            arguments = {}
-
-                    logger.info(
-                        "chat.tool_call",
-                        skill=skill_id,
-                        agent=tool_ctx.agent_id,
-                        iteration=iteration,
-                    )
-
-                    result = await executor.execute(skill_id, arguments)
-                    all_tool_calls.append({
-                        "skill_id": skill_id,
-                        "arguments": arguments,
-                        "result": result,
-                        "iteration": iteration,
-                    })
-
-                    # Inject tool result back into conversation
-                    working_messages.append({
-                        "role": "tool",
-                        "content": json.dumps(result.get("result") or {"error": result.get("error")}, ensure_ascii=False),
-                    })
-
-            # Circuit breaker: force final response without tools
-            resp = await client.chat(
-                model=model,
-                messages=working_messages,
-                options={"num_predict": MAX_TOKENS},
-            )
-            content = resp.get("message", {}).get("content", "").strip()
-            return content or "[No response from model]", all_tool_calls
-
-    except OllamaError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Ollama error: {exc}",
-        )
 
 
 async def _persist_assistant_message(

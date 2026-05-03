@@ -112,6 +112,7 @@ async def get_conversation(
             Conversation.id == uuid.UUID(conversation_id),
             Conversation.tenant_id == current_user.tenant_id,
             Conversation.user_id == current_user.id,
+            Conversation.status != "archived",
         )
     )
     conversation = conv_result.scalar_one_or_none()

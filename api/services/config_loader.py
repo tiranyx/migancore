@@ -70,14 +70,23 @@ def load_soul_md(path: str | None) -> str:
     """Load a SOUL.md file from the given relative path.
 
     Falls back to a minimal default if the file is missing.
+    Path is resolved and restricted to CONFIG_DIR.parent to prevent traversal.
     """
     if not path:
         return _DEFAULT_SOUL
-    full_path = CONFIG_DIR.parent / path
-    if not full_path.exists():
+    try:
+        # Resolve to absolute and ensure it stays within allowed directory
+        base_dir = CONFIG_DIR.parent.resolve()
+        full_path = (CONFIG_DIR.parent / path).resolve()
+        # Security: prevent directory traversal outside base_dir
+        if not str(full_path).startswith(str(base_dir)):
+            return _DEFAULT_SOUL
+        if not full_path.exists():
+            return _DEFAULT_SOUL
+        with open(full_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except (OSError, ValueError):
         return _DEFAULT_SOUL
-    with open(full_path, "r", encoding="utf-8") as f:
-        return f.read()
 
 
 _DEFAULT_SOUL = """# Mighan-Core
