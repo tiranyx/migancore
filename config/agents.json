@@ -14,7 +14,10 @@
         "python_repl",
         "memory_write",
         "memory_search",
-        "spawn_agent"
+        "spawn_agent",
+        "generate_image",
+        "read_file",
+        "write_file"
       ],
       "persona_locked": true,
       "visibility": "public",
