@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 21 — Auto-rerun Synthetic Generation)
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 22 — Chat UI + app.migancore.com)
 **API Version:** 0.4.1
-**Git Commit:** `2ef988d`
+**Git Commit:** `a8538d5`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,11 +16,11 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 21 (COMPLETE) → Day 22 (NEXT) |
+| Sprint Day | Day 22 (COMPLETE) → Day 23/24 (NEXT) |
 | API Version | 0.4.1 |
-| Git Commit | `2ef988d` |
+| Git Commit | `a8538d5` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
-| External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
+| External URL | **https://api.migancore.com** (API) · **https://app.migancore.com** (Chat UI) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
 
 ---
@@ -210,6 +210,35 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 22 — Chat UI + app.migancore.com (COMPLETE)
+**Git Commit:** `a8538d5` | **Deployed:** 2026-05-03 | **Version:** 0.4.1 (no API change)
+
+**Delivered:**
+- ✅ `frontend/chat.html` — Standalone React 18 Chat UI (single HTML file, no build step)
+  - Dark sci-fi design: `--bg-0: #07100e`, Orbitron + Inter + JetBrains Mono fonts
+  - Boot sequence animation (sessionStorage guard — skip after first visit)
+  - Login/Register screen (tabs) — auto-generates tenant_slug from name
+  - Auto-create agent on first login (stored in localStorage)
+  - SSE streaming chat: `type: start/chunk/done/error` handling
+  - Stop button during streaming (AbortController)
+  - Conversation persistence in localStorage (last 60 messages)
+  - Conversation history sidebar (last 20 conversations saved)
+  - Logout with full localStorage clear
+  - Responsive: sidebar hidden on mobile
+- ✅ `docs/USER_GUIDE.md` — Complete user guide + credentials reference (private to Fahmi)
+- ✅ `docs/nginx_app_migancore.conf` — nginx config for `app.migancore.com`
+- ✅ **DEPLOYED** to VPS at `https://app.migancore.com` (Let's Encrypt SSL ✅)
+  - nginx vhost: `/www/server/panel/vhost/nginx/app.migancore.com.conf`
+  - Static files: `/opt/ado/frontend/`
+  - HTTP 200 verified · SSL valid · 40KB · HTTP→HTTPS redirect ✅
+
+**E2E verified:**
+- `https://app.migancore.com/` → 200, `<title>MiganCore — Chat</title>` ✅
+- HTTP 301 → HTTPS redirect ✅
+- DNS resolving: `app.migancore.com → 72.62.125.6` ✅
+
+---
 
 ### ✅ Day 21 — Auto-rerun Synthetic Generation (COMPLETE)
 **Git Commit:** `2ef988d` | **Deployed:** 2026-05-03 | **Version:** 0.4.1
@@ -531,13 +560,13 @@ Tidak ada blocker saat ini.
 | Metric | Value |
 |--------|-------|
 | API endpoints | 20 (5 auth + 4 agents + 3 chat + 3 conversations + 6 admin: 3 monitoring + 3 synthetic) |
+| Frontend | https://app.migancore.com (Chat UI, Let's Encrypt SSL) — Day 22 ✅ |
 | DB tables | 20 (includes papers, kg_entities, preference_pairs untuk Week 3-4) |
 | Memory tier | Tier 1: Redis K-V ✅ | Tier 2: Qdrant (Day 12) | Tier 3: Letta blocks (Day 13) |
 | Test coverage | E2E: 14/14 endpoints + 10/10 safety gates |
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
-| External URL | https://api.migancore.com (Let's Encrypt SSL) |
+| External URL | API: https://api.migancore.com · App: https://app.migancore.com |
 | RunPod budget | $0 spent of $50 allocated |
-| Git (Day 21) | VPS ↔ GitHub ↔ Local = SYNCED @ 2ef988d |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
 | DPO pairs accumulated | real (CAI) + synthetic (synthetic_seed_v1) — target: 1000+ before training |
@@ -547,7 +576,8 @@ Tidak ada blocker saat ini.
 | Hybrid search | BM42 sparse + dense RRF, Qdrant v1.12.0, 7 collections migrated, Day 18 ✅ |
 | Context window | num_ctx=4096 explicit, token budget trimming, Day 20 ✅ |
 | Tool executor timeout | memory_search: asyncio.wait_for(2.0s) → Redis fallback, Day 20 ✅ |
-| Git | VPS ↔ GitHub ↔ Local = SYNCED @ 74e86e7 |
+| Chat UI | app.migancore.com, SSE streaming, login/register, Day 22 ✅ |
+| Git (Day 22) | VPS ↔ GitHub ↔ Local = SYNCED @ a8538d5 |
 
 ---
 
@@ -577,3 +607,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 19) | Claude Sonnet 4.6 | Synthetic DPO generator: seed_bank.py (120 seeds, 7 domains, Triple-Source), synthetic_pipeline.py (generate→critique→revise, Redis tracking, graceful cancel), admin.py 3 new endpoints (start/status/stop), cai_pipeline.py source_method param + nullable source_message_id. v0.3.9. No DB migration. |
 | 2026-05-03 (Day 20) | Claude Sonnet 4.6 | Context window management: num_ctx=4096 explicit in all Ollama calls (chat.py + director.py), token budget trimming in chat.py (_estimate_tokens, _trim_history_to_budget, MAX_HISTORY_LOAD=10). Tool executor timeout: asyncio.wait_for(2.0s) in _memory_search → Redis fallback; corrected source label qdrant_hybrid. v0.4.0. No DB migration. |
 | 2026-05-03 (Day 21) | Claude Sonnet 4.6 | Auto-rerun synthetic generation: synthetic_pipeline.py multi-round loop with DB target check (_count_synthetic_pairs), new Redis keys (round/cumulative_stored/target_pairs), zero_yield safety abort. admin.py SyntheticStartRequest body. v0.4.1. No DB migration. |
+| 2026-05-03 (Day 22) | Claude Sonnet 4.6 | Chat UI: frontend/chat.html (React 18 CDN, SSE streaming, login/register, agent auto-create, conversation persistence). Deployed to app.migancore.com (nginx + Let's Encrypt SSL). docs/USER_GUIDE.md (credentials + tutorial). No API change, no DB migration. Commit a8538d5. |

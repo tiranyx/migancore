@@ -468,6 +468,74 @@
 
 ---
 
+## Week 3: Chat UI + Tools + MCP (Days 22–28)
+
+### Day 22 — Chat UI + app.migancore.com Deploy
+**Agent:** Claude Sonnet 4.6
+**Scope:** Frontend — Fahmi bisa mencoba produk sendiri untuk pertama kali
+
+**Problem:**
+Fahmi (founder) belum pernah mencoba produk karena tidak ada UI. Backend sudah berjalan sejak Day 4 (API live), knowledge extraction Day 14, CAI pipeline Day 15, episodic RAG Day 16 — tapi semua hanya bisa diakses via curl. Tidak ada cara visual untuk berinteraksi dengan MiganCore.
+
+**Solution: Standalone Chat UI (chat.html):**
+Single HTML file — tidak perlu build toolchain, tidak perlu Node.js, tidak perlu deploy pipeline.
+React 18 via CDN + Babel standalone. Serve langsung dari nginx sebagai static file.
+
+**Design System:**
+Menggunakan design tokens dari `Migancore Design sistem/` yang sudah dibuat Fahmi:
+- Background: `#07100e` (dark sci-fi)
+- Primary accent: `#ff8a24` (orange) untuk CTA, brand, user messages
+- Secondary accent: `#2fe39a` (green) untuk status, AI indicator, assistant messages
+- Fonts: Orbitron (display/brand), Inter (body), JetBrains Mono (mono/technical)
+- Glassmorphism panels, dot-pulse live indicator, boot sequence animation
+
+**Features Implemented:**
+- Boot sequence animation (sessionStorage guard — hanya tampil sekali per browser session)
+- Login/Register screen dengan tabs:
+  - Register: email + password + display_name + tenant_name + tenant_slug (auto-generated)
+  - Login: email + password
+  - JWT token disimpan di localStorage
+- Chat interface:
+  - Auto-create agent "MiganCore" saat pertama login (agent_id di localStorage)
+  - SSE streaming via `fetch` + `ReadableStream` — events `start/chunk/done/error`
+  - Stop button (AbortController) saat streaming aktif
+  - Empty state dengan hint chips (klik untuk send)
+  - Auto-resize textarea (Enter kirim, Shift+Enter baris baru)
+  - Auto-scroll ke pesan terbaru
+  - Conversation persistence localStorage (last 60 messages)
+  - Conversation history sidebar (last 20 sessions)
+  - Responsive: sidebar hidden <640px
+  - Logout dengan full localStorage cleanup
+
+**Deployment:**
+- `git push` → `scp chat.html root@72.62.125.6:/opt/ado/frontend/`
+- Nginx vhost: `/www/server/panel/vhost/nginx/app.migancore.com.conf`
+- Certbot webroot method (bukan --nginx plugin — aaPanel nginx conflict)
+- SSL: Let's Encrypt, valid 2026-08-01, auto-renewal configured
+- DNS A record: `app.migancore.com → 72.62.125.6` (sudah ada)
+
+**Deliverables:**
+- `frontend/chat.html` — 40KB standalone React 18 Chat UI
+- `docs/USER_GUIDE.md` — private user guide + credentials reference
+- `docs/nginx_app_migancore.conf` — nginx config template
+- `https://app.migancore.com` — live, SSL, HTTP→HTTPS redirect ✅
+
+**E2E Verified:**
+- `https://app.migancore.com/` → HTTP 200 ✅
+- Response: `<title>MiganCore — Chat</title>` ✅
+- HTTP 301 → HTTPS redirect ✅
+- SSL valid (certbot webroot, Let's Encrypt) ✅
+- 40KB served (full app) ✅
+
+**Git Commits:**
+- `a8538d5` — feat: Chat UI + User Guide + nginx config (Day 22)
+
+**Version:** No API version change (0.4.1). Frontend-only delivery.
+
+**Deliverables:** Fahmi bisa buka https://app.migancore.com, register, dan chat dengan MiganCore untuk pertama kali.
+
+---
+
 ### Day 21 — Auto-rerun Synthetic Generation
 **Agent:** Claude Sonnet 4.6
 **Scope:** DPO flywheel automation — eliminate manual re-trigger every 2-4 hours

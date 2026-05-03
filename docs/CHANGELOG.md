@@ -6,6 +6,43 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.1-chat] — 2026-05-03 (Day 22) — Chat UI
+
+### Added
+- **`frontend/chat.html`** — Standalone React 18 Chat UI (no build step, single HTML file)
+  - Dark sci-fi design system: `--bg-0: #07100e`, `--orange: #ff8a24`, `--green: #2fe39a`
+  - Fonts: Orbitron (display/brand) + Inter (body) + JetBrains Mono (mono/labels)
+  - Boot sequence animation with sessionStorage guard (skip after first visit)
+  - Login/Register tabs — auto-generates `tenant_slug` from workspace name
+  - Auto-create default agent on first login (stored in `localStorage`)
+  - SSE streaming chat: handles `type: start/chunk/done/error` events via `fetch` + `ReadableStream`
+  - AbortController-based stop button during streaming
+  - Conversation persistence in `localStorage` (last 60 messages)
+  - Conversation history sidebar (last 20 sessions)
+  - Responsive — sidebar hidden on mobile (<640px)
+  - Logout with full `localStorage` cleanup
+- **`docs/USER_GUIDE.md`** — Private user guide + credentials reference for Fahmi
+  - Quick reference table: URLs, SSH, Admin Key, GitHub
+  - Step-by-step: register → login → chat
+  - curl examples for all key API endpoints
+  - Admin monitoring commands
+  - VPS SSH + Docker commands
+  - Week 3 roadmap + API keys to set up
+  - Troubleshooting table
+- **`docs/nginx_app_migancore.conf`** — nginx vhost config for `app.migancore.com`
+
+### Deployed
+- `https://app.migancore.com` — Live ✅
+  - nginx vhost: `/www/server/panel/vhost/nginx/app.migancore.com.conf`
+  - SSL: Let's Encrypt (certbot webroot), valid until 2026-08-01
+  - Static files: `/opt/ado/frontend/chat.html` (40KB)
+  - HTTP → HTTPS 301 redirect
+  - DNS A record: `app.migancore.com → 72.62.125.6` ✅
+
+### No API changes, no DB migration
+
+---
+
 ## [0.4.1] — 2026-05-03 (Day 21)
 
 ### Added
