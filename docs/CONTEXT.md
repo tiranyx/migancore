@@ -1,6 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 8)
-**API Version:** 0.3.0 (stable, Day 8)
+**Last Updated:** 2026-05-03 | **Last Agent:** Kimi Code CLI (Day 7-9 Audit + Fix)
+**API Version:** 0.3.0 (stable, Day 9)
+**Git Commit:** `f5c10cd`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -13,7 +14,7 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 1 → Week 2 transition |
-| Sprint Day | Day 8 (COMPLETE) |
+| Sprint Day | Day 9 (COMPLETE) |
 | API Version | 0.3.0 |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ |
@@ -36,12 +37,14 @@
 - ✅ `POST /v1/agents` — create agent, tenant-scoped
 - ✅ `GET /v1/agents/{id}` — get agent by ID
 
-### Chat System (Day 6, Kimi + Day 7, Claude)
-- ✅ `POST /v1/agents/{id}/chat` — chat dengan SOUL.md injection, Postgres persistence
+### Chat System (Day 6, Kimi + Day 7-9, Claude + Kimi)
+- ✅ `POST /v1/agents/{id}/chat` — sync chat via LangGraph director, tool calling, Postgres persistence
   - Rate limited: 30/min per IP
   - Context window: last 5 messages
   - Memory injection: Redis K-V summary injected into system prompt
-- ✅ `POST /v1/agents/{id}/chat/stream` — SSE streaming chat (Day 7 new)
+  - Tool calling: up to MAX_TOOL_ITERATIONS=5 via LangGraph StateGraph
+  - Response: `ChatResponse` with `tool_calls_made` + `reasoning_trace`
+- ✅ `POST /v1/agents/{id}/chat/stream` — SSE streaming chat (no tool calling)
   - Server-Sent Events format
   - Pre-flight DB ops selesai sebelum streaming mulai
   - Persist assistant message via asyncio.create_task setelah stream selesai
@@ -59,11 +62,13 @@
   - `memory_list(tenant_id, agent_id, namespace)` → Redis SCAN
   - `memory_summary(tenant_id, agent_id)` → formatted string untuk system prompt injection
   - Key pattern: `mem:{tenant_id}:{agent_id}:{namespace}:{key}`
+  - Race condition fix: `asyncio.Lock()` singleton pool initialization
 
 ### Config System (Day 6, Kimi)
 - ✅ `config/agents.json` — world.json pattern, declarative agent identities
 - ✅ `config/skills.json` — skill registry, MCP-compatible schemas declared
 - ✅ `services/config_loader.py` — lru_cache load, get_agent_config, get_skill_config
+  - Fallback: jika agent_id tidak exact match, return first `visibility == "public"` (core_brain)
 
 ### Tool Executor (Day 8, Claude)
 - ✅ `services/tool_executor.py` — dispatcher skill_id → handler
@@ -75,14 +80,15 @@
   - `TOOL_REGISTRY` dict, `ToolExecutor.execute()` menangkap semua error
   - `build_ollama_tools_spec(skill_ids)` → baca skills.json, filter mcp_compatible=True
 
-### ReAct Agentic Loop (Day 8, Claude)
-- ✅ `_run_agentic_loop(model, messages, tools_spec, tool_ctx)` dalam `routers/chat.py`
-  - Loop max `MAX_TOOL_ITERATIONS=5` iterasi
-  - Jika ada tool_calls: execute semua → inject `role:"tool"` → re-call Ollama
-  - Jika tidak ada tool_calls: return response + all_tool_calls list
-  - Circuit breaker: final call tanpa tools jika iterasi habis
-  - `tool_calls_made` field di ChatResponse schema
-- ✅ Tool calls dipersist di `messages.tool_calls` JSON column
+### LangGraph Director (Day 9, Claude + Kimi)
+- ✅ `services/director.py` — LangGraph StateGraph orchestrator
+  - `AgentState(TypedDict)`: messages, tools_spec, tool_ctx, model, options, tool_calls, iteration, final_response, reasoning_trace
+  - `reason_node` → calls Ollama with tools (fallback ke plain chat on any error)
+  - `execute_tools_node` → dispatches tool_calls via ToolExecutor
+  - `_route_after_reason` → conditional edge ke execute_tools atau END
+  - `run_director()` → public async entry point, returns `(final_response, tool_calls, reasoning_trace)`
+  - Circuit breaker: `MAX_TOOL_ITERATIONS=5`
+- ✅ Wired ke `POST /v1/agents/{id}/chat` via `routers/chat.py`
 
 ### Infrastructure
 - ✅ `docker-compose.yml` — semua service dengan profiles
@@ -92,7 +98,7 @@
   - observability: langfuse (disabled — defer Week 3)
   - ingress: caddy (disabled — nginx aaPanel owns 80/443)
 - ✅ `migrations/init.sql` — full schema, letta_db created
-- ✅ OllamaClient: timeouts (60s/5s connect/30s read), streaming + tool calling (Day 8)
+- ✅ OllamaClient: timeouts (60s/5s connect/30s read), streaming + tool calling
   - `chat_with_tools()` — stream=False hardcoded (Ollama requirement)
   - STREAM_TIMEOUT: no total limit, 30s per chunk
 - ✅ Request tracing: X-Request-ID middleware + structlog context binding
@@ -100,37 +106,6 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
-
-### Day 9 — LangGraph Director MVP
-**Goal:** Chat request diproses oleh StateGraph, bukan direct Ollama call
-
-Context:
-- LangGraph sudah ada di requirements (verified Day 6 Kimi)
-- Tool executor sudah siap (Day 8) — hanya perlu di-wrap dalam LangGraph node
-- ReAct loop saat ini di `chat.py` sebagai plain function — akan dipindah ke director.py
-
-Tasks:
-- [ ] `services/director.py` — LangGraph StateGraph
-  - State schema: `AgentState` TypedDict:
-    ```python
-    class AgentState(TypedDict):
-        messages: list[dict]
-        intent: str           # "tool_use" | "direct_answer" | "clarify"
-        tool_results: list[dict]
-        final_response: str
-        iteration: int
-    ```
-  - Nodes: `intent_classifier` → `reasoner` → `tool_executor` → `response_synthesizer`
-  - Edges: conditional routing berdasarkan `intent` field
-  - `intent_classifier`: lightweight Ollama call (Qwen2.5-0.5B) classify intent
-  - `reasoner`: main Ollama call dengan memory + tool context
-  - `tool_executor`: wrap `services/tool_executor.ToolExecutor`
-  - `response_synthesizer`: format final response, inject citations
-  - Circuit breaker: `max_iterations=10` via checkpointing
-- [ ] Wire director ke `POST /v1/agents/{id}/chat` (replace `_run_agentic_loop`)
-- [ ] Expose reasoning trace di `ChatResponse.metadata` (intent, nodes_visited, iterations)
-- [ ] Update `ChatResponse` schema: tambah `reasoning_trace: list[str] | None`
-- [ ] Test: multi-step query yang butuh tool use + synthesis
 
 ### Day 10 — Agent Genealogy + Spawning
 **Goal:** Agent bisa spawn child agents dengan inherited persona
@@ -158,6 +133,7 @@ Tidak ada blocker saat ini.
 | T1 | LOW | `models/base.py` punya `get_db()` duplikat dari `deps/db.py` | Hapus, semua router sudah pakai `deps.db.get_db` |
 | T2 | LOW | `create_agent` punya bare `import secrets` di dalam function | Move ke top-level import |
 | T3 | INFO | Chat rate limit pakai IP, bukan user_id | Fix Week 2: pakai JWT sub sebagai key |
+| O1 | INFO | Ollama `0.22.1` tool calling 404 jika `tools` field dikirim | **RESOLVED** — fallback ke plain chat di `director.py` reason_node. Model `qwen2.5:7b-instruct-q4_K_M` ternyata support tools native. |
 
 ---
 
@@ -217,3 +193,4 @@ Tidak ada blocker saat ini.
 | 2026-05-?? (Day 6) | Kimi | Agent CRUD, chat endpoint, SOUL.md injection, Postgres persistence, config system |
 | 2026-05-03 (Day 7) | Claude Sonnet 4.6 | Chat rate limiting, SSE streaming, memory service (Redis K-V), conversation endpoints, OllamaClient streaming support |
 | 2026-05-03 (Day 8) | Claude Sonnet 4.6 | Tool executor (web_search/memory_write/memory_search/python_repl), OllamaClient.chat_with_tools(), ReAct agentic loop wired ke chat.py, landing page interactive.jsx updated dengan real ADO event templates |
+| 2026-05-03 (Day 7-9) | Kimi Code CLI | Audit Claude Code's Day 7-9 implementation: fixed `_memory_search` namespace bug, wired orphaned `director.py` into `chat.py`, fixed health_check version mismatch, fixed `build_ollama_tools_spec` late import, fixed `_get_pool()` race condition dengan `asyncio.Lock()`, added Ollama 404 fallback di `director.py`. Deployed v0.3.0 ke VPS. E2E verified: register → create agent → chat (sync+stream) → list conversations = ALL PASSED. Tool calling verified: 1 tool call executed successfully. |
