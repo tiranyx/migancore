@@ -163,10 +163,12 @@ async def _revise(
                 messages=messages,
                 options={"num_predict": _MAX_REVISION_TOKENS, "temperature": 0.3},
             )
+        logger.info("cai.revise_ollama_returned", data_keys=list(data.keys()))
         revised = data.get("message", {}).get("content", "").strip()
         if not revised or len(revised) < 10:
             logger.warning("cai.revise_empty_response", response_len=len(revised))
             return None
+        logger.info("cai.revise_got_text", revised_len=len(revised))
         return revised
 
     except OllamaError as exc:
@@ -175,6 +177,9 @@ async def _revise(
     except Exception as exc:
         logger.warning("cai.revise_error", error=str(exc))
         return None
+    except BaseException as exc:
+        logger.error("cai.revise_base_exception", exc_type=type(exc).__name__, error=str(exc))
+        raise
 
 
 async def _store_preference_pair(
@@ -270,11 +275,13 @@ async def run_cai_pipeline(
         # Score <= 3: generate improved version
         logger.info("cai.revise_starting", score=score, source_message_id=str(source_message_id))
         revised = await _revise(user_message, assistant_response, critique)
+        logger.info("cai.revise_returned", revised_is_none=revised is None)
         if not revised:
             logger.warning("cai.revise_returned_none", source_message_id=str(source_message_id))
             return
 
         # chosen=revised (better), rejected=original (worse)
+        logger.info("cai.store_starting", source_message_id=str(source_message_id))
         await _store_preference_pair(
             prompt=user_message,
             chosen=revised,
@@ -282,9 +289,13 @@ async def run_cai_pipeline(
             score=float(score),
             source_message_id=source_message_id,
         )
+        logger.info("cai.store_done", source_message_id=str(source_message_id))
 
     except asyncio.CancelledError:
         logger.warning("cai.pipeline_cancelled", source_message_id=str(source_message_id))
         raise  # CancelledError must be re-raised to properly cancel the task
     except Exception as exc:
         logger.warning("cai.pipeline_error", error=str(exc))
+    except BaseException as exc:
+        logger.error("cai.pipeline_base_exception", exc_type=type(exc).__name__, error=str(exc))
+        raise
