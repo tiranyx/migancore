@@ -48,7 +48,7 @@ JUDGE_MODEL: str = settings.DEFAULT_MODEL  # qwen2.5:7b-instruct-q4_K_M
 CAI_SAMPLE_RATE: float = 0.5              # 50% of turns go through CAI pipeline
 CRITIQUE_THRESHOLD: int = 3              # score <= this → generate revision + store pair
 _MAX_CRITIQUE_TOKENS: int = 400
-_MAX_REVISION_TOKENS: int = 800
+_MAX_REVISION_TOKENS: int = 400  # Conservative — avoids OOM on CPU-only VPS with 7B model
 
 _CRITIQUE_PROMPT_TEMPLATE = """\
 Kamu adalah QA evaluator untuk sistem AI. Evaluasi respons AI berdasarkan 10 prinsip Constitution ADO:
