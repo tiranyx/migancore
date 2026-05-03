@@ -165,6 +165,7 @@ async def _revise(
             )
         revised = data.get("message", {}).get("content", "").strip()
         if not revised or len(revised) < 10:
+            logger.warning("cai.revise_empty_response", response_len=len(revised))
             return None
         return revised
 
@@ -265,8 +266,10 @@ async def run_cai_pipeline(
             return
 
         # Score <= 3: generate improved version
+        logger.info("cai.revise_starting", score=score, source_message_id=str(source_message_id))
         revised = await _revise(user_message, assistant_response, critique)
         if not revised:
+            logger.warning("cai.revise_returned_none", source_message_id=str(source_message_id))
             return
 
         # chosen=revised (better), rejected=original (worse)
