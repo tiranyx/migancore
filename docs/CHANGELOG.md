@@ -15,15 +15,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Migration script: `migrations/010_day10_schema_sync.sql`
 - Agent genealogy tracking: `parent_agent_id` + `generation` inheritance
 - Auto-copy of parent tool grants to spawned children
+- Comprehensive documentation suite: `MASTER_CONTEXT.md`, `SPRINT_LOG.md`, `CHANGELOG.md`, `FOUNDER_JOURNAL.md`, `QA_REPORT.md`
 
 ### Fixed
 - ORM ↔ SQL schema mismatch: `description`, `model_version`, `system_prompt` now in init.sql
 - Missing SQLAlchemy imports: `Boolean`, `Float` in `models/agent.py`
 - Tech debt T2: moved `import secrets` to top-level in `routers/agents.py`
-
-### Changed
-- `migrations/init.sql` synced with VPS reality (all columns match live DB)
-- `AgentResponse` schema extended with `parent_agent_id`, `generation`, `template_id`, `persona_locked`
+- **E2E Bug:** Stream chat 503 — `AsyncSessionLocal` import moved inside `chat_stream` function
+- **Security:** Path traversal in `load_soul_md` — added `resolve()` + base_dir restriction
+- **Tech Debt:** Removed 97 lines of dead code `_run_agentic_loop` from `chat.py`
 
 ---
 

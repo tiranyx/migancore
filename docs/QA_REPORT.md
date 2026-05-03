@@ -72,10 +72,10 @@
 
 | ID | File | Issue | Impact | Fix |
 |----|------|-------|--------|-----|
-| C1 | `chat.py:444-540` | `_run_agentic_loop` is dead code (replaced by director) | Confusion, maintenance burden | Remove function |
+| C1 | `chat.py:444-540` | ~~`_run_agentic_loop` is dead code~~ | **FIXED** — Removed 97 lines | — |
 | C2 | `chat.py:51-59` | `ChatResponse` missing `reasoning_trace` field | Debugging info computed but not exposed | Add field to schema |
 | C3 | `tool_executor.py` | `python_repl` uses bare `subprocess.run(["python", "-c", code])` | LLM-generated code can escape sandbox | Use gVisor/nsjail or dedicated micro-VM |
-| C4 | `config_loader.py:76-78` | `load_soul_md` has path traversal vulnerability | `../` in path can escape CONFIG_DIR | Restrict resolved paths to CONFIG_DIR |
+| C4 | `config_loader.py:76-78` | ~~`load_soul_md` has path traversal vulnerability~~ | **FIXED** — Added `resolve()` + base_dir check | — |
 
 ### 3.2 High Issues
 
@@ -94,6 +94,7 @@
 | ID | File | Issue | Impact | Fix |
 |----|------|-------|--------|-----|
 | M1 | `chat.py:74` | Rate limit uses IP, not JWT `sub` | Authenticated users share IP limits | Use `request.state.user_id` |
+| M2 | `chat.py:188` | ~~`AsyncSessionLocal` imported at module level before init~~ | **FIXED** — Moved import inside `chat_stream` | — |
 | M2 | `config.py:52` | `ENVIRONMENT` pattern may not work in Pydantic v2 | Validation warning | Test + fix pattern |
 | M3 | `memory.py:21` | `_MAX_MEMORY_ITEMS = 20` but `memory_list` has no limit | Could return excessive data | Add limit param |
 | M4 | `director.py:199-206` | `_get_director()` global state not thread-safe | Race condition on first call | Add threading.Lock() |
