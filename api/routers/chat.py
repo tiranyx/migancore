@@ -68,9 +68,14 @@ async def _check_tenant_message_quota(db: AsyncSession, tenant: Tenant) -> None:
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/agents", tags=["chat"])
 
-CONTEXT_WINDOW_MESSAGES = 5
-MAX_TOKENS = 1024
-MAX_TOOL_ITERATIONS = 5  # Circuit breaker — prevents infinite tool loops
+# Context window management (Day 20)
+MAX_HISTORY_LOAD = 10          # Messages fetched from DB (trimmed further below)
+MAX_HISTORY_TOKENS = 1500      # Token budget for history passed to Ollama
+MAX_MSG_CONTENT_CHARS = 800    # Per-message content cap — prevents tool outputs flooding context
+CHARS_PER_TOKEN = 3.5          # Estimate: Bahasa Indonesia + English mixed content
+NUM_CTX = 4096                 # Explicit Ollama context window — do NOT rely on Ollama default (2048)
+MAX_TOKENS = 1024              # num_predict: max response length tokens
+MAX_TOOL_ITERATIONS = 5        # Circuit breaker — prevents infinite tool loops
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +188,7 @@ async def chat(
         messages=messages,
         tools_spec=tools_spec,
         tool_ctx=tool_ctx,
-        options={"num_predict": MAX_TOKENS, "temperature": 0},
+        options={"num_predict": MAX_TOKENS, "temperature": 0, "num_ctx": NUM_CTX},
     )
     logger.info("chat.reasoning_trace", trace=reasoning_trace)
 
@@ -332,7 +337,7 @@ async def chat_stream(
             async for chunk, done in OllamaClient().chat_stream(
                 model=model,
                 messages=messages,
-                options={"num_predict": MAX_TOKENS},
+                options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
             ):
                 if chunk:
                     full_response.append(chunk)
@@ -549,7 +554,7 @@ async def _get_or_create_conversation(
         await db.flush()
 
     history = await _load_recent_messages(
-        db, conversation.id, limit=CONTEXT_WINDOW_MESSAGES
+        db, conversation.id, limit=MAX_HISTORY_LOAD
     )
     return conversation, history
 
@@ -570,15 +575,75 @@ async def _load_recent_messages(
     return list(reversed(messages))
 
 
+def _estimate_tokens(text: str) -> int:
+    """Estimate token count for mixed Bahasa Indonesia + English text.
+
+    Uses char/token ratio of 3.5 — conservative estimate that works for
+    Bahasa Indonesia (denser than English) + English mixed content.
+    Actual token count may vary ±20% but is good enough for budget trimming.
+    """
+    return max(1, int(len(text) / CHARS_PER_TOKEN))
+
+
+def _trim_history_to_budget(history_dicts: list[dict]) -> list[dict]:
+    """Trim message history to fit within MAX_HISTORY_TOKENS budget.
+
+    Day 20: Two-pass trimming strategy:
+      Pass 1 — Per-message cap: truncate content > MAX_MSG_CONTENT_CHARS.
+               Prevents tool outputs (3000+ chars) from monopolizing context.
+               Appends "…[disingkat]" so model knows content was cut.
+      Pass 2 — Token budget: drop oldest messages until total ≤ MAX_HISTORY_TOKENS.
+               Always drops from oldest end — preserves most recent context.
+
+    Returns trimmed list (may be shorter than input).
+    Logs when trimming occurs for context calibration.
+    """
+    # Pass 1: Per-message content cap
+    capped = []
+    for msg in history_dicts:
+        content = msg["content"]
+        if len(content) > MAX_MSG_CONTENT_CHARS:
+            content = content[:MAX_MSG_CONTENT_CHARS] + "…[disingkat]"
+        capped.append({**msg, "content": content})
+
+    # Pass 2: Token budget — drop oldest until under budget
+    total_tokens = sum(_estimate_tokens(m["content"]) for m in capped)
+    original_count = len(capped)
+
+    while capped and total_tokens > MAX_HISTORY_TOKENS:
+        removed = capped.pop(0)
+        total_tokens -= _estimate_tokens(removed["content"])
+
+    dropped = original_count - len(capped)
+    if dropped > 0:
+        logger.info(
+            "chat.history_trimmed",
+            original=original_count,
+            kept=len(capped),
+            dropped=dropped,
+            estimated_tokens=total_tokens,
+        )
+
+    return capped
+
+
 def _build_messages(
     system_prompt: str,
     history: list[Message],
     user_message: str,
 ) -> list[dict]:
-    """Build Ollama messages list from system prompt + history + new message."""
+    """Build Ollama messages list from system prompt + history + new message.
+
+    Day 20: Applies token-budget trimming before building message list.
+    Each history message is capped at MAX_MSG_CONTENT_CHARS, then oldest
+    messages are dropped until total history ≤ MAX_HISTORY_TOKENS.
+    This prevents context overflow on Ollama (NUM_CTX=4096).
+    """
+    history_dicts = [{"role": msg.role, "content": msg.content} for msg in history]
+    trimmed = _trim_history_to_budget(history_dicts)
+
     messages = [{"role": "system", "content": system_prompt}]
-    for msg in history:
-        messages.append({"role": msg.role, "content": msg.content})
+    messages.extend(trimmed)
     messages.append({"role": "user", "content": user_message})
     return messages
 

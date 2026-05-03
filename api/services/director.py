@@ -231,7 +231,7 @@ async def run_director(
         "tools_spec": tools_spec,
         "tool_ctx": tool_ctx,
         "model": model,
-        "options": options or {"num_predict": MAX_TOKENS, "temperature": 0},
+        "options": options or {"num_predict": MAX_TOKENS, "temperature": 0, "num_ctx": 4096},
         "tool_calls": [],
         "iteration": 0,
         "final_response": "",

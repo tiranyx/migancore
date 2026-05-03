@@ -155,10 +155,12 @@ async def _memory_write(args: dict, ctx: ToolContext) -> dict:
 
 
 async def _memory_search(args: dict, ctx: ToolContext) -> dict:
-    """Search agent memory — Qdrant semantic (Tier 2) with Redis K-V fallback (Tier 1).
+    """Search agent memory — Qdrant hybrid semantic (Tier 2) with Redis K-V fallback (Tier 1).
 
-    Day 12: Tries Qdrant semantic search first. If Qdrant is unavailable or
-    returns no results above threshold, falls back to Redis substring search.
+    Day 12: Qdrant semantic search first → Redis substring fallback.
+    Day 18: search_semantic() is now hybrid (dense + BM42 sparse + RRF).
+    Day 20: Added asyncio.wait_for timeout (2.0s) — prevents blocking tool loop
+            if Qdrant is slow. Falls through to Redis on timeout.
     """
     query = args.get("query", "").strip()
     limit = min(int(args.get("limit", 5)), 20)
@@ -166,12 +168,20 @@ async def _memory_search(args: dict, ctx: ToolContext) -> dict:
     if not query:
         raise ToolExecutionError("'query' is required")
 
-    # Tier 2: Qdrant semantic search
+    # Tier 2: Qdrant hybrid semantic search (dense + BM42 sparse + RRF)
     try:
         from services.vector_memory import search_semantic
-        semantic_hits = await search_semantic(ctx.agent_id, query, top_k=limit)
+        semantic_hits = await asyncio.wait_for(
+            search_semantic(ctx.agent_id, query, top_k=limit),
+            timeout=2.0,
+        )
         if semantic_hits:
-            logger.info("tool.memory_search.qdrant", query=query, matches=len(semantic_hits))
+            logger.info(
+                "tool.memory_search.qdrant",
+                query=query,
+                matches=len(semantic_hits),
+                top_score=semantic_hits[0].get("_retrieval_score", 0) if semantic_hits else 0,
+            )
             return {
                 "results": [
                     {
@@ -180,12 +190,15 @@ async def _memory_search(args: dict, ctx: ToolContext) -> dict:
                         "session_id": r.get("session_id"),
                         "turn_index": r.get("turn_index"),
                         "timestamp": r.get("timestamp"),
+                        "score": r.get("_retrieval_score"),
                     }
                     for r in semantic_hits
                 ],
                 "query": query,
-                "source": "qdrant_semantic",
+                "source": "qdrant_hybrid",
             }
+    except asyncio.TimeoutError:
+        logger.warning("tool.memory_search.qdrant_timeout", query=query, timeout_s=2.0)
     except Exception as exc:
         logger.warning("tool.memory_search.qdrant_error", error=str(exc))
 
