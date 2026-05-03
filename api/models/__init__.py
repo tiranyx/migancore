@@ -10,6 +10,7 @@ from models.conversation import Conversation
 from models.message import Message
 from models.model_version import ModelVersion
 from models.tool import Tool
+from models.preference_pair import PreferencePair
 
 __all__ = [
     "Base",
@@ -26,4 +27,5 @@ __all__ = [
     "Message",
     "ModelVersion",
     "Tool",
+    "PreferencePair",
 ]

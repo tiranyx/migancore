@@ -6,6 +6,40 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.7] — 2026-05-03 (Day 17)
+
+### Added
+- **Admin Monitoring Endpoints** (`routers/admin.py`) — NEW FILE
+  - `GET /v1/admin/stats` — CAI flywheel health: pair count, unused pairs, avg judge score,
+    score distribution, 24h/7d collection rates, training readiness assessment with progress %
+  - `GET /v1/admin/preference-pairs` — paginated pair listing with filters:
+    `score_max`, `unused_only`, `limit`, `offset` + `has_more` pagination
+  - `GET /v1/admin/export` — streams JSONL in Unsloth/TRL DPO-compatible format
+    (`{"prompt": "...", "chosen": "...", "rejected": "..."}`), ordered by lowest score first
+  - Auth: `X-Admin-Key` header → checked against `settings.ADMIN_SECRET_KEY`
+    (503 if unconfigured, 401 if wrong key)
+  - Training readiness thresholds (from Day 17 research, arxiv 2502.14560):
+    `not_ready` < 500 pairs | `approaching` 500-999 | `ready` 1000+ | `ideal` 2000+
+- **PreferencePair ORM model** (`models/preference_pair.py`) — NEW FILE
+  - Mirrors `init.sql` preference_pairs schema exactly
+  - Registered in `models/__init__.py`
+- **`ADMIN_SECRET_KEY` setting** (`config.py`) — new optional env var
+
+### Changed
+- Version bumped: `0.3.6` → `0.3.7`
+- `models/__init__.py` — exports `PreferencePair`
+- `main.py` — admin router wired
+
+### Research Notes (Day 17 research via research agent, 2025-2026 sources)
+- DPO minimum: 500 pairs for any signal, 1000 for reliability, 2000 for ideal (arxiv 2502.14560)
+- **SimPO > DPO for first run**: no reference model, noise-tolerant, +6.4pts AlpacaEval 2 (arxiv 2405.14734)
+- RunPod cost: ~$2-4 per Qwen2.5-7B QLoRA training run (RTX 4090, ~2hr)
+- Implicit signals: retry rate = strongest proxy, needs 10-20 instances to be reliable (CHI 2025)
+- HyDE/query rewriting: SKIP — CPU latency penalty too high on 7B
+- Hybrid search (BM42): good ROI, 1-day engineering → planned for Day 18
+
+---
+
 ## [0.3.6] — 2026-05-03 (Day 16)
 
 ### Added

@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     LETTA_URL: str = "http://letta:8283"
     LETTA_PASSWORD: Optional[str] = None
 
+    # Admin
+    ADMIN_SECRET_KEY: str = ""  # X-Admin-Key header value; empty = admin disabled
+
     # Observability
     ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production)$")
     LOG_LEVEL: str = "INFO"
