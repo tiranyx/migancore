@@ -55,6 +55,20 @@ class Settings(BaseSettings):
     FAL_KEY: Optional[str] = None          # fal.ai API key for image/video generation
     WORKSPACE_DIR: str = "/app/workspace"  # Sandboxed file system for read_file/write_file
 
+    # Day 27: ElevenLabs TTS
+    ELEVENLABS_KEY: Optional[str] = None
+    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel — default ElevenLabs voice
+    ELEVENLABS_MODEL: str = "eleven_flash_v2_5"        # ~75ms TTFB, free-tier compatible
+
+    # Day 27: API Keys (server-side pepper for HMAC)
+    # If empty, falls back to hash of JWT private key (dev convenience).
+    # Production: set explicit 32+ char secret.
+    API_KEY_PEPPER: Optional[str] = None
+
+    # Day 27: Memory pruning daemon
+    MEMORY_PRUNE_DAYS: int = 30           # Delete points older than this many days
+    MEMORY_PRUNE_IMPORTANCE_MAX: float = 0.7  # Only prune points BELOW this importance
+
     # Observability
     ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production)$")
     LOG_LEVEL: str = "INFO"

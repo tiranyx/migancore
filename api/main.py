@@ -3,6 +3,7 @@ MiganCore API — FastAPI Gateway
 Entry point for the autonomous digital organism.
 """
 
+import asyncio
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -23,6 +24,7 @@ from routers import agents as agents_router
 from routers import admin as admin_router
 from routers import chat as chat_router
 from routers import conversations as conversations_router
+from routers import api_keys as api_keys_router  # Day 27
 
 # Day 26: MCP Streamable HTTP server (lazy import — degrades gracefully if SDK missing)
 try:
@@ -124,9 +126,26 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.error("mcp.session_manager.start_failed", error=str(exc))
 
+    # 6. Day 27: Launch memory pruning daemon (background asyncio task)
+    pruner_task = None
+    try:
+        from services.memory_pruner import prune_loop
+        pruner_task = asyncio.create_task(prune_loop())
+        logger.info("memory_pruner.task_created")
+    except Exception as exc:
+        logger.error("memory_pruner.start_failed", error=str(exc))
+
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
+
+    # Tear down memory pruner
+    if pruner_task is not None and not pruner_task.done():
+        pruner_task.cancel()
+        try:
+            await pruner_task
+        except asyncio.CancelledError:
+            pass
 
     # Tear down MCP session manager
     if mcp_lifespan_cm is not None:
@@ -140,7 +159,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.4.4",
+    version="0.4.5",
     lifespan=lifespan,
 )
 
@@ -187,6 +206,7 @@ app.include_router(agents_router.router)
 app.include_router(admin_router.router)
 app.include_router(chat_router.router)
 app.include_router(conversations_router.router)
+app.include_router(api_keys_router.router)  # Day 27
 
 # Day 26: Mount MCP Streamable HTTP server at /mcp
 # Degrades gracefully if `mcp` SDK is unavailable (e.g. dev container without rebuild).

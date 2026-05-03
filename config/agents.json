@@ -17,7 +17,8 @@
         "spawn_agent",
         "generate_image",
         "read_file",
-        "write_file"
+        "write_file",
+        "text_to_speech"
       ],
       "persona_locked": true,
       "visibility": "public",

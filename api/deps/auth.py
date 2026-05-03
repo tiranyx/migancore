@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from deps.db import get_db, set_tenant_context
 from models import User
 from services.jwt import decode_token, get_token_jti
+from services.api_keys import is_api_key_format, verify_key
 
 security = HTTPBearer(auto_error=False)
 logger = structlog.get_logger()
@@ -33,22 +34,39 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    try:
-        payload = decode_token(credentials.credentials, token_type="access")
-    except Exception as exc:
-        logger.warning(
-            "auth.token_invalid",
-            error=str(exc),
-            jti=get_token_jti(credentials.credentials),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    presented = credentials.credentials
 
-    user_id = payload.get("sub")
-    tenant_id = payload.get("tenant_id")
+    # Day 27: Check if presented credential is an API key (mgn_live_*) first
+    # — this is cheaper than JWT decode (just a prefix check)
+    if is_api_key_format(presented):
+        api_key = await verify_key(db, presented)
+        if api_key is None:
+            logger.warning("auth.api_key_invalid", prefix_hint=presented[:14])
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or revoked API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_id = str(api_key.user_id) if api_key.user_id else None
+        tenant_id = str(api_key.tenant_id)
+    else:
+        # Standard JWT path
+        try:
+            payload = decode_token(presented, token_type="access")
+        except Exception as exc:
+            logger.warning(
+                "auth.token_invalid",
+                error=str(exc),
+                jti=get_token_jti(presented),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user_id = payload.get("sub")
+        tenant_id = payload.get("tenant_id")
 
     if not user_id or not tenant_id:
         raise HTTPException(

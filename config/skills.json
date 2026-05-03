@@ -213,6 +213,34 @@
       "cost_estimate": "~$0.003 per image"
     },
     {
+      "id": "text_to_speech",
+      "name": "Text to Speech",
+      "description": "MANDATORY for voice/audio output: invoke this function whenever the user asks for audio narration, spoken response, or text-to-speech. Generates MP3 via ElevenLabs (free tier 10k chars/month). Returns base64-encoded audio.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to synthesize (max 2500 chars per call)"
+          },
+          "voice_id": {
+            "type": "string",
+            "description": "Optional ElevenLabs voice ID. Default: Rachel (21m00Tcm4TlvDq8ikWAM)"
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Optional model ID. Default: eleven_flash_v2_5 (fastest)"
+          }
+        },
+        "required": ["text"]
+      },
+      "permissions": ["external.api"],
+      "npc_assignable": true,
+      "cost_estimate": "free tier 10k chars/month (~$0 for testing)"
+    },
+    {
       "id": "write_file",
       "name": "Write File",
       "description": "MANDATORY for creating/writing files: invoke this function whenever the user asks to create, write, save, or generate a file (script, config, document, code, etc.). Do NOT describe the action or instruct the user to do it manually — call this function directly. Creates parent directories automatically. Sandboxed to agent's workspace.",

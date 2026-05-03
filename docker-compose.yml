@@ -102,6 +102,8 @@ services:
       LETTA_PASSWORD: ${LETTA_PASSWORD}
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}
       FAL_KEY: ${FAL_KEY}                         # Day 24: fal.ai image/video generation
+      ELEVENLABS_KEY: ${ELEVENLABS_KEY}           # Day 27: ElevenLabs TTS
+      API_KEY_PEPPER: ${API_KEY_PEPPER}           # Day 27: server-side HMAC pepper for API keys
       JWT_PRIVATE_KEY_PATH: /etc/ado/keys/private.pem
       JWT_PUBLIC_KEY_PATH: /etc/ado/keys/public.pem
     volumes:

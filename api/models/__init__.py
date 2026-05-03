@@ -11,6 +11,7 @@ from models.message import Message
 from models.model_version import ModelVersion
 from models.tool import Tool
 from models.preference_pair import PreferencePair
+from models.api_key import ApiKey
 
 __all__ = [
     "Base",
@@ -28,4 +29,5 @@ __all__ = [
     "ModelVersion",
     "Tool",
     "PreferencePair",
+    "ApiKey",
 ]

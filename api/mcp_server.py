@@ -217,6 +217,27 @@ def _build_mcp():
         return await _execute("memory_search", {"query": query, "limit": limit}, ctx)
 
     @mcp.tool(
+        name="text_to_speech",
+        description=(
+            "MANDATORY for voice/audio output: invoke whenever the user requests audio "
+            "narration, spoken response, or text-to-speech. Generates MP3 via ElevenLabs "
+            "(free tier 10k chars/month, ~75ms TTFB). Returns base64-encoded audio bytes."
+        ),
+    )
+    async def text_to_speech(
+        text: str,
+        voice_id: str = "",
+        model_id: str = "",
+        ctx=None,
+    ) -> str:
+        args = {"text": text}
+        if voice_id:
+            args["voice_id"] = voice_id
+        if model_id:
+            args["model_id"] = model_id
+        return await _execute("text_to_speech", args, ctx)
+
+    @mcp.tool(
         name="python_repl",
         description=(
             "Execute Python code in a sandboxed subprocess. Use ONLY for computation "
@@ -228,11 +249,81 @@ def _build_mcp():
     async def python_repl(code: str, timeout: int = 30, ctx=None) -> str:
         return await _execute("python_repl", {"code": code, "timeout": timeout}, ctx)
 
+    # ---------- RESOURCE REGISTRATION (Day 27) ----------
+    # Resources are read-only attachable context (Claude Code: @migancore:URI).
+    # Tool vs Resource: Tool = action (POST), Resource = data (GET, idempotent).
+
+    @mcp.resource("migancore://workspace/{path}")
+    async def workspace_file(path: str) -> str:
+        """Read a file from the agent's sandboxed workspace.
+
+        URI: migancore://workspace/<path>
+        e.g. migancore://workspace/notes.md
+        """
+        from services.tool_executor import _resolve_workspace_path
+        try:
+            target = _resolve_workspace_path(path)
+        except Exception as exc:
+            return f"[Error] Path resolution failed: {exc}"
+
+        if not target.exists():
+            return f"[Error] File not found: {path}"
+        if not target.is_file():
+            # Directory listing fallback
+            entries = sorted(p.name for p in target.iterdir())
+            return f"[Directory: {path}]\n" + "\n".join(entries)
+
+        try:
+            content = target.read_text(encoding="utf-8")
+        except Exception as exc:
+            return f"[Error] Read failed: {exc}"
+
+        if len(content) > 50_000:
+            content = content[:50_000] + "\n\n[... truncated at 50KB]"
+        return content
+
+    @mcp.resource("migancore://workspace")
+    async def workspace_listing() -> str:
+        """List all files in the workspace root."""
+        from config import settings
+        from pathlib import Path
+        ws = Path(settings.WORKSPACE_DIR)
+        if not ws.exists():
+            return "[Workspace does not exist]"
+        entries = []
+        for p in sorted(ws.iterdir()):
+            kind = "DIR " if p.is_dir() else "FILE"
+            size = p.stat().st_size if p.is_file() else "-"
+            entries.append(f"{kind}  {p.name}  ({size}B)")
+        return f"[Workspace: {settings.WORKSPACE_DIR}]\n" + "\n".join(entries) if entries else "[Workspace empty]"
+
+    @mcp.resource("migancore://soul")
+    async def core_soul() -> str:
+        """The MiganCore SOUL.md persona — the foundational identity document."""
+        from services.config_loader import load_soul_md, get_agent_config
+        cfg = get_agent_config("core_brain")
+        path = cfg.get("soul_md_path") if cfg else None
+        return load_soul_md(path)
+
+    @mcp.resource("migancore://memory/help")
+    async def memory_help() -> str:
+        """Quick reference on how MiganCore memory works (3 tiers)."""
+        return (
+            "MiganCore Memory Tiers:\n"
+            "  Tier 1 (Redis K-V): use memory_write / memory_search tools\n"
+            "  Tier 2 (Qdrant episodic): auto-indexed conversation turns\n"
+            "  Tier 3 (Letta blocks): persona, mission, knowledge — long-term identity\n"
+            "\n"
+            "Episodic poisoning filter (Day 26): tool-error responses skip indexing.\n"
+            "Pruning (Day 27): points >30d AND importance<0.7 deleted daily 03:00 UTC.\n"
+        )
+
     logger.info(
         "mcp.server.built",
-        tool_count=7,  # web_search, generate_image, write_file, read_file, memory_write, memory_search, python_repl
+        tool_count=8,  # +text_to_speech (Day 27)
+        resource_count=4,  # workspace_file, workspace_listing, soul, memory_help
         stateless=True,
-        auth="jwt-middleware",
+        auth="jwt+api_keys",
     )
     return mcp
 
@@ -312,16 +403,39 @@ def get_mcp_app():
             return
 
         token = auth_header[7:].strip()
-        try:
-            payload = decode_token(token, token_type="access")
-        except PyJWTError as exc:
-            logger.warning("mcp.auth.invalid_token", error=str(exc), path=path)
-            for msg in _send_401(f"invalid_token: {exc}"):
-                await send(msg)
-            return
 
-        tenant_id = payload.get("tenant_id")
-        subject = payload.get("sub")
+        # Day 27: try API key first (mgn_live_*) then JWT fallback
+        from services.api_keys import is_api_key_format, verify_key
+        from models.base import AsyncSessionLocal
+
+        tenant_id = None
+        subject = None
+
+        if is_api_key_format(token):
+            if AsyncSessionLocal is None:
+                logger.error("mcp.auth.no_db_session")
+                for msg in _send_401("server not ready"):
+                    await send(msg)
+                return
+            async with AsyncSessionLocal() as db:
+                api_key = await verify_key(db, token)
+            if api_key is None:
+                logger.warning("mcp.auth.api_key_invalid", path=path)
+                for msg in _send_401("invalid or revoked API key"):
+                    await send(msg)
+                return
+            tenant_id = str(api_key.tenant_id)
+            subject = str(api_key.user_id) if api_key.user_id else f"apikey:{api_key.prefix}"
+        else:
+            try:
+                payload = decode_token(token, token_type="access")
+            except PyJWTError as exc:
+                logger.warning("mcp.auth.invalid_token", error=str(exc), path=path)
+                for msg in _send_401(f"invalid_token: {exc}"):
+                    await send(msg)
+                return
+            tenant_id = payload.get("tenant_id")
+            subject = payload.get("sub")
         if not tenant_id or not subject:
             logger.warning("mcp.auth.missing_claims", path=path)
             for msg in _send_401("tenant_id and sub claims required"):

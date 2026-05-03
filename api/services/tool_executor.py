@@ -55,6 +55,11 @@ logger = structlog.get_logger()
 MAX_TOOL_ITERATIONS = 5
 DDG_ENDPOINT = "https://api.duckduckgo.com/"
 FAL_FLUX_ENDPOINT = "https://fal.run/fal-ai/flux/schnell"
+
+# Day 27 — ElevenLabs TTS
+ELEVENLABS_TTS_ENDPOINT = "https://api.elevenlabs.io/v1/text-to-speech"
+TTS_MAX_CHARS = 2500     # Free tier 10k/month — cap per-call to ~250 cents budget
+TTS_MAX_AUDIO_BYTES = 2_000_000  # 2MB cap on returned audio (avoid MCP payload bloat)
 FAL_VALID_SIZES = {
     "square_hd", "square", "portrait_4_3", "portrait_16_9",
     "landscape_4_3", "landscape_16_9",
@@ -286,6 +291,108 @@ async def _python_repl(args: dict, ctx: ToolContext) -> dict:
         return {"output": "", "error": str(exc), "success": False, "return_code": -1}
 
 
+async def _text_to_speech(args: dict, ctx: ToolContext) -> dict:
+    """Convert text to speech via ElevenLabs TTS API (Day 27).
+
+    Returns base64-encoded mp3 audio (capped at 2MB) plus metadata.
+    Uses `eleven_flash_v2_5` model — ~75ms TTFB, free-tier compatible.
+    Free tier limit: 10,000 chars/month per ElevenLabs account.
+
+    Args:
+        text: text to synthesize (required, max 2500 chars per call)
+        voice_id: optional ElevenLabs voice ID (default Rachel)
+        model_id: optional model override (default eleven_flash_v2_5)
+    """
+    import base64
+
+    text = (args.get("text") or "").strip()
+    if not text:
+        raise ToolExecutionError("'text' is required and cannot be empty")
+    if len(text) > TTS_MAX_CHARS:
+        raise ToolExecutionError(
+            f"Text too long ({len(text)} chars > {TTS_MAX_CHARS} cap). "
+            f"Split into smaller chunks."
+        )
+
+    if not settings.ELEVENLABS_KEY:
+        raise ToolExecutionError(
+            "ElevenLabs not configured. Set ELEVENLABS_KEY env var (free tier: "
+            "https://elevenlabs.io)."
+        )
+
+    voice_id = args.get("voice_id") or settings.ELEVENLABS_VOICE_ID
+    model_id = args.get("model_id") or settings.ELEVENLABS_MODEL
+
+    url = f"{ELEVENLABS_TTS_ENDPOINT}/{voice_id}"
+    payload = {
+        "text": text,
+        "model_id": model_id,
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+        },
+    }
+    headers = {
+        "xi-api-key": settings.ELEVENLABS_KEY,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+    }
+
+    logger.info(
+        "tool.text_to_speech.start",
+        chars=len(text),
+        voice_id=voice_id,
+        model_id=model_id,
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+        if resp.status_code == 401:
+            raise ToolExecutionError("ElevenLabs auth failed (check ELEVENLABS_KEY)")
+        if resp.status_code == 429:
+            raise ToolExecutionError(
+                "ElevenLabs quota exceeded. Free tier: 10k chars/month. "
+                "Upgrade or wait for monthly reset."
+            )
+        if resp.status_code != 200:
+            raise ToolExecutionError(
+                f"ElevenLabs error HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+    except httpx.TimeoutException:
+        raise ToolExecutionError("ElevenLabs TTS request timed out (30s)")
+    except httpx.HTTPError as exc:
+        raise ToolExecutionError(f"ElevenLabs HTTP error: {exc}")
+
+    audio_bytes = resp.content
+    if len(audio_bytes) > TTS_MAX_AUDIO_BYTES:
+        raise ToolExecutionError(
+            f"Audio response too large ({len(audio_bytes)} > {TTS_MAX_AUDIO_BYTES} bytes)."
+        )
+
+    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+
+    logger.info(
+        "tool.text_to_speech.done",
+        chars=len(text),
+        audio_bytes=len(audio_bytes),
+    )
+
+    return {
+        "format": "mp3",
+        "encoding": "base64",
+        "audio_base64": audio_b64,
+        "size_bytes": len(audio_bytes),
+        "chars_synthesized": len(text),
+        "voice_id": voice_id,
+        "model_id": model_id,
+        "hint": (
+            "Decode with: base64 -d > out.mp3, then play. "
+            f"~{len(text)} chars used from free tier quota."
+        ),
+    }
+
+
 async def _generate_image(args: dict, ctx: ToolContext) -> dict:
     """Generate an image via fal.ai FLUX schnell.
 
@@ -510,6 +617,8 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "generate_image": _generate_image,
     "read_file": _read_file,
     "write_file": _write_file,
+    # Day 27 — TTS
+    "text_to_speech": _text_to_speech,
 }
 
 
