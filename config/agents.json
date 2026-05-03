@@ -7,7 +7,7 @@
       "name": "Mighan-Core",
       "role": "orchestrator",
       "soul_md_path": "docs/01_SOUL.md",
-      "model_version": "qwen2.5-7b-instruct-q4_K_M",
+      "model_version": "qwen2.5:7b",
       "memory_blocks": ["persona", "human", "world_state"],
       "default_tools": [
         "web_search",
@@ -26,7 +26,7 @@
       "name": "Aria",
       "role": "customer_success",
       "soul_md_path": "templates/aria_soul.md",
-      "model_version": "qwen2.5-7b-instruct-q4_K_M",
+      "model_version": "qwen2.5:7b",
       "memory_blocks": ["persona", "human", "current_task"],
       "default_tools": [
         "memory_write",
