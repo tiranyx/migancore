@@ -39,7 +39,12 @@ _mcp = None  # FastMCP instance singleton
 
 
 def _build_mcp():
-    """Construct the FastMCP instance with tools and JWT verifier.
+    """Construct the FastMCP instance with tools.
+
+    Auth is NOT wired into FastMCP itself (the SDK requires full OAuth 2.1 settings
+    to use token_verifier, which is overkill for MiganCore's existing JWT setup).
+    Instead, JWT auth is enforced via Starlette middleware on the mounted ASGI app
+    in get_mcp_app() below — same security guarantee, simpler integration.
 
     Returns the FastMCP instance, ready to be mounted via streamable_http_app().
     """
@@ -51,67 +56,20 @@ def _build_mcp():
             "MCP SDK not installed. Run: pip install 'mcp>=1.27.0'"
         ) from exc
 
-    # Try to import TokenVerifier — API surface varies across SDK minor versions.
-    # If unavailable, we'll attach auth via a starlette middleware fallback.
-    try:
-        from mcp.server.auth.provider import TokenVerifier, AccessToken
-        _has_native_verifier = True
-    except ImportError:
-        TokenVerifier = object  # type: ignore
-        AccessToken = None  # type: ignore
-        _has_native_verifier = False
-
-    # ---------- JWT VERIFIER ----------
-    if _has_native_verifier:
-        class MiganCoreJWTVerifier(TokenVerifier):  # type: ignore
-            """Verify Bearer tokens using MiganCore's RS256 JWT keys."""
-
-            async def verify_token(self, token: str):
-                try:
-                    payload = decode_token(token, token_type="access")
-                except PyJWTError as exc:
-                    logger.warning("mcp.auth.invalid_token", error=str(exc))
-                    return None
-
-                tenant_id = payload.get("tenant_id")
-                subject = payload.get("sub")
-                if not tenant_id or not subject:
-                    logger.warning(
-                        "mcp.auth.missing_claims",
-                        has_tenant=bool(tenant_id),
-                        has_sub=bool(subject),
-                    )
-                    return None
-
-                logger.info("mcp.auth.ok", subject=subject, tenant_id=tenant_id)
-                return AccessToken(  # type: ignore
-                    token=token,
-                    client_id=subject,
-                    scopes=(payload.get("scope") or "").split() if payload.get("scope") else [],
-                )
-
-        verifier = MiganCoreJWTVerifier()
-    else:
-        verifier = None
-
     # ---------- FASTMCP INSTANCE ----------
     # stateless_http=True → no session bookkeeping, every request is independent.
     # This simplifies ops but means no server-initiated sampling. Acceptable for
     # Day 26 (just exposing tools, not full bi-directional protocol).
-    mcp_kwargs: dict[str, Any] = {
-        "name": "migancore",
-        "instructions": (
+    mcp = FastMCP(
+        name="migancore",
+        instructions=(
             "MiganCore — Autonomous Digital Organism. Provides 9 tools: web_search, "
             "python_repl, memory_write/search, spawn_agent, http_get, generate_image "
             "(fal.ai FLUX), read_file/write_file (sandboxed workspace). Bearer JWT auth "
             "required. Get token: POST https://api.migancore.com/v1/auth/login."
         ),
-        "stateless_http": True,
-    }
-    if verifier is not None:
-        mcp_kwargs["token_verifier"] = verifier
-
-    mcp = FastMCP(**mcp_kwargs)  # type: ignore[arg-type]
+        stateless_http=True,
+    )
 
     # ---------- TOOL CONTEXT EXTRACTION ----------
     # FastMCP passes a Context object to tools; we pull tenant_id from the
@@ -262,12 +220,70 @@ def get_mcp():
 
 
 def get_mcp_app():
-    """Return the Starlette ASGI app for mounting at /mcp.
+    """Return the Starlette ASGI app for mounting at /mcp, wrapped with JWT auth.
 
     Usage in main.py:
         from mcp_server import get_mcp_app
         app.mount("/mcp", get_mcp_app())
+
+    Auth: every request to the mounted app must include `Authorization: Bearer <jwt>`.
+    The JWT is verified against MiganCore's RS256 keys (services/jwt.py).
+    Tenant context is attached to the request scope for tools to read.
     """
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import JSONResponse
+
     mcp = get_mcp()
-    # SDK exposes streamable_http_app() — returns a Starlette ASGI sub-app
-    return mcp.streamable_http_app()
+    asgi_app = mcp.streamable_http_app()
+
+    class JWTAuthMiddleware(BaseHTTPMiddleware):
+        """Enforce Bearer JWT on every MCP request.
+
+        Allow OPTIONS through (CORS preflight). Reject missing/invalid tokens
+        with 401. Attach tenant_id/subject to request.state for downstream use.
+        """
+
+        async def dispatch(self, request, call_next):
+            # CORS preflight
+            if request.method == "OPTIONS":
+                return await call_next(request)
+
+            auth_header = request.headers.get("authorization", "")
+            if not auth_header.lower().startswith("bearer "):
+                logger.warning("mcp.auth.missing_bearer", path=request.url.path)
+                return JSONResponse(
+                    {"error": "missing_bearer_token", "detail": "Authorization: Bearer <jwt> required"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Bearer realm="migancore-mcp"'},
+                )
+
+            token = auth_header[7:].strip()
+            try:
+                payload = decode_token(token, token_type="access")
+            except PyJWTError as exc:
+                logger.warning("mcp.auth.invalid_token", error=str(exc), path=request.url.path)
+                return JSONResponse(
+                    {"error": "invalid_token", "detail": str(exc)},
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Bearer realm="migancore-mcp"'},
+                )
+
+            tenant_id = payload.get("tenant_id")
+            subject = payload.get("sub")
+            if not tenant_id or not subject:
+                logger.warning("mcp.auth.missing_claims", path=request.url.path)
+                return JSONResponse(
+                    {"error": "invalid_claims", "detail": "tenant_id and sub claims required"},
+                    status_code=401,
+                )
+
+            # Attach to request scope so tools can extract via context
+            request.state.tenant_id = tenant_id
+            request.state.subject = subject
+            request.state.scopes = (payload.get("scope") or "").split() if payload.get("scope") else []
+
+            logger.info("mcp.auth.ok", subject=subject, tenant_id=tenant_id, path=request.url.path)
+            return await call_next(request)
+
+    asgi_app.add_middleware(JWTAuthMiddleware)
+    return asgi_app
