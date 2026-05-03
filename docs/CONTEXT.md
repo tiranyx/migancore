@@ -14,8 +14,8 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 1 → Week 2 transition |
-| Sprint Day | Day 9 (COMPLETE) |
-| API Version | 0.3.0 |
+| Sprint Day | Day 10 (COMPLETE) |
+| API Version | 0.3.1 |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ |
 
@@ -33,9 +33,16 @@
 - ✅ Audit logging: events ke Postgres (async, no rollback risk)
 - ✅ RLS: cross-tenant isolation verified, ado_app non-superuser
 
-### Agent System (Day 6, Kimi)
+### Agent System (Day 6, Kimi + Day 10, Kimi)
 - ✅ `POST /v1/agents` — create agent, tenant-scoped
 - ✅ `GET /v1/agents/{id}` — get agent by ID
+- ✅ `POST /v1/agents/{id}/spawn` — spawn child agent with inherited persona (Day 10)
+  - Inherits: `model_version`, `visibility`, `system_prompt`, `description`
+  - Persona merge: parent `persona_blob` + `persona_overrides` from request
+  - Generation: `parent.generation + 1`
+  - Template tracking: `template_id` column (parent's id as fallback)
+  - Auto-grants: copies parent's `agent_tool_grants` to child via raw SQL
+- ✅ `GET /v1/agents/{id}/children` — list direct children of an agent
 
 ### Chat System (Day 6, Kimi + Day 7-9, Claude + Kimi)
 - ✅ `POST /v1/agents/{id}/chat` — sync chat via LangGraph director, tool calling, Postgres persistence
@@ -131,9 +138,10 @@ Tidak ada blocker saat ini.
 | H2 | LOW | Alembic belum setup, migrations raw SQL | Setup sebelum beta |
 | C8 | LOW | JWT key rotation belum ada strategi | Defer sampai user base > 0 |
 | T1 | LOW | `models/base.py` punya `get_db()` duplikat dari `deps/db.py` | Hapus, semua router sudah pakai `deps.db.get_db` |
-| T2 | LOW | `create_agent` punya bare `import secrets` di dalam function | Move ke top-level import |
+| T2 | LOW | ~~`create_agent` punya bare `import secrets` di dalam function~~ | **FIXED Day 10** — moved to top-level import |
 | T3 | INFO | Chat rate limit pakai IP, bukan user_id | Fix Week 2: pakai JWT sub sebagai key |
 | O1 | INFO | Ollama `0.22.1` tool calling 404 jika `tools` field dikirim | **RESOLVED** — fallback ke plain chat di `director.py` reason_node. Model `qwen2.5:7b-instruct-q4_K_M` ternyata support tools native. |
+| S1 | INFO | Schema mismatch ORM ↔ SQL (`description`, `model_version`, `system_prompt` missing dari init.sql; `letta_agent_id`, `webhook_url`, `avg_quality_score` missing dari ORM) | **FIXED Day 10** — init.sql synced, ORM updated, migration applied to live DB |
 
 ---
 
@@ -171,7 +179,7 @@ Tidak ada blocker saat ini.
 
 | Metric | Value |
 |--------|-------|
-| API endpoints | 12 (5 auth + 2 agents + 3 chat + 3 conversations) |
+| API endpoints | 14 (5 auth + 4 agents + 3 chat + 3 conversations) |
 | DB tables | 9 (tenants, users, agents, conversations, messages, model_versions, refresh_tokens, audit_events, training_runs) |
 | Memory service | Redis K-V, 30d TTL |
 | Test coverage | auth (unit) + RLS (integration) |
@@ -194,3 +202,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 7) | Claude Sonnet 4.6 | Chat rate limiting, SSE streaming, memory service (Redis K-V), conversation endpoints, OllamaClient streaming support |
 | 2026-05-03 (Day 8) | Claude Sonnet 4.6 | Tool executor (web_search/memory_write/memory_search/python_repl), OllamaClient.chat_with_tools(), ReAct agentic loop wired ke chat.py, landing page interactive.jsx updated dengan real ADO event templates |
 | 2026-05-03 (Day 7-9) | Kimi Code CLI | Audit Claude Code's Day 7-9 implementation: fixed `_memory_search` namespace bug, wired orphaned `director.py` into `chat.py`, fixed health_check version mismatch, fixed `build_ollama_tools_spec` late import, fixed `_get_pool()` race condition dengan `asyncio.Lock()`, added Ollama 404 fallback di `director.py`. Deployed v0.3.0 ke VPS. E2E verified: register → create agent → chat (sync+stream) → list conversations = ALL PASSED. Tool calling verified: 1 tool call executed successfully. |
+| 2026-05-03 (Day 10) | Kimi Code CLI | Schema sync: fixed ORM↔SQL mismatch (added missing columns to init.sql + ORM + live DB migration). Agent spawning: `POST /v1/agents/{id}/spawn` with persona inheritance, generation counter, tool grant copy. `GET /v1/agents/{id}/children` endpoint. Deployed v0.3.1 ke VPS. E2E verified: create parent → spawn child → verify generation/parent_id → list children = ALL PASSED. |
