@@ -182,12 +182,18 @@ async def _store_preference_pair(
     chosen: str,
     rejected: str,
     score: float,
-    source_message_id: uuid.UUID,
+    source_message_id: uuid.UUID | None = None,
+    source_method: str = "cai_pipeline",
 ) -> None:
     """Insert a (chosen, rejected) preference pair into preference_pairs table.
 
     preference_pairs has no RLS — it is a global training table, not tenant-scoped.
     Uses AsyncSessionLocal directly (background task, no request DB session available).
+
+    Args:
+        source_message_id: UUID of originating message (None for synthetic pairs).
+        source_method: Tag for training data provenance. "cai_pipeline" for real
+            user turns, "synthetic_seed_v1" for synthetic generation (Day 19).
     """
     if _models_base.AsyncSessionLocal is None:
         return
@@ -207,7 +213,7 @@ async def _store_preference_pair(
                     "rejected": rejected[:4000],
                     "score": float(score),
                     "model": JUDGE_MODEL,
-                    "method": "cai_pipeline",
+                    "method": source_method,
                     "msg_id": source_message_id,
                     "now": datetime.now(timezone.utc),
                 },
@@ -216,7 +222,8 @@ async def _store_preference_pair(
         logger.info(
             "cai.preference_pair_stored",
             score=score,
-            source_message_id=str(source_message_id),
+            source_method=source_method,
+            source_message_id=str(source_message_id) if source_message_id else None,
             chosen_len=len(chosen),
             rejected_len=len(rejected),
         )
@@ -224,7 +231,8 @@ async def _store_preference_pair(
         logger.warning(
             "cai.store_error",
             error=str(exc),
-            source_message_id=str(source_message_id),
+            source_method=source_method,
+            source_message_id=str(source_message_id) if source_message_id else None,
         )
 
 
@@ -281,6 +289,7 @@ async def run_cai_pipeline(
             rejected=assistant_response,
             score=float(score),
             source_message_id=source_message_id,
+            source_method="cai_pipeline",
         )
 
     except asyncio.CancelledError:

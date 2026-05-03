@@ -1,16 +1,19 @@
 """
-Admin endpoints — CAI flywheel monitoring and dataset export (Day 17).
+Admin endpoints — CAI flywheel monitoring, dataset export, synthetic generation (Day 17+19).
 
-Provides visibility into the preference_pairs training data flywheel:
-  - /v1/admin/stats       → aggregate health metrics (pair count, quality, rate)
-  - /v1/admin/preference-pairs → paginated pair listing with filters
-  - /v1/admin/export      → JSONL download in Unsloth/TRL DPO-compatible format
+Provides visibility and control over the preference_pairs training data flywheel:
+  - /v1/admin/stats              → aggregate health metrics (pair count, quality, rate)
+  - /v1/admin/preference-pairs   → paginated pair listing with filters
+  - /v1/admin/export             → JSONL download in Unsloth/TRL DPO-compatible format
+  - /v1/admin/synthetic/start    → start synthetic conversation generation (Day 19)
+  - /v1/admin/synthetic/status   → monitor synthetic generation progress
+  - /v1/admin/synthetic/stop     → cancel running synthetic generation
 
 Auth: X-Admin-Key header checked against settings.ADMIN_SECRET_KEY.
       Empty ADMIN_SECRET_KEY → 503 (admin not configured).
       Wrong key → 401.
 
-All endpoints are READ-ONLY — no training data is mutated here.
+All endpoints are READ-ONLY except synthetic/start and synthetic/stop.
 Export marks nothing as "used" — that happens during the training run itself.
 
 Training readiness thresholds (from Day 17 research, arxiv 2502.14560):
@@ -33,6 +36,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from deps.db import get_db
 from models.preference_pair import PreferencePair
+from services.synthetic_pipeline import (
+    get_synthetic_status,
+    start_synthetic_generation,
+    stop_synthetic_generation,
+)
 
 logger = structlog.get_logger()
 
@@ -356,3 +364,83 @@ async def export_dataset(
             "X-Total-Pairs": str(len(rows)),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Synthetic generation endpoints (Day 19)
+# ---------------------------------------------------------------------------
+
+@router.post("/synthetic/start", dependencies=[Depends(require_admin_key)])
+async def start_synthetic():
+    """Start a synthetic conversation generation run.
+
+    Generates 120 seeds through the CAI pipeline to produce DPO preference pairs.
+    Only one run allowed at a time (CPU-only VPS constraint).
+
+    Returns run_id for tracking. Monitor progress at GET /v1/admin/synthetic/status.
+
+    Expected yield: ~50-60 pairs per run (40-50% of seeds score <= 3 after critique).
+    Tagged as source_method="synthetic_seed_v1" in preference_pairs table.
+
+    Usage:
+        curl -X POST -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/start
+    """
+    success, run_id, message = await start_synthetic_generation()
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=message,
+        )
+
+    logger.info("admin.synthetic_started", run_id=run_id)
+    return {
+        "run_id": run_id,
+        "message": message,
+        "monitor": "/v1/admin/synthetic/status",
+        "stop": "/v1/admin/synthetic/stop",
+    }
+
+
+@router.get("/synthetic/status", dependencies=[Depends(require_admin_key)])
+async def synthetic_status():
+    """Get current synthetic generation status and progress counters.
+
+    Returns:
+        status: "idle" | "running" | "done" | "cancelled" | "error" | "unknown"
+        run_id: UUID of current/last run
+        total: total seeds to process (120)
+        processed: seeds processed so far
+        stored: DPO pairs actually stored (score <= 3)
+        progress_pct: processed/total * 100
+        started_at: ISO timestamp of run start
+        is_running: True if task is active in event loop
+
+    Usage:
+        curl -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/status
+    """
+    status_data = await get_synthetic_status()
+    logger.info("admin.synthetic_status_checked", status=status_data.get("status"))
+    return status_data
+
+
+@router.post("/synthetic/stop", dependencies=[Depends(require_admin_key)])
+async def stop_synthetic():
+    """Cancel the running synthetic generation.
+
+    Cancellation is asynchronous — the task will update Redis status to 'cancelled'
+    shortly after this call returns. Check /status to confirm.
+
+    Returns 404 if no generation is running.
+
+    Usage:
+        curl -X POST -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/stop
+    """
+    success, message = await stop_synthetic_generation()
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=message,
+        )
+
+    logger.info("admin.synthetic_stop_requested")
+    return {"message": message}
