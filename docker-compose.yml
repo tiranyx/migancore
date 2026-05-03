@@ -103,7 +103,13 @@ services:
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}
       FAL_KEY: ${FAL_KEY}                         # Day 24: fal.ai image/video generation
       ELEVENLABS_KEY: ${ELEVENLABS_KEY}           # Day 27: ElevenLabs TTS
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID} # Day 28: user's voice library voice
       API_KEY_PEPPER: ${API_KEY_PEPPER}           # Day 27: server-side HMAC pepper for API keys
+      # Day 28 — Teacher APIs for distillation pipeline
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      KIMI_API_KEY: ${KIMI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       JWT_PRIVATE_KEY_PATH: /etc/ado/keys/private.pem
       JWT_PUBLIC_KEY_PATH: /etc/ado/keys/public.pem
     volumes:

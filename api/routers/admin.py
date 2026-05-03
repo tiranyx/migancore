@@ -480,3 +480,77 @@ async def stop_synthetic():
 
     logger.info("admin.synthetic_stop_requested")
     return {"message": message}
+
+
+# ---------------------------------------------------------------------------
+# Distillation endpoints (Day 28)
+# ---------------------------------------------------------------------------
+
+class StartDistillRequest(BaseModel):
+    teacher: str = Field(..., description="One of: kimi, claude, gpt, gemini")
+    target_pairs: int = Field(default=30, ge=1, le=2000)
+    judge_teacher: str = Field(default="claude", description="Independent judge teacher (default claude)")
+    budget_cap_usd: Optional[float] = Field(default=None, description="Override default budget cap")
+
+
+@router.post("/distill/start", dependencies=[Depends(require_admin_key)])
+async def start_distill(body: StartDistillRequest):
+    """Start a distillation run.
+
+    Generates `target_pairs` DPO pairs by comparing MiganCore (student) vs the
+    chosen teacher LLM, scored by an independent judge. Stores margin-passing
+    pairs in preference_pairs with source_method='distill_<teacher>_v1'.
+
+    Usage:
+        curl -X POST -H "X-Admin-Key: <key>" -H "Content-Type: application/json" \
+          -d '{"teacher":"kimi","target_pairs":30}' \
+          https://api.migancore.com/v1/admin/distill/start
+    """
+    from services.distillation import start_distillation, list_available_teachers
+
+    available = list_available_teachers()
+    if body.teacher not in available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Teacher '{body.teacher}' not available. Available: {available}",
+        )
+    if body.judge_teacher not in available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Judge '{body.judge_teacher}' not available. Available: {available}",
+        )
+
+    result = await start_distillation(
+        teacher=body.teacher,
+        target_pairs=body.target_pairs,
+        judge_teacher=body.judge_teacher,
+        budget_cap_usd=body.budget_cap_usd,
+    )
+    if result.get("status") == "rejected":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result)
+    return result
+
+
+@router.get("/distill/status", dependencies=[Depends(require_admin_key)])
+async def distill_status():
+    """Live status of the current distillation run (if any)."""
+    from services.distillation import get_run_status, list_available_teachers
+    cur = await get_run_status()
+    return {
+        "current_run": cur,
+        "available_teachers": list_available_teachers(),
+    }
+
+
+@router.post("/distill/stop", dependencies=[Depends(require_admin_key)])
+async def distill_stop():
+    """Cancel the running distillation."""
+    from services.distillation import stop_distillation
+    return await stop_distillation()
+
+
+@router.get("/distill/summary", dependencies=[Depends(require_admin_key)])
+async def distill_summary():
+    """Aggregate stats per teacher across all distillation runs."""
+    from services.distillation import get_distill_summary
+    return await get_distill_summary()

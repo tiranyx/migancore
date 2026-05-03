@@ -57,8 +57,19 @@ class Settings(BaseSettings):
 
     # Day 27: ElevenLabs TTS
     ELEVENLABS_KEY: Optional[str] = None
-    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel — default ElevenLabs voice
+    ELEVENLABS_VOICE_ID: str = "pIdeS8l1cmJzzqqt7NRc"  # User's "Menit" voice (Day 28 update)
     ELEVENLABS_MODEL: str = "eleven_flash_v2_5"        # ~75ms TTFB, free-tier compatible
+
+    # Day 28: Teacher API keys for distillation pipeline
+    ANTHROPIC_API_KEY: Optional[str] = None    # Claude (judge + alt teacher)
+    OPENAI_API_KEY: Optional[str] = None       # GPT (alt teacher)
+    KIMI_API_KEY: Optional[str] = None         # Moonshot Kimi K2 (primary teacher — bilingual ID)
+    GEMINI_API_KEY: Optional[str] = None       # Google Gemini (cheap teacher)
+
+    # Distillation budget caps
+    DISTILL_BUDGET_USD_HARD_CAP: float = 10.0  # Pipeline aborts if estimated spend > this
+    DISTILL_MARGIN_THRESHOLD: float = 2.0      # Only keep pairs with judge_diff >= this
+    DISTILL_MAX_OUTPUT_TOKENS: int = 600       # Per teacher response cap
 
     # Day 27: API Keys (server-side pepper for HMAC)
     # If empty, falls back to hash of JWT private key (dev convenience).

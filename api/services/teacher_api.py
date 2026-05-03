@@ -1,0 +1,327 @@
+"""
+Teacher API wrappers — Day 28 distillation pipeline.
+
+Unified async interface to 4 LLM providers used as "teachers" for MiganCore-7B
+distillation. Each wrapper exposes the same `complete(prompt, system, max_tokens)`
+signature returning (text, input_tokens, output_tokens, est_cost_usd).
+
+Providers:
+  - Anthropic Claude (sonnet 4.5) — best quality, used as JUDGE primarily
+  - Moonshot Kimi K2 — cheapest bilingual ID/EN, primary TEACHER
+  - OpenAI GPT-4o — alternative teacher
+  - Google Gemini 2.5 Flash — cheapest, alternative teacher
+
+Pricing (May 2026, official pages, $/1M tokens):
+  Claude Sonnet 4.5  : $3 in / $15 out
+  GPT-4o             : $2.50 in / $10 out
+  Kimi K2            : $0.60 in / $2.50 out  (cheapest bilingual)
+  Gemini 2.5 Flash   : $0.075 in / $0.30 out (cheapest overall)
+
+All wrappers:
+  - httpx.AsyncClient with 60s timeout
+  - Retry x3 with exponential backoff on 429/5xx
+  - Return est_cost_usd for budget tracking
+  - Raise TeacherError on hard failures
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+from dataclasses import dataclass
+from typing import Optional
+
+import httpx
+import structlog
+
+from config import settings
+
+logger = structlog.get_logger()
+
+
+class TeacherError(Exception):
+    """Raised when a teacher API call fails after retries."""
+
+
+@dataclass
+class TeacherResponse:
+    text: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    provider: str
+    model: str
+
+
+# Pricing table ($/1M tokens) — single source of truth
+PRICING = {
+    "anthropic/claude-sonnet-4-5": {"in": 3.00, "out": 15.00},
+    "anthropic/claude-haiku-4-5":  {"in": 1.00, "out": 5.00},  # cheaper alt
+    "openai/gpt-4o":               {"in": 2.50, "out": 10.00},
+    "openai/gpt-4o-mini":          {"in": 0.15, "out": 0.60},
+    "moonshot/kimi-k2-0905-preview": {"in": 0.60, "out": 2.50},
+    "google/gemini-2.5-flash":     {"in": 0.075, "out": 0.30},
+}
+
+
+def _cost(model_key: str, in_tok: int, out_tok: int) -> float:
+    p = PRICING.get(model_key)
+    if not p:
+        return 0.0
+    return (in_tok / 1_000_000) * p["in"] + (out_tok / 1_000_000) * p["out"]
+
+
+# ---------------------------------------------------------------------------
+# Anthropic Claude
+# ---------------------------------------------------------------------------
+async def call_claude(
+    prompt: str,
+    system: str = "",
+    max_tokens: int = 600,
+    model: str = "claude-sonnet-4-5",
+) -> TeacherResponse:
+    if not settings.ANTHROPIC_API_KEY:
+        raise TeacherError("ANTHROPIC_API_KEY not set")
+
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        payload["system"] = system
+
+    headers = {
+        "x-api-key": settings.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        for attempt in range(3):
+            try:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    json=payload, headers=headers,
+                )
+                if resp.status_code == 429:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                if resp.status_code != 200:
+                    raise TeacherError(f"Claude HTTP {resp.status_code}: {resp.text[:200]}")
+                data = resp.json()
+                text = "".join(b["text"] for b in data["content"] if b["type"] == "text")
+                in_tok = data["usage"]["input_tokens"]
+                out_tok = data["usage"]["output_tokens"]
+                return TeacherResponse(
+                    text=text,
+                    input_tokens=in_tok,
+                    output_tokens=out_tok,
+                    cost_usd=_cost(f"anthropic/{model}", in_tok, out_tok),
+                    provider="anthropic",
+                    model=model,
+                )
+            except httpx.HTTPError as exc:
+                if attempt == 2:
+                    raise TeacherError(f"Claude failed after 3 retries: {exc}")
+                await asyncio.sleep(2 ** attempt)
+    raise TeacherError("Claude unreachable")
+
+
+# ---------------------------------------------------------------------------
+# Moonshot Kimi K2 (OpenAI-compatible API)
+# ---------------------------------------------------------------------------
+async def call_kimi(
+    prompt: str,
+    system: str = "",
+    max_tokens: int = 600,
+    model: str = "kimi-k2-0905-preview",
+) -> TeacherResponse:
+    if not settings.KIMI_API_KEY:
+        raise TeacherError("KIMI_API_KEY not set")
+
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.6}
+    headers = {
+        "Authorization": f"Bearer {settings.KIMI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        for attempt in range(3):
+            try:
+                resp = await client.post(
+                    "https://api.moonshot.ai/v1/chat/completions",
+                    json=payload, headers=headers,
+                )
+                if resp.status_code == 429:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                if resp.status_code != 200:
+                    raise TeacherError(f"Kimi HTTP {resp.status_code}: {resp.text[:200]}")
+                data = resp.json()
+                text = data["choices"][0]["message"]["content"]
+                in_tok = data["usage"]["prompt_tokens"]
+                out_tok = data["usage"]["completion_tokens"]
+                return TeacherResponse(
+                    text=text,
+                    input_tokens=in_tok,
+                    output_tokens=out_tok,
+                    cost_usd=_cost(f"moonshot/{model}", in_tok, out_tok),
+                    provider="moonshot",
+                    model=model,
+                )
+            except httpx.HTTPError as exc:
+                if attempt == 2:
+                    raise TeacherError(f"Kimi failed after 3 retries: {exc}")
+                await asyncio.sleep(2 ** attempt)
+    raise TeacherError("Kimi unreachable")
+
+
+# ---------------------------------------------------------------------------
+# OpenAI GPT-4o
+# ---------------------------------------------------------------------------
+async def call_gpt(
+    prompt: str,
+    system: str = "",
+    max_tokens: int = 600,
+    model: str = "gpt-4o",
+) -> TeacherResponse:
+    if not settings.OPENAI_API_KEY:
+        raise TeacherError("OPENAI_API_KEY not set")
+
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.6}
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        for attempt in range(3):
+            try:
+                resp = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    json=payload, headers=headers,
+                )
+                if resp.status_code == 429:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                if resp.status_code != 200:
+                    raise TeacherError(f"OpenAI HTTP {resp.status_code}: {resp.text[:200]}")
+                data = resp.json()
+                text = data["choices"][0]["message"]["content"]
+                in_tok = data["usage"]["prompt_tokens"]
+                out_tok = data["usage"]["completion_tokens"]
+                return TeacherResponse(
+                    text=text,
+                    input_tokens=in_tok,
+                    output_tokens=out_tok,
+                    cost_usd=_cost(f"openai/{model}", in_tok, out_tok),
+                    provider="openai",
+                    model=model,
+                )
+            except httpx.HTTPError as exc:
+                if attempt == 2:
+                    raise TeacherError(f"OpenAI failed after 3 retries: {exc}")
+                await asyncio.sleep(2 ** attempt)
+    raise TeacherError("OpenAI unreachable")
+
+
+# ---------------------------------------------------------------------------
+# Google Gemini 2.5 Flash
+# ---------------------------------------------------------------------------
+async def call_gemini(
+    prompt: str,
+    system: str = "",
+    max_tokens: int = 600,
+    model: str = "gemini-2.5-flash",
+) -> TeacherResponse:
+    if not settings.GEMINI_API_KEY:
+        raise TeacherError("GEMINI_API_KEY not set")
+
+    contents = [{"role": "user", "parts": [{"text": prompt}]}]
+    payload = {
+        "contents": contents,
+        "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.6},
+    }
+    if system:
+        payload["systemInstruction"] = {"parts": [{"text": system}]}
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={settings.GEMINI_API_KEY}"
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        for attempt in range(3):
+            try:
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 429:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                if resp.status_code != 200:
+                    raise TeacherError(f"Gemini HTTP {resp.status_code}: {resp.text[:200]}")
+                data = resp.json()
+                cands = data.get("candidates", [])
+                if not cands:
+                    raise TeacherError(f"Gemini no candidates: {data}")
+                parts = cands[0].get("content", {}).get("parts", [])
+                text = "".join(p.get("text", "") for p in parts)
+                usage = data.get("usageMetadata", {})
+                in_tok = usage.get("promptTokenCount", 0)
+                out_tok = usage.get("candidatesTokenCount", 0)
+                return TeacherResponse(
+                    text=text,
+                    input_tokens=in_tok,
+                    output_tokens=out_tok,
+                    cost_usd=_cost(f"google/{model}", in_tok, out_tok),
+                    provider="google",
+                    model=model,
+                )
+            except httpx.HTTPError as exc:
+                if attempt == 2:
+                    raise TeacherError(f"Gemini failed after 3 retries: {exc}")
+                await asyncio.sleep(2 ** attempt)
+    raise TeacherError("Gemini unreachable")
+
+
+# ---------------------------------------------------------------------------
+# Dispatch table
+# ---------------------------------------------------------------------------
+TEACHER_REGISTRY = {
+    "claude": call_claude,
+    "kimi": call_kimi,
+    "gpt": call_gpt,
+    "gemini": call_gemini,
+}
+
+
+async def call_teacher(
+    teacher: str, prompt: str, system: str = "", max_tokens: int = 600
+) -> TeacherResponse:
+    """Generic dispatch: call_teacher('kimi', prompt, system, 600)"""
+    fn = TEACHER_REGISTRY.get(teacher)
+    if not fn:
+        raise TeacherError(f"Unknown teacher: {teacher}. Available: {list(TEACHER_REGISTRY)}")
+    return await fn(prompt, system, max_tokens)
+
+
+def is_teacher_available(teacher: str) -> bool:
+    """Quick check: is API key configured for this teacher?"""
+    keys = {
+        "claude": settings.ANTHROPIC_API_KEY,
+        "kimi": settings.KIMI_API_KEY,
+        "gpt": settings.OPENAI_API_KEY,
+        "gemini": settings.GEMINI_API_KEY,
+    }
+    return bool(keys.get(teacher))
+
+
+def list_available_teachers() -> list[str]:
+    return [t for t in TEACHER_REGISTRY if is_teacher_available(t)]
