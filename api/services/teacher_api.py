@@ -150,9 +150,16 @@ async def call_kimi(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    # Kimi K2 series only accepts temperature=1; older moonshot-v1-* allow 0.6
-    temp = 1.0 if model.startswith("kimi-k2") else 0.6
+    # Kimi K2 series quirks (per platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model.md):
+    # - temperature must be 1.0 (server enforces internally)
+    # - Default has thinking ENABLED — output goes to reasoning_content, not content
+    # - For distillation we disable thinking: cheaper, faster, content-only response
+    is_k2 = model.startswith("kimi-k2")
+    temp = 1.0 if is_k2 else 0.6
     payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temp}
+    if is_k2:
+        # Disable thinking to get clean content response (cost-efficient for distillation)
+        payload["thinking"] = {"type": "disabled"}
     headers = {
         "Authorization": f"Bearer {settings.KIMI_API_KEY}",
         "Content-Type": "application/json",
@@ -171,7 +178,12 @@ async def call_kimi(
                 if resp.status_code != 200:
                     raise TeacherError(f"Kimi HTTP {resp.status_code}: {resp.text[:200]}")
                 data = resp.json()
-                text = data["choices"][0]["message"]["content"]
+                msg = data["choices"][0]["message"]
+                # K2 thinking models split: content (final) + reasoning_content (chain-of-thought)
+                # If thinking is enabled and max_tokens too low, content may be empty.
+                text = (msg.get("content") or "").strip()
+                if not text:
+                    text = (msg.get("reasoning_content") or "").strip()
                 in_tok = data["usage"]["prompt_tokens"]
                 out_tok = data["usage"]["completion_tokens"]
                 return TeacherResponse(
