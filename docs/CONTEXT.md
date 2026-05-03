@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 19 — Synthetic DPO Generator)
-**API Version:** 0.3.9
-**Git Commit:** `471e34b`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 20 — Context Window Management)
+**API Version:** 0.4.0
+**Git Commit:** `74e86e7`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 19 (COMPLETE) → Day 20 (NEXT) |
-| API Version | 0.3.9 |
-| Git Commit | `471e34b` |
+| Sprint Day | Day 20 (COMPLETE) → Day 21 (NEXT) |
+| API Version | 0.4.0 |
+| Git Commit | `74e86e7` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -49,16 +49,17 @@
   - **max_agents enforcement** juga berlaku untuk spawn (Day 11)
 - ✅ `GET /v1/agents/{id}/children` — list direct children
 
-### Chat System (Day 6–11)
+### Chat System (Day 6–11 + Day 20)
 - ✅ `POST /v1/agents/{id}/chat` — sync chat via LangGraph director
   - Rate limited: 30/min per IP
-  - Context window: last 5 messages
+  - **Context management (Day 20):** `MAX_HISTORY_LOAD=10`, token budget `MAX_HISTORY_TOKENS=1500`, per-message cap `MAX_MSG_CONTENT_CHARS=800`, `CHARS_PER_TOKEN=3.5`
+  - **Explicit `num_ctx=4096`** in all Ollama call options (Day 20)
   - Memory injection: Redis K-V summary injected ke system prompt
   - Tool calling: MAX_TOOL_ITERATIONS=5 via LangGraph StateGraph
   - **Tenant message quota check** (Day 11): max_messages_per_day, auto-reset UTC midnight
   - **Tool policy enforcement** via ToolPolicyChecker (Day 11)
   - Response: `ChatResponse` dengan `tool_calls_made` + `reasoning_trace`
-- ✅ `POST /v1/agents/{id}/chat/stream` — SSE streaming (no tool calling)
+- ✅ `POST /v1/agents/{id}/chat/stream` — SSE streaming (no tool calling) — also `num_ctx=4096`
 - ✅ `GET /v1/agents/{id}/conversations` — list conversations
 
 ### Conversation Management (Day 7, Claude)
@@ -178,7 +179,9 @@
 - ✅ `routers/chat.py` — background index after message save
   - `asyncio.create_task(index_turn_pair(...))` — fire-and-forget, never blocks response
 - ✅ `services/tool_executor.py` — `_memory_search` upgraded: Qdrant first → Redis fallback
-  - Returns `source: "qdrant_semantic"` or `"redis_kv"`
+  - **Day 20:** `asyncio.wait_for(timeout=2.0)` around Qdrant call — prevents tool loop blocking
+  - Returns `source: "qdrant_hybrid"` or `"redis_kv"` (label corrected from stale "qdrant_semantic")
+  - Each result now includes `"score": r.get("_retrieval_score")` for transparency
 - ✅ **7 existing collections auto-migrated** to hybrid schema on first API restart (zero data loss)
 
 ### Tool Executor (Day 8, Claude + Day 11 + Day 12 update)
@@ -207,6 +210,29 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 20 — Context Window Management + Tool Executor Timeout (COMPLETE)
+**Git Commit:** `74e86e7` | **Deployed:** 2026-05-03 | **Version:** 0.4.0
+
+**Delivered:**
+- ✅ `services/tool_executor.py` — `asyncio.wait_for(timeout=2.0)` on Qdrant `memory_search` call; graceful Redis fallback; corrected source label "qdrant_hybrid"; added score field to results
+- ✅ `routers/chat.py` — token budget trimming (`_estimate_tokens`, `_trim_history_to_budget`), `MAX_HISTORY_LOAD=10`, per-message 800-char cap, `num_ctx=4096` in all Ollama options
+- ✅ `services/director.py` — explicit `num_ctx=4096` in default options dict
+- ✅ `main.py` — version 0.3.9 → 0.4.0
+
+**E2E verified:**
+- `/health version: 0.4.0` ✅
+- Sync chat with `num_ctx=4096` confirmed via Ollama call ✅
+- memory_search timeout path verified ✅
+
+**Architecture decisions locked:**
+- `num_ctx=4096` everywhere — never leave unset (silent overflow risk)
+- `MAX_MSG_CONTENT_CHARS=800` — per-message cap prevents budget hogging
+- `MAX_HISTORY_TOKENS=1500` — history budget within 4096 total context
+- `CHARS_PER_TOKEN=3.5` — conservative mixed-language estimate (no tokenizer dependency)
+- Qdrant timeout 2.0s in tool executor (vs 1.5s in retrieval.py — tool path has Redis fallback)
+
+---
 
 ### ✅ Day 19 — Synthetic DPO Generator (COMPLETE)
 **Git Commits:** `a9a7b65`, `471e34b` | **Deployed:** 2026-05-03 | **Version:** 0.3.9
@@ -401,6 +427,9 @@ Tidak ada blocker saat ini.
 | DPO pipeline | Accumulate pairs now, train Week 3-4 | RunPod RTX 4090, $2-4/run; need 1000+ pairs minimum (arxiv 2502.14560) |
 | Synthetic seed source | MighanTech3D NPCs + SIDIX taxonomy (framing only) | Realistic archetypes + diverse framing; no hallucination transfer |
 | Synthetic generation cadence | Re-run /synthetic/start as needed | Each run adds ~50-60 pairs; stop/start anytime |
+| `num_ctx` | 4096 (explicit) at all Ollama call sites | Ollama default ~2048 causes silent truncation on long chats |
+| Context history budget | MAX_HISTORY_TOKENS=1500, MAX_MSG_CONTENT_CHARS=800 | Leaves room for system prompt + response within 4096 |
+| Qdrant timeout (tool executor) | 2.0s asyncio.wait_for → Redis fallback | Tool loop must not block; Redis is immediate fallback |
 | Knowledge scope | Sync chat only | Stream endpoint: async persist pattern makes nested task complex. Defer. |
 | Langfuse | DEFERRED (Week 3) | Belum ada yang perlu diobservasi. structlog sudah cukup. |
 | Memory Tier 1 | Redis K-V | Fast, simple, TTL built-in |
@@ -447,6 +476,10 @@ Tidak ada blocker saat ini.
 - ❌ Jangan import SIDIX QA answers / corpus_qa / finetune_sft.jsonl sebagai seed data — hallucination transfer risk ke MiganCore model
 - ❌ Jangan jalankan dua synthetic generation task sekaligus — asyncio.Lock sudah ada, gunakan /stop dulu
 - ❌ Jangan filter semua synthetic pairs dari training set secara default — synthetic data valid, bedakan dengan source_method jika diperlukan
+- ❌ Jangan hilangkan `num_ctx` dari Ollama call options — Ollama default ~2048 = silent context overflow (F-10)
+- ❌ Jangan set `num_ctx` terlalu besar (>8192) tanpa benchmark — CPU inference O(n²) dengan context length
+- ❌ Jangan skip `_trim_history_to_budget()` saat menambah history — token budget tidak otomatis dikelola oleh Ollama
+- ❌ Jangan percaya notes lama tentang "upgrade needed" tanpa baca code actual — bisa jadi sudah diimplementasikan (F-11)
 
 ---
 
@@ -474,21 +507,24 @@ Tidak ada blocker saat ini.
 
 | Metric | Value |
 |--------|-------|
-| API endpoints | 17 (5 auth + 4 agents + 3 chat + 3 conversations + 3 admin) + hybrid search |
+| API endpoints | 20 (5 auth + 4 agents + 3 chat + 3 conversations + 6 admin: 3 monitoring + 3 synthetic) |
 | DB tables | 20 (includes papers, kg_entities, preference_pairs untuk Week 3-4) |
 | Memory tier | Tier 1: Redis K-V ✅ | Tier 2: Qdrant (Day 12) | Tier 3: Letta blocks (Day 13) |
 | Test coverage | E2E: 14/14 endpoints + 10/10 safety gates |
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
 | External URL | https://api.migancore.com (Let's Encrypt SSL) |
 | RunPod budget | $0 spent of $50 allocated |
-| Git (Day 17) | VPS ↔ GitHub ↔ Local = SYNCED @ fac8e9a |
+| Git (Day 20) | VPS ↔ GitHub ↔ Local = SYNCED @ 74e86e7 |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
-| DPO pairs accumulated | **3** real pairs (CAI pipeline working since Day 15 — target: 1000+ before training) |
+| DPO pairs accumulated | real (CAI) + synthetic (synthetic_seed_v1) — target: 1000+ before training |
 | Admin monitoring | /v1/admin/stats + /preference-pairs + /export (JSONL), Day 17 ✅ |
+| Synthetic generator | 120 seeds, 7 domains, Triple-Source, Day 19 ✅ |
 | Episodic RAG | Qdrant retrieval wired, score=0.65, top-k=3, sort-by-relevance, Day 16 ✅ |
 | Hybrid search | BM42 sparse + dense RRF, Qdrant v1.12.0, 7 collections migrated, Day 18 ✅ |
-| Git | VPS ↔ GitHub ↔ Local = SYNCED @ f8779ea |
+| Context window | num_ctx=4096 explicit, token budget trimming, Day 20 ✅ |
+| Tool executor timeout | memory_search: asyncio.wait_for(2.0s) → Redis fallback, Day 20 ✅ |
+| Git | VPS ↔ GitHub ↔ Local = SYNCED @ 74e86e7 |
 
 ---
 
@@ -515,3 +551,5 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 16) | Claude Sonnet 4.6 | Episodic RAG retrieval: vector_retrieval.py (retrieve+format), wired sync in chat.py before run_director(), injected as last system prompt section. Score 0.65, top-k=3, sort by relevance. Research-backed (Mem0, LangMem, arxiv). v0.3.6. No DB migration. |
 | 2026-05-03 (Day 17) | Claude Sonnet 4.6 | Admin monitoring: routers/admin.py (stats+list+export JSONL), PreferencePair ORM, ADMIN_SECRET_KEY config. 3 real CAI pairs discovered. Training readiness assessment built-in. Research: SimPO>DPO for first run. v0.3.7. No DB migration. |
 | 2026-05-03 (Day 18) | Claude Sonnet 4.6 | Hybrid search BM42: embedding.py BM42 sparse model (get_sparse_model/embed_sparse_document/embed_sparse_query), vector_memory.py full rewrite (schema detection, zero-loss migration, Prefetch+RRF hybrid search, dense fallback). Qdrant v1.9→v1.12.0. 7 collections auto-migrated. fastembed_cache named volume. v0.3.8. No DB migration. |
+| 2026-05-03 (Day 19) | Claude Sonnet 4.6 | Synthetic DPO generator: seed_bank.py (120 seeds, 7 domains, Triple-Source), synthetic_pipeline.py (generate→critique→revise, Redis tracking, graceful cancel), admin.py 3 new endpoints (start/status/stop), cai_pipeline.py source_method param + nullable source_message_id. v0.3.9. No DB migration. |
+| 2026-05-03 (Day 20) | Claude Sonnet 4.6 | Context window management: num_ctx=4096 explicit in all Ollama calls (chat.py + director.py), token budget trimming in chat.py (_estimate_tokens, _trim_history_to_budget, MAX_HISTORY_LOAD=10). Tool executor timeout: asyncio.wait_for(2.0s) in _memory_search → Redis fallback; corrected source label qdrant_hybrid. v0.4.0. No DB migration. |

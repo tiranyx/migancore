@@ -1,6 +1,6 @@
 # MIGANCORE — LESSONS LEARNED
 **Living Document — Updated setiap sesi**
-**Last Update:** Day 19 | **Author:** Claude Sonnet 4.6
+**Last Update:** Day 20 | **Author:** Claude Sonnet 4.6
 
 > Ini adalah cognitive ledger proyek — catatan pelajaran berharga dari kegagalan DAN keberhasilan.
 > Tujuan: **jangan ulangi kegagalan, lipat gandakan keberhasilan.**
@@ -394,6 +394,90 @@ volumes:
 
 ---
 
+### [F-10] `num_ctx` Tidak Pernah Di-set — Silent Context Overflow
+**Day:** 20 | **Severity:** HIGH | **Category:** LLM Inference
+
+**Gejala:** Tidak ada error. Chat response tetap keluar — tapi semakin panjang conversation history (terutama dengan tool calling), respons terasa makin "pelupa" atau "meleset". Tidak ada exception, tidak ada log error.
+
+**Root Cause:** Ollama menggunakan **default `num_ctx` jika tidak di-set**. Untuk Qwen2.5-7B, default Ollama adalah ~2048 tokens. Padahal satu conversation dengan 5 messages + tool output bisa mencapai ~2500 tokens. Ollama **silently truncate** context dari kiri (oldest messages) tanpa memberi tahu caller.
+
+**Impact:** Model tidak bisa referensi bagian awal conversation. Tool call results yang panjang mendorong system prompt keluar dari context window. Tidak ada error — response keluar tapi dengan degraded context.
+
+**Fix:**
+```python
+# Semua call ke Ollama HARUS set num_ctx eksplisit:
+options = {"num_predict": 1024, "temperature": 0, "num_ctx": 4096}
+# Berlaku di: chat.py (sync), chat.py (SSE stream), director.py (default options)
+```
+
+**Generalized Principle:**
+> **"Selalu set `num_ctx` eksplisit pada setiap Ollama call. Default = hidden bug."** Ollama tidak inherit model card max context — ia punya default sendiri yang mungkin jauh lebih rendah. Verifikasi di Ollama log: cari `"n_ctx"` value saat model load.
+
+**Detection:** Cari degraded response pada long conversations dengan tool outputs. Silent truncation tidak melempar exception. Satu-satunya cara detect tanpa log = behavioral regression.
+
+---
+
+### [F-11] "Hybrid Search Upgrade Needed" — Tapi Sudah Ada Sejak Day 18
+**Day:** 20 | **Severity:** LOW | **Category:** Process / Documentation
+
+**Gejala:** Day 17 dan 19 notes menyebut `_memory_search` di tool_executor perlu "upgrade ke hybrid search". Day 20 planning mengalokasikan waktu untuk ini. Tapi saat code dibaca, `search_semantic()` di Day 18 sudah hybrid.
+
+**Root Cause:** Documentation lag — notes dari Day 17 tidak di-update setelah Day 18 selesai. "Qdrant semantic" label di return dict tidak diubah ke "qdrant_hybrid" saat Day 18. Menyebabkan false impression bahwa upgrade belum dilakukan.
+
+**Impact:** Waktu perencanaan terbuang untuk masalah yang sudah solved. Fix yang sebenarnya dibutuhkan (timeout) lebih kecil scope-nya.
+
+**Fix Applied:**
+1. Baca kode actual sebelum planning (`_memory_search()` → sudah call `search_semantic()` which is hybrid)
+2. Fix yang benar: tambah timeout + perbaiki stale label `"qdrant_semantic"` → `"qdrant_hybrid"`
+
+**Generalized Principle:**
+> **"Baca kode, jangan percaya catatan yang tidak diupdate."** Setelah setiap implementasi besar, update SEMUA referensi ke modul yang diubah — termasuk dalam notes tentang future work. Stale future-work notes menyebabkan wasted planning.
+
+---
+
+### [S-10] Token Budget Trimming Pattern
+**Day:** 20 | **Category:** LLM Engineering
+
+**Pattern:** Two-pass history trimming sebelum Ollama call:
+```python
+CHARS_PER_TOKEN = 3.5
+MAX_MSG_CONTENT_CHARS = 800
+MAX_HISTORY_TOKENS = 1500
+
+def _estimate_tokens(text: str) -> int:
+    return max(1, int(len(text) / CHARS_PER_TOKEN))
+
+def _trim_history_to_budget(history: list[dict]) -> list[dict]:
+    # Pass 1: cap each message at MAX_MSG_CONTENT_CHARS
+    capped = []
+    for msg in history:
+        content = msg["content"]
+        if len(content) > MAX_MSG_CONTENT_CHARS:
+            content = content[:MAX_MSG_CONTENT_CHARS] + "…[disingkat]"
+        capped.append({**msg, "content": content})
+
+    # Pass 2: drop oldest until under budget
+    total_tokens = sum(_estimate_tokens(m["content"]) for m in capped)
+    while capped and total_tokens > MAX_HISTORY_TOKENS:
+        removed = capped.pop(0)
+        total_tokens -= _estimate_tokens(removed["content"])
+    return capped
+```
+
+**Kenapa dua pass, bukan satu?**
+- Pass 1 (content cap): satu message tool-output panjang tidak habiskan seluruh budget
+- Pass 2 (message drop): drop unit terkecil = message (preserves coherence vs character-level truncation)
+
+**Kenapa `CHARS_PER_TOKEN = 3.5` dan bukan tiktoken?**
+- tiktoken membutuhkan model-specific tokenizer + cold start overhead
+- 3.5 chars/token = konservatif untuk Bahasa Indonesia + English mixed (rata-rata 3.5-4.0)
+- Undershooting estimate = lebih aman (keep sedikit lebih banyak dari yang perlu)
+
+**Generalized Principle:**
+> **"Two-pass history trim: cap per-message first, drop oldest second."** Ini mencegah single long message meledakkan budget, dan mempertahankan message unit integrity (tidak potong di tengah kalimat).
+
+---
+
 ### [S-09] Source Method Tagging untuk Multi-Source Training Data
 **Day:** 19 | **Category:** ML Operations
 
@@ -455,6 +539,8 @@ ulimits:
 | HTTP response | Latency | ~30-45s | with tool calling, CPU 7B |
 | Synthetic generation (per seed) | Latency | ~60-120s | generate + critique + revise |
 | Synthetic full run (120 seeds) | Duration | ~2-4 hours | CPU-only, sequential |
+| History trim (token budget) | Latency | <1ms | Pure Python, no tokenizer |
+| Context window (num_ctx) | Value | 4096 tokens | Explicit for all Ollama calls (Day 20) |
 
 ---
 
@@ -477,6 +563,10 @@ ulimits:
 | Named volume fastembed_cache | Instant model reload (S-08) | 4s+ cold start per rebuild |
 | SIDIX content NOT in seed bank | Hallucination transfer risk (F-09) | Model adopts SIDIX identity |
 | source_method tag on all pairs | Multi-source audit trail (S-09) | Can't filter by provenance |
+| `num_ctx=4096` eksplisit di semua Ollama calls | Silent overflow tanpa error (F-10) | Context truncated = degraded memory |
+| `MAX_MSG_CONTENT_CHARS=800` | Single long tool output tidak habiskan budget | History drop-off too aggressive |
+| `MAX_HISTORY_TOKENS=1500` | Headroom untuk system prompt + response (S-10) | Context overflow |
+| Read actual code before planning (not old notes) | Stale docs menyebabkan false work (F-11) | Wasted planning time |
 | asyncio.Semaphore(1) synthetic task | CPU-only VPS, no competition | Resource contention with inference |
 
 ---

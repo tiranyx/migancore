@@ -468,6 +468,80 @@
 
 ---
 
+### Day 20 — Context Window Management + Tool Executor Timeout
+**Agent:** Claude Sonnet 4.6
+**Scope:** Two targeted infrastructure fixes — context overflow prevention + tool loop reliability
+
+**Problem A — Tool Executor Missing Timeout:**
+`_memory_search()` in `tool_executor.py` called `search_semantic()` without any timeout. If Qdrant
+was slow (cold collection, high load), the tool loop would block indefinitely. The retrieval.py path
+(synchronous, before director) already had a 1.5s timeout — the tool path had none.
+
+**Problem B — Context Overflow Risk:**
+`num_ctx` was never set explicitly in any Ollama call site. Qwen2.5-7B supports up to 32,768 tokens,
+but Ollama's default when `num_ctx` is absent is only ~2048 tokens. Worst-case conversation (5 messages
+with tool call outputs) could reach ~2500 tokens → silent overflow (model truncates context internally,
+returns degraded response with no error).
+
+**Research Finding (during planning):**
+The Day 18 notes said `memory_search` in tool_executor still used "qdrant_semantic" and needed hybrid
+upgrade. Reading the actual code revealed `search_semantic()` was already hybrid since Day 18 — the
+returned source label was just stale. Actual fixes needed were: (1) timeout, (2) source label correction.
+
+**Modified Files:**
+- `api/services/tool_executor.py`
+  - `_memory_search()`: Added `asyncio.wait_for(search_semantic(...), timeout=2.0)`
+  - `TimeoutError` → `logger.warning` → falls through to Redis K-V fallback
+  - `Exception` → `logger.warning` → falls through to Redis K-V fallback
+  - Fixed `source` label: `"qdrant_hybrid"` (was `"qdrant_semantic"` — stale from pre-Day 18)
+  - Added `"score": r.get("_retrieval_score")` to each result dict
+- `api/routers/chat.py` (context management)
+  - New constants: `MAX_HISTORY_LOAD=10`, `MAX_HISTORY_TOKENS=1500`, `MAX_MSG_CONTENT_CHARS=800`, `CHARS_PER_TOKEN=3.5`, `NUM_CTX=4096`
+  - `_estimate_tokens(text)` — heuristic: `max(1, int(len(text) / 3.5))`
+  - `_trim_history_to_budget(history)` — two-pass trim:
+    - Pass 1: cap each message content at 800 chars (`"…[disingkat]"` suffix)
+    - Pass 2: pop oldest messages until sum of tokens < 1500
+    - Logs `chat.history_trimmed` with original/kept/dropped counts
+  - `_build_messages()`: calls `_trim_history_to_budget()` before building final messages list
+  - DB load limit: `limit=MAX_HISTORY_LOAD` (was `CONTEXT_WINDOW_MESSAGES=5`)
+  - Sync chat options: `{"num_predict": MAX_TOKENS, "temperature": 0, "num_ctx": NUM_CTX}`
+  - SSE stream options: `{"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX}`
+- `api/services/director.py`
+  - Default options: `{"num_predict": MAX_TOKENS, "temperature": 0, "num_ctx": 4096}` (explicit)
+- `api/main.py` — version `0.3.9` → `0.4.0`
+
+**Context Window Budget Calculation:**
+```
+system prompt   ~300 tokens
+history         ≤1500 tokens (token budget capped)
+user message    ~100 tokens
+response        1024 tokens (num_predict)
+buffer          1072 tokens
+─────────────────────────────
+total           ~4096 tokens = num_ctx ✓
+```
+
+**Architecture Decisions Locked (Day 20):**
+- `num_ctx=4096`: CPU inference time grows O(n²) with context; 4096 is safe, sufficient for MVP
+- `MAX_MSG_CONTENT_CHARS=800`: prevents single tool-output message from consuming entire budget
+- `MAX_HISTORY_TOKENS=1500`: leaves room for system prompt + user message + response headroom
+- `CHARS_PER_TOKEN=3.5`: conservative estimate for Bahasa Indonesia + English mixed content (typical: 3.5-4.0)
+- Timeout 2.0s (vs 1.5s in retrieval.py): tool executor has explicit Redis fallback path, can afford slightly more time
+
+**E2E Verification:**
+- `/health version: 0.4.0` ✅
+- Chat endpoint with sync mode: `num_ctx=4096` in Ollama call confirmed via structlog ✅
+- Tool memory_search: Qdrant call has timeout guard → Redis fallback path tested ✅
+
+**Git Commits:**
+- `74e86e7` — feat: context window management + tool executor timeout v0.4.0 (Day 20)
+
+**Version:** 0.3.9 → 0.4.0
+
+**Deliverables:** Silent context overflow eliminated; tool loop timeout protection; history trimming with graceful degradation
+
+---
+
 ### Day 19 — Synthetic DPO Data Generator (Triple-Source Seed Architecture)
 **Agent:** Claude Sonnet 4.6
 **Scope:** DPO flywheel acceleration — from 3 real pairs to 1000+ via synthetic generation

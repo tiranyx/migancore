@@ -6,6 +6,47 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.0] — 2026-05-03 (Day 20)
+
+### Added
+- **Context Window Management** (`routers/chat.py`) — token-budget trimming before Ollama call
+  - `MAX_HISTORY_LOAD = 10` — load 10 messages from DB (was 5)
+  - `MAX_HISTORY_TOKENS = 1500` — history token budget cap
+  - `MAX_MSG_CONTENT_CHARS = 800` — per-message content cap before token counting
+  - `CHARS_PER_TOKEN = 3.5` — conservative estimate for Bahasa Indonesia + English mixed
+  - `_estimate_tokens(text)` — heuristic token counter (no tokenizer dependency)
+  - `_trim_history_to_budget(history)` — Pass 1: cap each message at 800 chars; Pass 2: drop oldest until total history < 1500 tokens
+  - Logs `chat.history_trimmed` with original/kept/dropped counts
+
+### Changed
+- **Explicit `num_ctx=4096`** in all Ollama call sites:
+  - `routers/chat.py` — sync chat options: `{"num_predict": 1024, "temperature": 0, "num_ctx": 4096}`
+  - `routers/chat.py` — SSE stream options: `{"num_predict": 1024, "num_ctx": 4096}`
+  - `services/director.py` — default options: `{"num_predict": 1024, "temperature": 0, "num_ctx": 4096}`
+  - *Previously unset → Ollama default ~2048 → silent overflow risk with tool outputs*
+- **`_memory_search()` timeout** (`services/tool_executor.py`):
+  - Added `asyncio.wait_for(search_semantic(...), timeout=2.0)` — prevents tool loop blocking
+  - `TimeoutError` → falls through to Redis K-V fallback (no error response to LLM)
+  - `source` field now returns `"qdrant_hybrid"` (was `"qdrant_semantic"`) to reflect Day 18 hybrid upgrade
+  - Added `"score"` field to each result for transparency
+- Version bumped: `0.3.9` → `0.4.0`
+
+### Fixed
+- **Tool executor Qdrant timeout**: `memory_search` tool could block indefinitely if Qdrant was slow.
+  Now has 2.0s timeout with graceful Redis fallback — matches retrieval.py timeout behavior (1.5s).
+- **Silent context overflow**: `num_ctx` was never set explicitly. Ollama default (likely 2048) could be exceeded
+  by conversations with tool outputs (~2500 tokens worst case). Now explicit `num_ctx=4096` at all call sites.
+- **History load limit inconsistency**: DB was loading 5 messages but router processed 10 worth of context.
+  Unified to `MAX_HISTORY_LOAD = 10` with token budget trimming as safety valve.
+
+### Architecture Notes (Day 20 decisions)
+- `num_ctx=4096` chosen over larger values: CPU inference time grows quadratically; 4096 safe for MVP
+  Budget: system 300 + history 1500 + user message 100 + response 1024 + buffer 1172 = 4096 ✅
+- Token budget trim is conservative: if trimming occurs frequently, raise `MAX_HISTORY_TOKENS`
+- 2.0s Qdrant timeout in tool executor (vs 1.5s in retrieval.py): tool loop has explicit fallback path
+
+---
+
 ## [0.3.9] — 2026-05-03 (Day 19)
 
 ### Added
