@@ -7,10 +7,13 @@ Architecture:
   ToolExecutor.execute(): validate → dispatch → return structured result
 
 Handlers:
-  web_search   — DuckDuckGo Instant Answers (free, no key)
-  memory_write — Redis K-V tier 1 storage
-  memory_search — Redis K-V prefix + substring search
-  python_repl  — subprocess isolation (process boundary = real sandbox)
+  web_search     — DuckDuckGo Instant Answers (free, no key)
+  memory_write   — Redis K-V tier 1 storage
+  memory_search  — Redis K-V prefix + substring search (Qdrant hybrid + Redis fallback)
+  python_repl    — subprocess isolation (process boundary = real sandbox)
+  generate_image — fal.ai FLUX schnell (Day 24) — needs FAL_KEY env
+  read_file      — Read file from /app/workspace/ sandbox (Day 24)
+  write_file     — Write file to /app/workspace/ sandbox (Day 24)
 
 Tool calling flow (in chat.py):
   1. Build Ollama tools spec from skills.json
@@ -24,6 +27,11 @@ Research notes (2026-05-03):
   - Tool result format: {"role": "tool", "content": "<json string>"}
   - DuckDuckGo JSON API: no key, ~20 req/s per IP, good for MVP
   - subprocess gives real process isolation vs exec() which is easily escaped
+
+Day 24 notes (2026-05-04):
+  - fal.ai FLUX schnell: POST https://fal.run/fal-ai/flux/schnell, sync response ~3-8s
+  - File sandbox: WORKSPACE_DIR=/app/workspace, path traversal blocked via Path.resolve()
+  - generate_image timeout: 60s (fal.ai cold start can hit 15-20s occasionally)
 """
 
 import asyncio
@@ -31,11 +39,13 @@ import json
 import subprocess
 import urllib.parse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 import httpx
 import structlog
 
+from config import settings
 from services.config_loader import load_skills_config
 from services.memory import memory_write, memory_list
 from services.tool_policy import ToolPolicyChecker, validate_python_code, PolicyViolation
@@ -44,6 +54,11 @@ logger = structlog.get_logger()
 
 MAX_TOOL_ITERATIONS = 5
 DDG_ENDPOINT = "https://api.duckduckgo.com/"
+FAL_FLUX_ENDPOINT = "https://fal.run/fal-ai/flux/schnell"
+FAL_VALID_SIZES = {
+    "square_hd", "square", "portrait_4_3", "portrait_16_9",
+    "landscape_4_3", "landscape_16_9",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +286,215 @@ async def _python_repl(args: dict, ctx: ToolContext) -> dict:
         return {"output": "", "error": str(exc), "success": False, "return_code": -1}
 
 
+async def _generate_image(args: dict, ctx: ToolContext) -> dict:
+    """Generate an image via fal.ai FLUX schnell.
+
+    Day 24: fal.ai REST API — sync endpoint, ~3-8s per image.
+    Model: fal-ai/flux/schnell — 4 inference steps, fast, cheap (~$0.003/image).
+    Requires FAL_KEY environment variable.
+
+    Returns image URL (hosted on fal.media CDN, persistent).
+    """
+    prompt = args.get("prompt", "").strip()
+    if not prompt:
+        raise ToolExecutionError("'prompt' is required")
+
+    image_size = args.get("image_size", "landscape_4_3").strip()
+    if image_size not in FAL_VALID_SIZES:
+        image_size = "landscape_4_3"
+
+    num_images = max(1, min(int(args.get("num_images", 1)), 4))
+
+    fal_key = settings.FAL_KEY
+    if not fal_key:
+        raise ToolExecutionError(
+            "Image generation is not configured (FAL_KEY missing). "
+            "Contact admin to enable this tool."
+        )
+
+    payload = {
+        "prompt": prompt,
+        "image_size": image_size,
+        "num_inference_steps": 4,
+        "num_images": num_images,
+        "enable_safety_checker": True,
+    }
+
+    logger.info("tool.generate_image.start", prompt=prompt[:80], size=image_size, n=num_images)
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+            resp = await client.post(
+                FAL_FLUX_ENDPOINT,
+                json=payload,
+                headers={
+                    "Authorization": f"Key {fal_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.TimeoutException:
+        raise ToolExecutionError("Image generation timed out (60s). Try again.")
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:200]
+        raise ToolExecutionError(f"fal.ai API error {exc.response.status_code}: {body}") from exc
+    except Exception as exc:
+        raise ToolExecutionError(f"Image generation failed: {exc}") from exc
+
+    images = data.get("images", [])
+    if not images:
+        raise ToolExecutionError("fal.ai returned no images. Try a different prompt.")
+
+    result_images = [
+        {
+            "url": img.get("url", ""),
+            "width": img.get("width"),
+            "height": img.get("height"),
+        }
+        for img in images
+    ]
+
+    inference_time = data.get("timings", {}).get("inference")
+    seed = data.get("seed")
+
+    logger.info(
+        "tool.generate_image.done",
+        images=len(result_images),
+        url=result_images[0]["url"][:60] if result_images else "",
+        inference_s=inference_time,
+    )
+
+    return {
+        "images": result_images,
+        "prompt": prompt,
+        "model": "fal-ai/flux/schnell",
+        "seed": seed,
+        "inference_time_s": round(inference_time, 2) if inference_time else None,
+        # Convenience shortcut for single-image requests
+        "url": result_images[0]["url"] if result_images else None,
+    }
+
+
+def _resolve_workspace_path(user_path: str) -> Path:
+    """Resolve a user-supplied path relative to WORKSPACE_DIR.
+
+    Prevents path traversal attacks by ensuring the resolved path stays
+    within WORKSPACE_DIR. Raises ToolExecutionError for invalid paths.
+    """
+    workspace = Path(settings.WORKSPACE_DIR).resolve()
+    # Strip leading slashes/dots to force relative interpretation
+    clean = user_path.lstrip("/").lstrip(".")
+    if not clean:
+        raise ToolExecutionError("'path' must not be empty or root")
+
+    target = (workspace / clean).resolve()
+
+    # Strict containment check
+    try:
+        target.relative_to(workspace)
+    except ValueError:
+        raise ToolExecutionError(
+            f"Path traversal blocked: '{user_path}' is outside workspace"
+        )
+
+    return target
+
+
+async def _read_file(args: dict, ctx: ToolContext) -> dict:
+    """Read a file from the agent's sandboxed workspace (/app/workspace/).
+
+    Day 24: File system access for coding/agentic workflows.
+    All paths are relative to WORKSPACE_DIR — no escaping the sandbox.
+    Max file size: 50KB (larger files truncated with a notice).
+    """
+    user_path = args.get("path", "").strip()
+    if not user_path:
+        raise ToolExecutionError("'path' is required")
+
+    try:
+        target = _resolve_workspace_path(user_path)
+    except ToolExecutionError:
+        raise
+    except Exception as exc:
+        raise ToolExecutionError(f"Invalid path: {exc}") from exc
+
+    if not target.exists():
+        raise ToolExecutionError(f"File not found: {user_path}")
+    if target.is_dir():
+        # List directory contents instead
+        entries = sorted(str(p.relative_to(target.parent)) for p in target.iterdir())
+        return {
+            "type": "directory",
+            "path": user_path,
+            "entries": entries[:100],
+        }
+
+    MAX_BYTES = 50_000
+    try:
+        raw = target.read_bytes()
+        truncated = len(raw) > MAX_BYTES
+        content = raw[:MAX_BYTES].decode("utf-8", errors="replace")
+
+        logger.info("tool.read_file", path=user_path, size=len(raw), agent=ctx.agent_id)
+        return {
+            "content": content,
+            "path": user_path,
+            "size_bytes": len(raw),
+            "truncated": truncated,
+            "truncated_at": MAX_BYTES if truncated else None,
+        }
+    except Exception as exc:
+        raise ToolExecutionError(f"Cannot read file: {exc}") from exc
+
+
+async def _write_file(args: dict, ctx: ToolContext) -> dict:
+    """Write content to a file in the agent's sandboxed workspace (/app/workspace/).
+
+    Day 24: File system write for coding/agentic workflows.
+    Creates parent directories automatically. Max content: 200KB.
+    """
+    user_path = args.get("path", "").strip()
+    content = args.get("content", "")
+
+    if not user_path:
+        raise ToolExecutionError("'path' is required")
+    if content is None:
+        raise ToolExecutionError("'content' is required")
+
+    MAX_CONTENT = 200_000
+    if len(content) > MAX_CONTENT:
+        raise ToolExecutionError(
+            f"Content too large ({len(content)} chars). Max: {MAX_CONTENT} chars."
+        )
+
+    try:
+        target = _resolve_workspace_path(user_path)
+    except ToolExecutionError:
+        raise
+    except Exception as exc:
+        raise ToolExecutionError(f"Invalid path: {exc}") from exc
+
+    try:
+        # Ensure workspace and parent dirs exist
+        workspace = Path(settings.WORKSPACE_DIR)
+        workspace.mkdir(parents=True, exist_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        target.write_text(content, encoding="utf-8")
+        logger.info("tool.write_file", path=user_path, size=len(content), agent=ctx.agent_id)
+
+        return {
+            "status": "written",
+            "path": user_path,
+            "size_bytes": len(content.encode("utf-8")),
+        }
+    except ToolExecutionError:
+        raise
+    except Exception as exc:
+        raise ToolExecutionError(f"Cannot write file: {exc}") from exc
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -282,6 +506,10 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "memory_write": _memory_write,
     "memory_search": _memory_search,
     "python_repl": _python_repl,
+    # Day 24 — Tool Expansion
+    "generate_image": _generate_image,
+    "read_file": _read_file,
+    "write_file": _write_file,
 }
 
 

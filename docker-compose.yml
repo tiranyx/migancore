@@ -101,12 +101,14 @@ services:
       LETTA_URL: http://letta:8283
       LETTA_PASSWORD: ${LETTA_PASSWORD}
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}
+      FAL_KEY: ${FAL_KEY}                         # Day 24: fal.ai image/video generation
       JWT_PRIVATE_KEY_PATH: /etc/ado/keys/private.pem
       JWT_PUBLIC_KEY_PATH: /etc/ado/keys/public.pem
     volumes:
       - /etc/ado/keys:/etc/ado/keys:ro
       - ./config:/app/config:ro
       - fastembed_cache:/app/.cache/fastembed   # Persist model downloads across rebuilds
+      - ./data/workspace:/app/workspace         # Day 24: sandboxed file system for agents
     depends_on: [postgres, qdrant, redis, ollama]
     deploy:
       resources:

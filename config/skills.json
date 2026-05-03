@@ -178,6 +178,63 @@
       "permissions": ["web.read"],
       "npc_assignable": true,
       "cost_estimate": "free"
+    },
+    {
+      "id": "generate_image",
+      "name": "Generate Image",
+      "description": "Generate an image from a text prompt using fal.ai FLUX schnell. Returns a URL to the generated image. Use for creative visuals, illustrations, marketing assets, or any image creation task.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Detailed description of the image to generate"
+          },
+          "image_size": {
+            "type": "string",
+            "enum": ["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"],
+            "default": "landscape_4_3",
+            "description": "Output image dimensions. landscape_4_3 = 1024x768. square_hd = 1024x1024."
+          },
+          "num_images": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 4,
+            "description": "Number of images to generate (1-4)"
+          }
+        },
+        "required": ["prompt"]
+      },
+      "permissions": ["external.api"],
+      "npc_assignable": true,
+      "cost_estimate": "~$0.003 per image"
+    },
+    {
+      "id": "write_file",
+      "name": "Write File",
+      "description": "Write content to a file in the agent's sandboxed workspace. Creates parent directories automatically. Use for saving code, configs, or any text content.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path relative to workspace (e.g. 'script.py' or 'src/main.py')"
+          },
+          "content": {
+            "type": "string",
+            "description": "Text content to write to the file"
+          }
+        },
+        "required": ["path", "content"]
+      },
+      "permissions": ["fs.write"],
+      "npc_assignable": true,
+      "cost_estimate": "free"
     }
   ]
 }

@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Admin
     ADMIN_SECRET_KEY: str = ""  # X-Admin-Key header value; empty = admin disabled
 
+    # External APIs — Tool Expansion (Day 24)
+    FAL_KEY: Optional[str] = None          # fal.ai API key for image/video generation
+    WORKSPACE_DIR: str = "/app/workspace"  # Sandboxed file system for read_file/write_file
+
     # Observability
     ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production)$")
     LOG_LEVEL: str = "INFO"
