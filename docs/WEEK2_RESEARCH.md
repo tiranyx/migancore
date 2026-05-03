@@ -135,7 +135,7 @@ Research shows **chunking strategy matters more than vector DB choice**.
 | E5-base-v2 | 110MB | Medium | Best | MIT |
 | text-embedding-3-large | Cloud | Variable | Excellent | Proprietary |
 
-**Recommendation:** `BGE-small-en-v1.5` or `all-MiniLM-L6-v2` (local, fast, good quality)
+**Recommendation (updated):** `paraphrase-multilingual-mpnet-base-v2` (768-dim, 1GB, native Bahasa Indonesia support). Claude Code found BGE-small-en is English-only and bge-m3 has fastembed compatibility issues.
 
 ### 2.4 Qdrant Integration Pattern
 ```python

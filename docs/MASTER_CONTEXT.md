@@ -288,24 +288,27 @@ When deploying changes:
 
 ---
 
-## 10. WEEK 2 ROADMAP (Research Complete)
+## 10. WEEK 2 ROADMAP (3-Agent Consensus)
 
-Deep research completed. Full details in `WEEK2_RESEARCH.md`.
+Deep research completed by Kimi + GPT-5.5 + Claude Code. Full details in `WEEK2_SYNTHESIS.md`.
 
-| Day | Feature | Approach | Complexity |
-|-----|---------|----------|------------|
-| 11 | **Letta Integration** | Hybrid Tier 3 memory (blocks) | Medium |
-| 12 | **Qdrant RAG** | Recursive chunking + BGE embeddings | Medium |
-| 13-14 | **MCP** | Convert skills.json → MCP server | Medium |
-| 15 | **Training Pipeline** | Unsloth + LoRA + DPO on RunPod | High |
-| 16-17 | **Model Versioning** | Deploy pipeline, A/B testing | Medium |
+| Day | Feature | Priority | Approach | Complexity |
+|-----|---------|----------|----------|------------|
+| 11 | **Safety Gate + Tool Policy** | 🔴 P0 | 6-class tool policy, approval gates, spawn limits | Medium |
+| 12 | **Qdrant RAG Tier 2** | 🟡 P1 | Turn-pair chunking + paraphrase-multilingual-mpnet | Medium |
+| 13 | **Letta Tier 3 Memory** | 🟡 P1 | Passive storage only (blocks.retrieve/update) | Medium |
+| 14 | **MCP Adapter** | 🟡 P1 | Expose 3 tools, consume external via Streamable HTTP | Medium |
+| 15-17 | **Data Ledger** | 🟢 P2 | Auto-collect chat logs, user feedback, PII scrubber | Medium |
 
-### Key Decisions (Pre-made)
-- **Letta:** Use as Tier 3 memory, NOT replacement for our director
-- **Chunking:** Start recursive 512 tokens, iterate to semantic
-- **MCP:** Gradual migration of skills.json, keep existing tools working
-- **Training:** DPO (not RLHF) for MVP — simpler, no reward model
-- **GPU:** RunPod for training (VPS CPU too slow), export GGUF for Ollama
+### Key Decisions (3-Agent Consensus)
+- **Safety First:** Tool policy framework before any new features (GPT-5.5: "jangan tambah otak sebelum sistem imun")
+- **Letta:** Passive storage ONLY — don't invoke agents.messages.create() (Claude: Q4 model below Letta threshold)
+- **Chunking:** Turn-pair (user+assistant) not per-message (Claude)
+- **Embedding:** paraphrase-multilingual-mpnet-base-v2 (Claude: bge-m3 buggy, BGE English-only)
+- **MCP Transport:** Streamable HTTP (NOT legacy HTTP+SSE) — spec 2025-03-26 (GPT-5.5)
+- **Training:** Data ledger dulu, DPO nanti. Min 500 pairs before training (GPT-5.5)
+- **Training Cost:** RunPod RTX 4090 Community Cloud $0.34/hr, 500 pairs × 3 epochs = $0.10 (Claude)
+- **Training Method:** DPO (not GRPO) — GRPO for reasoning, DPO for chat alignment (Claude)
 
 ---
 
@@ -319,6 +322,8 @@ Deep research completed. Full details in `WEEK2_RESEARCH.md`.
 | `FOUNDER_JOURNAL.md` | Strategic decisions | As needed |
 | `QA_REPORT.md` | Audit findings | After major changes |
 | `WEEK2_RESEARCH.md` | Deep research for upcoming work | Before sprint |
+| `WEEK2_SYNTHESIS.md` | Consolidated research (Kimi + GPT-5.5 + Claude) | After research complete |
+| `AGENT_PROMPTS.md` | Prompt templates for multi-agent research | As needed |
 
 ---
 

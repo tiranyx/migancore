@@ -124,8 +124,9 @@ RESEARCH TASK:
    - Map skill_id → MCP tool name
    - Map skills.json schema → MCP inputSchema
    - Handle JSON-RPC requests: initialize, tools/list, tools/call
+   - CRITICAL: Use Streamable HTTP (NOT legacy HTTP+SSE which is deprecated)
 4. Implement MCP client:
-   - Connect to external MCP servers (stdio or HTTP)
+   - Connect to external MCP servers (stdio or Streamable HTTP)
    - Discover tools dynamically
    - Convert MCP tool calls to our ToolExecutor format
 5. Security:
@@ -143,7 +144,8 @@ DELIVERABLES:
 CONSTRAINTS:
 - Must work with our existing LangGraph director
 - Must not break existing tool calling
-- Must support both stdio (local) and HTTP SSE (remote) transports
+- Must support both stdio (local) and Streamable HTTP (remote) transports
+- Do NOT use legacy HTTP+SSE — deprecated in MCP spec 2025-03-26
 - Async throughout
 ```
 
