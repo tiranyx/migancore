@@ -284,6 +284,77 @@
 
 ---
 
+### Day 16 — Episodic RAG Retrieval + Critical Bug Fixes
+**Agent:** Claude Sonnet 4.6
+**Scope:** Memory Tier 2 read path — semantic memory dari write-only menjadi read-write aktif
+
+**Pre-Implementation Research (documented in DAY16_RAG_RESEARCH.md):**
+- Qdrant sudah write-only sejak Day 12 — `search_semantic()` ada tapi tidak pernah dipanggil di chat
+- Surveyed arxiv 2024-2026 + production systems (Mem0, Zep, LangMem, Memoria)
+- **Finding 1:** top-k inject = 3 (bukan 5+) — Mem0 production 2025: >3 confuses 7B models
+- **Finding 2:** Sort by relevance descending, BUKAN by recency — arxiv 2505.15561 "Lost in the Middle": 30% accuracy degradation jika diurutkan by timestamp
+- **Finding 3:** Score threshold 0.65 untuk Bahasa Indonesia (dari 0.70 English → -5-8% cross-lingual deflation dari Zep + multilingual research)
+- **Finding 4:** CRAG/Self-RAG tidak praktis untuk CPU-only 7B — butuh fine-tuning, di-skip untuk MVP
+- **Finding 5:** Format numbered [N] + role-per-line outperforms chain-of-thought untuk 7B (LangMem, Memoria arxiv 2512.12686)
+- **Finding 6:** Posisi LAST di system prompt (primacy attention bias 7B — informasi pertama mendapat attention terbesar)
+
+**New Files:**
+- `api/services/vector_retrieval.py`
+  - `RETRIEVAL_SCORE_THRESHOLD = 0.65` (stricter dari 0.55 untuk proactive injection)
+  - `TOP_K_INJECT = 3` (inject top 3 dari search candidates 5)
+  - `RETRIEVAL_TIMEOUT_S = 1.5` (asyncio.wait_for safety valve)
+  - `retrieve_episodic_context(agent_id, query)` — async retrieval dengan timeout guard
+  - `format_episodic_context(results)` — numbered [N] format, sorted by `_retrieval_score` descending, 150/200 char truncation
+- `docs/DAY16_RAG_RESEARCH.md` — comprehensive research document dengan arxiv citations, decision matrix, risk matrix
+- `docs/LESSONS_LEARNED.md` — NEW: cognitive ledger komprehensif (F-01 s/d F-06 kegagalan + S-01 s/d S-06 keberhasilan)
+
+**Modified Files:**
+- `api/services/vector_memory.py`
+  - `search_semantic()` menerima `score_threshold` parameter (default 0.55, overridable)
+  - `_retrieval_score` key ditambahkan ke returned payloads — enables caller-side sorting
+- `api/routers/chat.py`
+  - Import: `from services.vector_retrieval import retrieve_episodic_context, format_episodic_context`
+  - `retrieve_episodic_context()` dipanggil synchronously SEBELUM `run_director()`
+  - `_build_system_prompt()` extended: `episodic_context: str = ""` param (backward-compat)
+  - Episodic context sebagai LAST section (max attention weight untuk 7B)
+- `api/main.py` — version `0.3.5` → `0.3.6`
+- `docker-compose.yml` — Qdrant ulimits fix (critical bug fix, lihat bawah)
+- `docs/CHANGELOG.md` — v0.3.6 entry lengkap dengan research notes
+- `docs/CONTEXT.md` — Day 16 di WORKING COMPONENTS, IN PROGRESS, HANDOFF LOG, METRICS, WHAT NEXT MUST NOT DO
+
+**System prompt injection order final (Day 16):**
+```
+1. Persona  (Letta Tier 3 atau SOUL.md Tier 0)
+2. Mission  (Letta)
+3. Knowledge (Letta, learned facts)
+4. Redis memory summary (Tier 1, K-V facts)
+5. [KONTEKS EPISODIK] (Qdrant Tier 2, semantically relevant past turns) ← NEW
+```
+
+**Critical Bug Fixed — Qdrant RocksDB "Too Many Open Files":**
+- **Symptom:** `qdrant.index_failed: Unexpected Response: 500` pada semua upserts
+- **Root Cause:** RocksDB (storage engine Qdrant) membuka banyak FD per segment per collection. Docker default soft limit = 1024. Dengan 6+ collections, EPERM pada file creation (os error 24)
+- **Fix:** `ulimits: nofile: {soft: 65536, hard: 65536}` di docker-compose.yml service qdrant
+- **Verify:** `docker exec ado-qdrant-1 cat /proc/1/limits | grep "open files"` → 65536 ✅
+- **Principle locked:** ANY production Qdrant deployment dengan multiple collections WAJIB set ulimits ≥65536
+
+**E2E Verification:**
+- `retrieval.episodic_found count=1 top_score=0.7428` ✅
+- Query: "Siapa CEO Tiranyx? Dan apa platform yang mereka bangun?"
+- Agent menjawab benar dari episodic context (bukan message history semata)
+- Confirmed: past turn "Fahmi, CEO Tiranyx, ADO platform" berhasil di-inject ke system prompt
+
+**Git Commits:**
+- `5968db7` — feat: episodic RAG retrieval (vector_retrieval.py, chat.py, vector_memory.py)
+- `8131ec2` — chore: bump version 0.3.5 → 0.3.6
+- `4eaa610` — fix: Qdrant ulimits nofile 1024→65536 (RocksDB Too many open files)
+
+**Version:** 0.3.5 → 0.3.6
+
+**Deliverables:** Qdrant memory Tier 2 sepenuhnya operasional (read-write) — agent bisa mengingat dan menggunakan konteks percakapan semantically relevant dari masa lalu
+
+---
+
 ### Day 14 — Knowledge Block Auto-Extraction
 **Agent:** Claude Sonnet 4.6
 **Scope:** Self-evolving memory — knowledge block grows from real conversations
