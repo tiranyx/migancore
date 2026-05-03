@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
 **Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 15 — Constitutional AI Pipeline)
 **API Version:** 0.3.5
-**Git Commit:** `TBD`
+**Git Commit:** `3a256f4`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -18,7 +18,7 @@
 | Phase | Week 2 — Safety + Intelligence |
 | Sprint Day | Day 15 (COMPLETE) → Day 16 (NEXT) |
 | API Version | 0.3.5 |
-| Git Commit | `TBD — see SPRINT_LOG.md` |
+| Git Commit | `3a256f4` (chore: remove diagnostic logs — final clean state) |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
