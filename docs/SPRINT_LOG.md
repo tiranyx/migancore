@@ -470,6 +470,79 @@
 
 ## Week 3: Chat UI + Tools + MCP (Days 22–28)
 
+### Day 28 — Distillation Pipeline (4 teachers) + Admin Dashboard
+**Agent:** Claude Opus 4.7 (1m context)
+**Scope:** External AI as teacher pipeline + visual monitoring
+
+**Problem:**
+User insight Day 27: "kalau saya pake [MCP], migan nggak dapet pengalaman apa-apa?" Correct — MCP server hanya distribusi tools, MiganCore-7B nggak benar-benar belajar dari Claude/GPT/Kimi/Gemini. Pipeline existing (CAI + Synthetic) terbatas pada self-bound 7B kualitas. Untuk break ceiling, perlu **knowledge distillation dari LLM eksternal yang lebih kuat**.
+
+**Approach (mandatory protocol followed):**
+1. ✅ Read context (week3_roadmap, day27_progress, project_overview)
+2. ✅ 2 parallel research agents — distillation 2026 SOTA + MCP Resources/Qdrant
+3. ✅ Architecture audit (preference_pairs schema fits, source_method extensible)
+4. ✅ Infrastructure audit (VPS capacity OK, in-flight synthetic check)
+5. ✅ Cost audit (Kimi $1.25 / Claude $7.50 per 1000 pairs)
+6. ✅ Risk/benefit/adaptation documented
+7. ✅ User approved A+B+C combined plan
+8. ✅ Execute + adapt
+
+**Solution (3 components):**
+
+**1. `services/teacher_api.py` (327 lines)** — 4 LLM provider wrapper
+- Anthropic Claude Sonnet 4.5, Moonshot Kimi K2.6, OpenAI GPT-4o, Google Gemini 2.5 Flash
+- Unified async interface with cost tracking + retry exponential backoff
+- PRICING table (12 model variants supported)
+
+**2. `services/distillation.py` (476 lines)** — pipeline orchestrator
+- Per prompt: student (MiganCore-7B) vs teacher → independent judge → margin filter → store
+- SOUL.md injected as teacher system prompt → persona preserved (no clone collapse)
+- Independent judge enforced (teacher==judge → swap to alt)
+- Budget cap + Redis state tracking + asyncio task pattern
+- Source method: `distill_<teacher>_v1`
+
+**3. `frontend/dashboard.html` (814 lines)** — Admin Dashboard
+- Standalone React, no build step
+- Live at `https://app.migancore.com/admin/`
+- Top stats + source bars + distill panel + synthetic panel
+- Auto-refresh 4s, X-Admin-Key gate
+
+**Bugs hit & adapted (5):**
+1. Container `--force-recreate` reuses old image → switched to `--build`
+2. Kimi model name wrong (research had `kimi-k2-0905-preview`, actual `kimi-k2.6`) — probed via `/v1/models`
+3. Kimi K2 thinking mode default ON, content empty → explicitly disabled
+4. Kimi temperature constraint (1.0 with thinking, 0.6 without) → handled
+5. Gemini safety filters block legit responses → BLOCK_NONE all categories
+
+**E2E Verification:**
+- All 4 teacher API smoke tests PASS
+- Distillation pipeline started, monitoring background
+- Dashboard live HTTPS 200, auth gate functional
+
+**Files Modified:**
+- NEW: `api/services/teacher_api.py`, `api/services/distillation.py`, `frontend/dashboard.html`, `docs/DAY27_PLAN.md`
+- MODIFIED: `api/config.py`, `api/routers/admin.py`, `api/main.py`, `docker-compose.yml`
+
+**Git Commits:**
+- `7b679e5` feat(day28): distillation pipeline + 4 teacher APIs v0.4.6
+- `ee9c1e2` fix: Kimi model + Gemini safety + dashboard
+- `bcff63f` fix: Kimi K2 temp=1
+- `b2958c3` fix: Kimi K2 disable thinking
+- `a7ce9c4` fix: Kimi temp=0.6 with thinking disabled
+
+**Version:** 0.4.5 → 0.4.6
+
+**Deliverables:** External AI teacher pipeline LIVE. MiganCore-7B sekarang bisa belajar dari Claude/Kimi/GPT/Gemini melalui DPO pair distillation. Dashboard visual untuk monitor real-time. Week 4 SimPO training UNLOCKED (data flywheel siap).
+
+**Lessons (5 critical):**
+1. Always probe vendor's `/v1/models` before hardcoding
+2. Read vendor docs carefully — quirks like reasoning_content + temp constraints invisible to research
+3. Gemini safety filters block legit content — explicit BLOCK_NONE for distillation
+4. Container vs Image distinction matters — `--build` flag mandatory for code deploys
+5. Hallucination without context = teaching wrong things → SOUL.md injection mandatory
+
+---
+
 ### Day 27 — API Keys + migan CLI + MCP Resources + TTS + Memory Pruning
 **Agent:** Claude Opus 4.7 (1m context)
 **Scope:** UX polish + capability expansion — make MCP setup trivial, expand to Resources/TTS, production-ready memory

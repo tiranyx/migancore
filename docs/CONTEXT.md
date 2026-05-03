@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 27 — API Keys + migan CLI + MCP Resources + TTS + Memory Pruning)
-**API Version:** 0.4.5
-**Git Commit:** `ff80996`
+**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 28 — Distillation Pipeline + Admin Dashboard A+B+C combined)
+**API Version:** 0.4.6
+**Git Commit:** `a7ce9c4`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -15,17 +15,20 @@
 
 | Field | Value |
 |-------|-------|
-| Phase | Week 3 — Distribution Layer + Production Polish |
-| Sprint Day | Day 27 (COMPLETE) → Day 28 (Admin Dashboard + Handoff NEXT) |
-| API Version | 0.4.5 |
-| Git Commit | `ff80996` |
-| Tool Catalog | 10 tools: web_search, python_repl, memory_*, spawn_agent, http_get, generate_image, read_file, write_file, **text_to_speech** (Day 27) |
-| **MCP Server** | ✅ **LIVE** at `https://api.migancore.com/mcp/` — 8 tools + 4 resources |
-| **API Keys** | ✅ `mgn_live_*` long-lived (Day 27) — replaces 15-min JWT for headless clients |
-| **`migan` CLI** | ✅ one-line installer (`scripts/migan-setup.sh`/`.ps1`) |
-| Episodic Filter | ✅ tool-error responses skip Qdrant indexing (Day 26) |
-| Memory Pruner | ✅ daily daemon — points >30d AND importance<0.7 deleted (Day 27) |
-| External APIs | fal.ai $9.99 · ElevenLabs free tier ready (key not set yet) |
+| Phase | Week 3 — Distribution Layer + Training Pipeline |
+| Sprint Day | Day 28 (COMPLETE) → Week 4 (SimPO Training NEXT) |
+| API Version | 0.4.6 |
+| Git Commit | `a7ce9c4` |
+| Tool Catalog | 10 tools: web_search, python_repl, memory_*, spawn_agent, http_get, generate_image, read_file, write_file, text_to_speech |
+| **MCP Server** | ✅ LIVE at `https://api.migancore.com/mcp/` — 8 tools + 4 resources |
+| **Admin Dashboard** | ✅ **LIVE** at `https://app.migancore.com/admin/` (Day 28) |
+| **Distillation Pipeline** | ✅ **LIVE** — 4 teachers (Anthropic Claude, Moonshot Kimi K2.6, OpenAI GPT-4o, Google Gemini 2.5 Flash) with judge + margin filter (Day 28) |
+| API Keys | ✅ `mgn_live_*` long-lived |
+| `migan` CLI | ✅ one-line installer |
+| Episodic Filter | ✅ tool-error responses skip Qdrant indexing |
+| Memory Pruner | ✅ daily daemon |
+| External APIs | fal.ai $9.99 · ElevenLabs $5 (voice `pIdeS8l1cmJzzqqt7NRc`) · Anthropic $4.55 · Kimi $2 · OpenAI $5 · Gemini free tier |
+| **DPO Flywheel** | Synthetic 228+→1000 + CAI 3 + Distill 30+→500 = ~1500 pairs target (training UNLOCKED) |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (API) · **https://app.migancore.com** (Chat UI) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |

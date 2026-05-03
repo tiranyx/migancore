@@ -6,6 +6,68 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.6] — 2026-05-04 (Day 28) — Distillation Pipeline + Admin Dashboard
+
+### Added
+- **Multi-Provider Teacher API Wrapper** — `services/teacher_api.py`
+  - 4 LLM providers: Anthropic Claude, Moonshot Kimi K2.6, OpenAI GPT-4o, Google Gemini 2.5 Flash
+  - Unified async interface with cost tracking + retry x3 + exponential backoff
+  - PRICING table single source of truth (12 model variants)
+  - `is_teacher_available()` / `list_available_teachers()` for env-aware UX
+- **Distillation Pipeline** — `services/distillation.py` (476 lines)
+  - student (MiganCore-7B) vs teacher LLM with independent judge
+  - Margin filter `DISTILL_MARGIN_THRESHOLD=2.0` (judge_diff >= 2.0)
+  - Budget cap `DISTILL_BUDGET_USD_HARD_CAP=10.0`
+  - SOUL.md injected as teacher system prompt → persona preserved
+  - Independent judge enforced (teacher==judge → swap to alt teacher)
+  - Source method: `distill_<teacher>_v1`
+  - Background asyncio task with Redis state tracking
+- **Admin REST endpoints** in `routers/admin.py`
+  - `POST /v1/admin/distill/start` — kick off distillation run
+  - `GET /v1/admin/distill/status` — live state
+  - `POST /v1/admin/distill/stop` — cancel in-flight run
+  - `GET /v1/admin/distill/summary` — aggregate stats per teacher
+- **Admin Dashboard** — `frontend/dashboard.html` (814 lines, standalone React)
+  - Live at `https://app.migancore.com/admin/`
+  - Auth gate: X-Admin-Key
+  - Top stats: total pairs, unused, last 24h, training_readiness
+  - Source breakdown bars (cai/synthetic/distill/manual color-coded)
+  - Distill panel: teacher/judge/target/budget controls, live progress, history table
+  - Synthetic panel: status, target, start/stop
+  - Auto-refresh 4s
+
+### Changed
+- `api/config.py`: ANTHROPIC_API_KEY, OPENAI_API_KEY, KIMI_API_KEY, GEMINI_API_KEY, DISTILL_*
+  - ELEVENLABS_VOICE_ID default updated to user's voice (`pIdeS8l1cmJzzqqt7NRc`)
+- `api/main.py`: version 0.4.5 → 0.4.6
+- `docker-compose.yml`: pass all 4 teacher API keys + voice ID env
+- Source method convention extended: `distill_*` for teacher-derived pairs
+
+### Fixed
+- Kimi model name: switched from researched `kimi-k2-0905-preview` to actual valid `kimi-k2.6`
+- Kimi K2 thinking mode: explicitly disabled for distillation (cleaner content response)
+- Kimi K2 temperature: 0.6 with thinking-disabled (server enforces strictly)
+- Gemini truncation: `max_tokens >= 256` minimum + safety filters BLOCK_NONE + finishReason check
+- Container rebuild: documented `--build` flag (force-recreate alone reuses old image)
+
+### Verified E2E
+```
+4 teacher smoke tests:    PASS  (Claude $0.0009, Kimi $0.0001, GPT $0.0004, Gemini $0.000004)
+Distillation start:       HTTP 200 — kimi teacher, claude judge, 30 target, $0.5 cap
+Synthetic resume:         HTTP 200 — picking up at 228 pairs
+Dashboard external:       HTTP 200 — https://app.migancore.com/admin/
+Dashboard auth gate:      X-Admin-Key required, validates against /v1/admin/stats
+```
+
+### Lessons
+1. Always probe model availability via `/v1/models` before hardcoding (Kimi name was wrong)
+2. Read vendor docs CAREFULLY — Kimi thinking mode + temperature constraints + reasoning_content field undocumented in research summary
+3. Gemini safety filters aggressive — must explicitly set BLOCK_NONE for legit distillation use
+4. `docker compose up -d --force-recreate` ≠ rebuild — always use `--build` for code changes
+5. Hallucination without context = teaching wrong things → SOUL.md injection MANDATORY in distillation
+
+---
+
 ## [0.4.5] — 2026-05-04 (Day 27) — API Keys + migan CLI + MCP Resources + TTS + Memory Pruning
 
 ### Added
