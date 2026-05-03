@@ -6,6 +6,58 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.4] — 2026-05-04 (Day 26) — MCP Streamable HTTP Server + Episodic Memory Poisoning Filter
+
+### Added
+- **`api/mcp_server.py`** — MCP Streamable HTTP server using official Anthropic SDK (`mcp>=1.27.0`)
+  - 7 tools exposed: `web_search`, `generate_image`, `write_file`, `read_file`, `memory_write`, `memory_search`, `python_repl`
+  - Mounted at `/mcp/` on the existing FastAPI app via Starlette ASGI sub-mount
+  - `stateless_http=True` — no session bookkeeping, simpler ops
+  - JWT auth enforced via pure ASGI middleware (NOT `BaseHTTPMiddleware` — that breaks SSE)
+  - Auth reuses existing RS256 JWT keys (`services/jwt.py`)
+  - Endpoint live at `https://api.migancore.com/mcp/`
+- **`docs/DAY26_PLAN.md`** — full implementation plan with hypothesis/risk/benefit/adaptation
+- **`api/services/vector_memory.py::_is_tool_error_response()`** — pattern detection for tool-error
+  responses ("policy block", "encountered an issue", "operation was blocked", "requires plan", etc.)
+- **`api/services/vector_memory.py::index_turn_pair()`** — skip indexing if response is a tool error
+  (prevents episodic memory poisoning where the model regurgitates past failures on similar prompts)
+
+### Changed
+- `api/main.py`: lazy import + mount MCP at `/mcp` + start `mcp.session_manager.run()` in lifespan
+  (mounted Starlette sub-apps DON'T inherit parent lifespan — caused 500 "Task group not initialized")
+- `api/requirements.txt`: bumped `httpx>=0.27.2`, `pydantic-settings>=2.5.2`, `pydantic>=2.11`,
+  `pyjwt>=2.10.1` for `mcp` SDK compatibility. Added `mcp>=1.27.0`.
+- `api/main.py`: version 0.4.3 → 0.4.4
+- `.gitignore`: fixed UTF-16 BOM (PowerShell encoding) → UTF-8, added `*.tar.gz` rule
+
+### Verified E2E
+```
+[Internal HTTP at 127.0.0.1:18000/mcp/]
+  auth check (no token):       HTTP 401 PASS
+  auth check (invalid token):  HTTP 401 PASS
+  initialize handshake:        HTTP 200 PASS — protocolVersion 2025-06-18
+  initialized notification:    HTTP 202 PASS
+  tools/list:                  7 tools returned PASS
+  tools/call write_file:       file persisted at /opt/ado/data/workspace/ PASS
+  tools/call generate_image:   fal.ai URL returned PASS
+
+[External HTTPS at api.migancore.com/mcp/]
+  initialize handshake:        PASS — serverInfo {name:'migancore', version:'1.27.0'}
+
+[Episodic memory poisoning filter]
+  8 pattern tests: 8 PASS, 0 FAIL
+```
+Image generated via MCP: `https://v3b.fal.media/files/b/0a98c63d/Yga1T4Oz8cFvzAAifdAQd.jpg`
+
+### Lessons Documented
+1. `BaseHTTPMiddleware` incompatible with SSE — use pure ASGI middleware function
+2. Mounted Starlette sub-apps DON'T inherit parent lifespan — must explicitly start
+3. FastMCP `streamable_http_path` defaults to `/mcp` — set `"/"` to avoid double-mount
+4. FastMCP `token_verifier` requires full `auth_settings` (OAuth 2.1) — bypass with custom middleware
+5. FastMCP rejects foreign Host headers (DNS rebinding protection) — explicit `TransportSecuritySettings` allowlist required behind nginx
+
+---
+
 ## [0.4.3] — 2026-05-04 (Day 25) — Sprint Fixes: SSE heartbeat, generate_image LLM compliance, tool DB migration
 
 ### Fixed

@@ -470,6 +470,101 @@
 
 ## Week 3: Chat UI + Tools + MCP (Days 22–28)
 
+### Day 26 — MCP Streamable HTTP Server + Episodic Memory Poisoning Filter
+**Agent:** Claude Opus 4.7 (1m context)
+**Scope:** Distribution layer — expose MiganCore tools to MCP clients (Claude Desktop, Code, Cursor, Continue.dev)
+
+**Problem:**
+Tools MiganCore (write_file, generate_image, dll) hanya bisa dipakai dari `app.migancore.com`. Untuk jadi *Core Brain* per visi `week3_roadmap.md`, tools harus tersedia ke ekosistem agent client lain. Standar industri 2025-2026: **Model Context Protocol (MCP)** — Anthropic's spec untuk expose tools/resources lintas-client.
+
+Plus: episodic memory poisoning yang ditemukan di Day 25 (failed responses indexed → model regurgitate "policy block") belum punya filter pipeline.
+
+**Approach (followed mandatory protocol):**
+1. **Read core docs**: `week3_roadmap.md`, `project_overview.md`, `user_profile.md`
+2. **Research MCP latest 2025-2026**: spawned researcher agent — output: official Anthropic SDK `mcp>=1.27.0`, Streamable HTTP transport (2025-06-18 spec), pure ASGI middleware for auth, real production examples from `modelcontextprotocol/servers`
+3. **Documented Day 26 plan** (`docs/DAY26_PLAN.md`): objectives, KPIs, hypothesis, risks, benefits, adaptation strategy
+4. **Executed in 8 phases** with adaptation when blocked
+5. **E2E verified**: internal + external + filter test
+6. **Documented lessons**
+
+**Solution:**
+
+`api/mcp_server.py` (273 lines) — FastMCP wrapper around existing TOOL_REGISTRY:
+- 7 tools wrapped as `@mcp.tool()` adapters (delegate to `services/tool_executor.py::ToolExecutor`)
+- `stateless_http=True` — no session bookkeeping
+- `streamable_http_path="/"` — endpoint at mount root (`/mcp/`), not `/mcp/mcp`
+- TransportSecuritySettings allowlist `api.migancore.com` + localhost
+- Pure ASGI JWT middleware (BaseHTTPMiddleware breaks SSE — known Starlette issue)
+- Reuses RS256 keys from `services/jwt.py`
+
+`api/main.py` integration:
+- Lazy import → degrades gracefully if `mcp` SDK missing
+- Mount via `app.mount("/mcp", get_mcp_app())`
+- Critical: start `mcp.session_manager.run()` in main lifespan (mounted Starlette sub-apps don't inherit parent lifespan → 500 "Task group not initialized")
+
+`api/services/vector_memory.py` episodic memory filter:
+- `_is_tool_error_response(text)` — pattern detection on first 300 chars
+- Skip indexing if matched — prevents poisoning loop
+- 8/8 test patterns correctly classified
+
+**Bugs Hit & Fixed (with adaptation):**
+1. Dependency conflicts — bumped httpx, pydantic, pydantic-settings, pyjwt
+2. FastMCP `token_verifier` requires `auth_settings` (full OAuth) — adapted to custom middleware
+3. `BaseHTTPMiddleware` breaks SSE — switched to pure ASGI function middleware
+4. Mounted sub-apps don't inherit lifespan — added explicit `session_manager.run()` start
+5. `streamable_http_path` default `/mcp` doubles up when mounted at `/mcp` — set to `/`
+6. FastMCP rejects foreign Host headers — added explicit `TransportSecuritySettings` allowlist
+7. `.gitignore` UTF-16 BOM from PowerShell — rewrote in UTF-8
+
+**E2E Verification:**
+```
+Internal (127.0.0.1:18000/mcp/):
+  initialize handshake → HTTP 200, protocolVersion 2025-06-18
+  tools/list → 7 tools returned
+  tools/call write_file → file persisted on disk
+  tools/call generate_image → fal.ai URL returned
+
+External (https://api.migancore.com/mcp/):
+  initialize handshake PASS — serverInfo {name:'migancore', version:'1.27.0'}
+
+Episodic poisoning filter: 8/8 PASS
+```
+
+Verified URLs:
+- MCP endpoint: `https://api.migancore.com/mcp/`
+- Test image (via MCP): `https://v3b.fal.media/files/b/0a98c63d/Yga1T4Oz8cFvzAAifdAQd.jpg`
+
+**Files Modified:**
+- `api/mcp_server.py` (NEW, 273 lines)
+- `api/main.py` — lazy import, mount, lifespan integration, version 0.4.3 → 0.4.4
+- `api/services/vector_memory.py` — `_is_tool_error_response()` + skip in `index_turn_pair()`
+- `api/requirements.txt` — `mcp>=1.27.0` + 4 dependency bumps
+- `docs/DAY26_PLAN.md` (NEW) — full plan with hypothesis/risk/benefit/adaptation
+- `.gitignore` — UTF-16 BOM fix + `*.tar.gz` rule
+
+**Git Commits (Day 26 sprint):**
+- `79d76a0` — feat(day26): MCP Streamable HTTP server + episodic memory poisoning filter v0.4.4
+- `5fceec2`, `1cfef6c`, `8c89828`, `3689647` — dependency conflict fixes (httpx, pydantic-settings, pydantic, pyjwt)
+- `fe85235` — fix: MCP auth via Starlette middleware (skip OAuth requirement)
+- `a703c7b`, `847baf2` — cleanup stale ref + UTF-16 gitignore
+- `484e5ad` — fix: pure ASGI middleware (BaseHTTPMiddleware breaks SSE)
+- `4787b29` — fix: streamable_http_path="/" so endpoint matches mount
+- `d324aaf` — fix: start MCP session manager in app lifespan
+- `6dfec87` — fix: TransportSecuritySettings for api.migancore.com host
+
+**Version:** 0.4.3 → 0.4.4
+
+**Deliverables:** MCP Server live di production. Fahmi sekarang bisa connect Claude Code/Desktop/Cursor ke MiganCore tools tanpa harus pakai chat UI. Episodic memory tidak lagi terkontaminasi tool errors.
+
+**Key Lessons (5 critical):**
+1. `BaseHTTPMiddleware` ≠ SSE compatible
+2. Starlette mount + lifespan = manual integration required
+3. FastMCP path config can collide with mount path
+4. FastMCP auth integration requires either full OAuth or custom middleware
+5. DNS rebinding protection requires explicit Host allowlist behind any reverse proxy
+
+---
+
 ### Day 25 — Sprint Fixes: SSE Heartbeat + LLM Tool Compliance + DB Migration
 **Agent:** Claude Opus 4.7 (1m context)
 **Scope:** Production bug fixes — SSE network error visible at app.migancore.com + Day 24 tool E2E completion
