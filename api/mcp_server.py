@@ -206,7 +206,7 @@ def _build_mcp():
         "mcp.server.built",
         tool_count=7,  # web_search, generate_image, write_file, read_file, memory_write, memory_search, python_repl
         stateless=True,
-        auth=("jwt" if verifier else "none"),
+        auth="jwt-middleware",
     )
     return mcp
 
