@@ -324,6 +324,77 @@ async def spawn_agent(
     )
 
 
+@router.get("", response_model=list[AgentResponse])
+async def list_agents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    include_archived: bool = False,
+):
+    """List all agents for the current tenant (Week 4 Day 29 — Spawn UI support).
+
+    Returns agents ordered by generation (oldest core_brain first), then created_at.
+    Used by chat.html sidebar agent switcher and dashboard genealogy view.
+    """
+    await set_tenant_context(db, str(current_user.tenant_id))
+
+    stmt = select(Agent).where(Agent.tenant_id == current_user.tenant_id)
+    if not include_archived:
+        stmt = stmt.where(Agent.status != "archived")
+    stmt = stmt.order_by(Agent.generation.asc(), Agent.created_at.asc())
+
+    result = await db.execute(stmt)
+    agents = result.scalars().all()
+
+    return [
+        AgentResponse(
+            id=str(a.id),
+            name=a.name,
+            description=a.description,
+            model_version=a.model_version,
+            status=a.status,
+            created_at=a.created_at.isoformat(),
+            parent_agent_id=str(a.parent_agent_id) if a.parent_agent_id else None,
+            generation=a.generation,
+            template_id=a.template_id,
+            persona_locked=a.persona_locked,
+        )
+        for a in agents
+    ]
+
+
+@router.get("/genealogy", response_model=list[dict])
+async def get_genealogy(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get full genealogy tree for current tenant (Day 30 — D3.js force-directed).
+
+    Returns flat list of {id, name, parent_id, generation, template_id, status, created_at}.
+    Frontend builds the tree from parent_id links.
+    """
+    await set_tenant_context(db, str(current_user.tenant_id))
+    result = await db.execute(
+        select(Agent).where(
+            Agent.tenant_id == current_user.tenant_id,
+            Agent.status != "archived",
+        ).order_by(Agent.generation.asc(), Agent.created_at.asc())
+    )
+    agents = result.scalars().all()
+    return [
+        {
+            "id": str(a.id),
+            "name": a.name,
+            "parent_id": str(a.parent_agent_id) if a.parent_agent_id else None,
+            "generation": a.generation,
+            "template_id": a.template_id,
+            "status": a.status,
+            "created_at": a.created_at.isoformat(),
+            "model_version": a.model_version,
+        }
+        for a in agents
+    ]
+
+
 @router.get("/{agent_id}/children", response_model=list[AgentChildResponse])
 async def list_agent_children(
     agent_id: str,

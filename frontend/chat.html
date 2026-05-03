@@ -679,6 +679,139 @@
     }
 
     /* ===========================
+       SPAWN MODAL + AGENT LIST (Day 29)
+    =========================== */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(7, 16, 14, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+      padding: 1rem;
+    }
+    .modal-card {
+      width: min(520px, 100%);
+      background: var(--bg-1);
+      border: 1px solid var(--orange-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-title {
+      font-family: var(--display);
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--orange);
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+    .modal-sub {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-bottom: 1.25rem;
+    }
+    .modal-form-row { margin-bottom: 0.85rem; }
+    .modal-form-label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.35rem;
+    }
+    .modal-input, .modal-select, .modal-textarea {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+    .modal-textarea { resize: vertical; min-height: 80px; }
+    .modal-actions {
+      display: flex; gap: 0.5rem; justify-content: flex-end;
+      margin-top: 1rem;
+    }
+    .modal-btn-primary, .modal-btn-ghost {
+      padding: 0.55rem 1.25rem;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      border: none;
+    }
+    .modal-btn-primary { background: var(--orange); color: #1a0f00; }
+    .modal-btn-primary:hover { filter: brightness(1.1); }
+    .modal-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .modal-btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+
+    .agent-list-section {
+      margin-top: 0.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed var(--border);
+    }
+    .agent-list { display: flex; flex-direction: column; gap: 2px; max-height: 32vh; overflow-y: auto; }
+    .agent-item {
+      padding: 0.5rem 0.65rem;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.15s;
+    }
+    .agent-item:hover { background: var(--bg-2); color: var(--text); }
+    .agent-item.active {
+      background: var(--orange-dim);
+      color: var(--orange);
+      border: 1px solid var(--orange-border);
+    }
+    .agent-gen-badge {
+      font-size: 0.6rem;
+      padding: 1px 5px;
+      background: var(--bg-2);
+      color: var(--text-faint, var(--text-dim));
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .agent-item.active .agent-gen-badge {
+      background: var(--orange);
+      color: #1a0f00;
+    }
+    .btn-spawn {
+      background: transparent;
+      color: var(--green);
+      border: 1px dashed var(--green-border);
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.15s;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    .btn-spawn:hover {
+      background: var(--green-dim);
+      border-style: solid;
+    }
+
+    /* ===========================
        SCROLLBAR
     =========================== */
     ::-webkit-scrollbar { width: 4px; }
@@ -759,6 +892,12 @@
       body: JSON.stringify({ name, description: 'Personal MiganCore agent', visibility: 'private' }),
     }),
 
+    listAgents: () => apiFetch('/v1/agents'),
+    spawnAgent: (parentId, name, persona_overrides, template_id) =>
+      apiFetch(`/v1/agents/${parentId}/spawn`, {
+        method: 'POST',
+        body: JSON.stringify({ name, persona_overrides, template_id }),
+      }),
     chat: (agentId, message, convId) => apiFetch(`/v1/agents/${agentId}/chat`, {
       method: 'POST',
       body: JSON.stringify({ message, conversation_id: convId || null }),
@@ -867,6 +1006,112 @@
             <div key={i} className={`boot-line ${l.cls}`}>{l.text}</div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // ===========================
+  // SPAWN MODAL (Day 29 — Level 5 Visibility)
+  // ===========================
+  function SpawnModal({ parentAgent, onClose, onSpawned }) {
+    const [name, setName] = useState('');
+    const [voice, setVoice] = useState('');
+    const [tone, setTone] = useState('');
+    const [values, setValues] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState('');
+
+    const submit = async (e) => {
+      e?.preventDefault();
+      if (!name.trim() || busy) return;
+      setBusy(true); setErr('');
+      try {
+        const overrides = {};
+        if (voice.trim())  overrides.voice = voice.trim();
+        if (tone.trim())   overrides.tone  = tone.trim();
+        if (values.trim()) overrides.values = values.split(',').map(v => v.trim()).filter(Boolean);
+
+        const child = await api.spawnAgent(
+          parentAgent.id,
+          name.trim(),
+          Object.keys(overrides).length ? overrides : null,
+          null,  // template_id — Day 31 will add template selector
+        );
+        onSpawned(child);
+      } catch (e) {
+        setErr(e.message || 'Spawn failed');
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <form className="modal-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+          <div className="modal-title">SPAWN CHILD AGENT</div>
+          <div className="modal-sub">
+            Parent: <span style={{ color: 'var(--orange)' }}>{parentAgent.name}</span>
+            {' · '}gen: {parentAgent.generation || 0}
+            {' → '}new: gen {(parentAgent.generation || 0) + 1}
+          </div>
+
+          <div className="modal-form-row">
+            <label className="modal-form-label">Agent Name *</label>
+            <input
+              className="modal-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. CustomerHelper"
+              autoFocus
+              required
+            />
+          </div>
+
+          <div className="modal-form-row">
+            <label className="modal-form-label">Voice (persona override, optional)</label>
+            <input
+              className="modal-input"
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              placeholder="e.g. warm, patient, solution-oriented"
+            />
+          </div>
+
+          <div className="modal-form-row">
+            <label className="modal-form-label">Tone (optional)</label>
+            <input
+              className="modal-input"
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              placeholder="e.g. friendly, professional"
+            />
+          </div>
+
+          <div className="modal-form-row">
+            <label className="modal-form-label">Values (comma-separated, optional)</label>
+            <input
+              className="modal-input"
+              value={values}
+              onChange={(e) => setValues(e.target.value)}
+              placeholder="e.g. clarity, empathy, accuracy"
+            />
+          </div>
+
+          <div className="modal-sub" style={{ marginTop: '1rem' }}>
+            ▸ Child inherits parent's SOUL.md persona, model, and tools.
+            ▸ Persona overrides merge on top (only if you fill them).
+            ▸ Template selector (customer_success, etc.) coming Day 31.
+          </div>
+
+          {err && <div className="err" style={{ color: 'var(--red, #ff5577)', fontSize: '0.75rem', fontFamily: 'var(--mono)', marginTop: '0.5rem' }}>⚠ {err}</div>}
+
+          <div className="modal-actions">
+            <button type="button" className="modal-btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+            <button type="submit" className="modal-btn-primary" disabled={busy || !name.trim()}>
+              {busy ? 'spawning...' : 'spawn child'}
+            </button>
+          </div>
+        </form>
       </div>
     );
   }
@@ -1085,22 +1330,53 @@
     const [convList, setConvList]   = useState([]);
     const [initErr, setInitErr]     = useState('');
     const [initing, setIniting]     = useState(true);
+    // Day 29 — agent list + spawn modal
+    const [agents, setAgents]       = useState([]);
+    const [spawnOpen, setSpawnOpen] = useState(false);
 
     const endRef     = useRef(null);
     const taRef      = useRef(null);
     const stopRef    = useRef(null);
     const streamMsgId = useRef(null);
 
-    // ─── Init: ensure agent ───────────────────────────────
+    // ─── Init: ensure agent + load agent list (Day 29) ─────
+    const refreshAgents = useCallback(async () => {
+      try {
+        const list = await api.listAgents();
+        setAgents(Array.isArray(list) ? list : []);
+        return list;
+      } catch (e) {
+        return [];
+      }
+    }, []);
+
     useEffect(() => {
       (async () => {
         try {
           let aid  = LS.get('agent_id');
           let aname = LS.get('agent_name') || 'MiganCore';
+
+          // Day 29: Load all agents first
+          const list = await refreshAgents();
+
+          // Validate stored agent still exists
+          if (aid && list && Array.isArray(list)) {
+            const found = list.find(a => a.id === aid);
+            if (!found) { aid = null; aname = null; }
+          }
+
+          // Pick from list, or create new
           if (!aid) {
-            const agent = await api.createAgent('MiganCore');
-            aid   = agent.id;
-            aname = agent.name;
+            if (list && list.length > 0) {
+              const first = list[0];
+              aid = first.id;
+              aname = first.name;
+            } else {
+              const agent = await api.createAgent('MiganCore');
+              aid   = agent.id;
+              aname = agent.name;
+              await refreshAgents();
+            }
             LS.set('agent_id',   aid);
             LS.set('agent_name', aname);
           }
@@ -1112,7 +1388,28 @@
           setIniting(false);
         }
       })();
-    }, []);
+    }, [refreshAgents]);
+
+    // Switch to a different agent
+    const switchAgent = useCallback((agent) => {
+      if (!agent || agent.id === agentId) return;
+      setAgentId(agent.id);
+      setAgentName(agent.name);
+      LS.set('agent_id', agent.id);
+      LS.set('agent_name', agent.name);
+      // Reset chat state for the new agent context
+      setMsgs([]);
+      setConvId(null);
+      LS.del('mc_msgs');
+      LS.del('mc_conv');
+    }, [agentId]);
+
+    // After successful spawn — switch to new child + refresh list
+    const handleSpawned = useCallback(async (child) => {
+      setSpawnOpen(false);
+      await refreshAgents();
+      switchAgent({ id: child.id, name: child.name, generation: child.generation });
+    }, [refreshAgents, switchAgent]);
 
     // ─── Restore session ──────────────────────────────────
     useEffect(() => {
@@ -1263,7 +1560,30 @@
 
           <button className="btn-new" onClick={newChat}>+ NEW CHAT</button>
 
-          <div className="section-label">RIWAYAT CHAT</div>
+          {/* Day 29: Agent list + spawn button (Level 5 visibility) */}
+          <div className="agent-list-section">
+            <div className="section-label">AGENTS ({agents.length})</div>
+            <div className="agent-list">
+              {agents.map(a => (
+                <div
+                  key={a.id}
+                  className={`agent-item ${a.id === agentId ? 'active' : ''}`}
+                  onClick={() => switchAgent(a)}
+                  title={`${a.name} (gen ${a.generation || 0})`}
+                >
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.name}
+                  </span>
+                  <span className="agent-gen-badge">G{a.generation || 0}</span>
+                </div>
+              ))}
+            </div>
+            <button className="btn-spawn" onClick={() => setSpawnOpen(true)} title="Spawn child agent from current">
+              + SPAWN CHILD
+            </button>
+          </div>
+
+          <div className="section-label" style={{ marginTop: '0.75rem' }}>RIWAYAT CHAT</div>
           <div className="conv-list">
             {convList.length === 0
               ? <div className="empty-convs">Belum ada chat</div>
@@ -1349,6 +1669,15 @@
             <div className="input-hint">ENTER kirim · SHIFT+ENTER baris baru · respon streaming real-time</div>
           </div>
         </main>
+
+        {/* Day 29: Spawn Modal */}
+        {spawnOpen && (
+          <SpawnModal
+            parentAgent={agents.find(a => a.id === agentId) || { id: agentId, name: agentName, generation: 0 }}
+            onClose={() => setSpawnOpen(false)}
+            onSpawned={handleSpawned}
+          />
+        )}
       </div>
     );
   }
