@@ -12,6 +12,11 @@ import json
 import uuid
 from datetime import datetime, timezone
 
+# Strong references to keep background tasks alive until completion.
+# asyncio.create_task() returns a weak-ref — tasks without a live reference
+# can be GC'd mid-execution (raises GeneratorExit, closes httpx connections).
+_background_tasks: set[asyncio.Task] = set()
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -190,8 +195,8 @@ async def chat(
 
     await db.commit()
 
-    # Day 12: Background semantic embed — fire-and-forget, never blocks response
-    asyncio.create_task(
+    # Day 12: Background semantic embed — store ref to prevent GC mid-execution
+    _t = asyncio.create_task(
         index_turn_pair(
             agent_id=agent_id,
             tenant_id=tenant_id,
@@ -201,10 +206,12 @@ async def chat(
             turn_index=conversation.message_count,
         )
     )
+    _background_tasks.add(_t)
+    _t.add_done_callback(_background_tasks.discard)
 
     # Day 14: Background knowledge extraction — updates Letta knowledge block with new facts
     if agent.letta_agent_id:
-        asyncio.create_task(
+        _t = asyncio.create_task(
             maybe_update_knowledge_block(
                 letta_agent_id=agent.letta_agent_id,
                 user_message=data.message,
@@ -212,15 +219,19 @@ async def chat(
                 letta_blocks=letta_blocks,
             )
         )
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
 
     # Day 15: Background CAI critique-revise — generates preference pairs for DPO training
-    asyncio.create_task(
+    _t = asyncio.create_task(
         run_cai_pipeline(
             user_message=data.message,
             assistant_response=assistant_content,
             source_message_id=assistant_msg.id,
         )
     )
+    _background_tasks.add(_t)
+    _t.add_done_callback(_background_tasks.discard)
 
     logger.info(
         "chat.response",
@@ -325,8 +336,8 @@ async def chat_stream(
             full_text = "".join(full_response)
             yield _sse({"type": "done", "conversation_id": str(conversation_id)})
 
-            # Persist assistant message in background (non-blocking)
-            asyncio.create_task(
+            # Persist assistant message in background — store ref to prevent GC
+            _t = asyncio.create_task(
                 _persist_assistant_message(
                     conversation_id=conversation_id,
                     tenant_id=tenant_id,
@@ -334,6 +345,8 @@ async def chat_stream(
                     message_count=len(history) + 2,
                 )
             )
+            _background_tasks.add(_t)
+            _t.add_done_callback(_background_tasks.discard)
 
         except OllamaError as exc:
             logger.error("chat.stream.ollama_error", error=str(exc))
