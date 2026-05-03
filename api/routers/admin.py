@@ -30,6 +30,7 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import text, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -367,35 +368,67 @@ async def export_dataset(
 
 
 # ---------------------------------------------------------------------------
-# Synthetic generation endpoints (Day 19)
+# Synthetic generation endpoints (Day 19 + Day 21)
 # ---------------------------------------------------------------------------
 
+class SyntheticStartRequest(BaseModel):
+    """Request body for POST /v1/admin/synthetic/start.
+
+    target_pairs: If set, auto-rerun rounds until total synthetic pairs in DB
+                  reaches this number. Each round processes 120 seeds.
+                  If omitted, runs exactly one round (original behavior).
+    """
+    target_pairs: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=10_000,
+        description=(
+            "Auto-rerun target: keep running rounds until synthetic pairs in DB >= this value. "
+            "Omit for single-run mode (120 seeds, one round)."
+        ),
+    )
+
+
 @router.post("/synthetic/start", dependencies=[Depends(require_admin_key)])
-async def start_synthetic():
+async def start_synthetic(body: SyntheticStartRequest = SyntheticStartRequest()):
     """Start a synthetic conversation generation run.
 
     Generates 120 seeds through the CAI pipeline to produce DPO preference pairs.
     Only one run allowed at a time (CPU-only VPS constraint).
 
-    Returns run_id for tracking. Monitor progress at GET /v1/admin/synthetic/status.
+    **Single-run mode** (default, no body):
+      Processes 120 seeds once. ~50-60 pairs stored per run.
+      curl -X POST -H "X-Admin-Key: <key>" .../synthetic/start
 
-    Expected yield: ~50-60 pairs per run (40-50% of seeds score <= 3 after critique).
+    **Auto-rerun mode** (Day 21):
+      Loops rounds automatically until total synthetic pairs in DB >= target_pairs.
+      Each round = 120 seeds. Stop anytime with POST /synthetic/stop.
+      curl -X POST -H "X-Admin-Key: <key>" -H "Content-Type: application/json" \\
+           -d '{"target_pairs": 1000}' .../synthetic/start
+
+    Tracks progress at GET /v1/admin/synthetic/status (includes round, cumulative_stored, target_pairs).
     Tagged as source_method="synthetic_seed_v1" in preference_pairs table.
-
-    Usage:
-        curl -X POST -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/start
     """
-    success, run_id, message = await start_synthetic_generation()
+    success, run_id, message = await start_synthetic_generation(
+        target_pairs=body.target_pairs
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=message,
         )
 
-    logger.info("admin.synthetic_started", run_id=run_id)
+    logger.info(
+        "admin.synthetic_started",
+        run_id=run_id,
+        target_pairs=body.target_pairs,
+        mode="auto_rerun" if body.target_pairs else "single_run",
+    )
     return {
         "run_id": run_id,
         "message": message,
+        "mode": "auto_rerun" if body.target_pairs else "single_run",
+        "target_pairs": body.target_pairs,
         "monitor": "/v1/admin/synthetic/status",
         "stop": "/v1/admin/synthetic/stop",
     }
@@ -406,14 +439,17 @@ async def synthetic_status():
     """Get current synthetic generation status and progress counters.
 
     Returns:
-        status: "idle" | "running" | "done" | "cancelled" | "error" | "unknown"
-        run_id: UUID of current/last run
-        total: total seeds to process (120)
-        processed: seeds processed so far
-        stored: DPO pairs actually stored (score <= 3)
-        progress_pct: processed/total * 100
-        started_at: ISO timestamp of run start
-        is_running: True if task is active in event loop
+        status:            "idle" | "running" | "done" | "done_target_reached" | "cancelled" | "error"
+        run_id:            UUID of current/last round
+        round:             current round number (1 = single-run or first round of auto-rerun)
+        total:             seeds per round (120)
+        processed:         seeds processed in current round
+        stored:            pairs stored in current round
+        cumulative_stored: total pairs stored across all rounds this session
+        target_pairs:      auto-rerun target (null = single-run mode)
+        progress_pct:      processed/total × 100 for current round
+        started_at:        ISO timestamp of first round start
+        is_running:        True if task is active in event loop
 
     Usage:
         curl -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/status
