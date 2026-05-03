@@ -5,7 +5,7 @@ Agent ORM model.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, ForeignKey, Integer, DateTime, JSON, Boolean
+from sqlalchemy import String, ForeignKey, Integer, DateTime, JSON, Boolean, Float
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base
