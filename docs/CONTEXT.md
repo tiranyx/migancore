@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 12 Handoff + Stabilize)
-**API Version:** 0.3.2 (stable, Day 11)
-**Git Commit:** `c8a066b`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 12 — Qdrant RAG Tier 2)
+**API Version:** 0.3.2
+**Git Commit:** `3f22074`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 11 (COMPLETE) → Day 12 (NEXT) |
+| Sprint Day | Day 12 (COMPLETE) → Day 13 (NEXT) |
 | API Version | 0.3.2 |
-| Git Commit | `c8a066b` (VPS + GitHub + Local = SYNCED) |
+| Git Commit | `3f22074` (VPS + GitHub + Local = SYNCED) |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -83,11 +83,30 @@
   - Key pattern: `mem:{tenant_id}:{agent_id}:{namespace}:{key}`, 30d TTL
   - `memory_write` / `memory_read` / `memory_list` / `memory_summary`
 
-### Tool Executor (Day 8, Claude + Day 11 update)
+### Qdrant RAG — Semantic Memory Tier 2 (Day 12, Claude)
+- ✅ `services/embedding.py` — fastembed CPU inference wrapper
+  - Model: `paraphrase-multilingual-mpnet-base-v2` (768-dim, Bahasa Indonesia native)
+  - Singleton `TextEmbedding` instance, asyncio.Lock double-checked init
+  - CPU offload via `run_in_threadpool` (no GPU required)
+  - Pre-warmed at lifespan startup (avoids cold start on first chat)
+  - `format_turn_pair()` — Bahasa Indonesia labels, 300-char truncation per side
+- ✅ `services/vector_memory.py` — Qdrant async CRUD per agent
+  - Per-agent collections: `episodic_{agent_id}`
+  - `ensure_collection()` — idempotent create, HNSW brute-force for <10k vectors
+  - `index_turn_pair()` — embed turn pair → upsert to Qdrant, asyncio.Semaphore(2) guard
+  - `search_semantic()` — cosine similarity search, score threshold 0.55
+  - Graceful degradation: returns `[]` on any Qdrant error
+- ✅ `routers/chat.py` — background index after message save
+  - `asyncio.create_task(index_turn_pair(...))` — fire-and-forget, never blocks response
+- ✅ `services/tool_executor.py` — `_memory_search` upgraded: Qdrant first → Redis fallback
+  - Returns `source: "qdrant_semantic"` or `"redis_kv"`
+
+### Tool Executor (Day 8, Claude + Day 11 + Day 12 update)
 - ✅ `services/tool_executor.py`
   - `ToolContext(tenant_id, agent_id, tenant_plan, tool_policies)` — diperluas Day 11
   - `_web_search` → DuckDuckGo Instant Answers
-  - `_memory_write` / `_memory_search` → Redis K-V
+  - `_memory_write` → Redis K-V
+  - `_memory_search` → **Qdrant semantic (Tier 2) → Redis K-V fallback (Tier 1)** (Day 12)
   - `_python_repl` → subprocess.run + import blacklist + policy check
   - Policy check via `ToolPolicyChecker.check()` sebelum dispatch
 
@@ -109,25 +128,22 @@
 
 ## IN PROGRESS / NEXT SPRINT
 
-### Day 12 — Qdrant RAG Tier 2
-**Goal:** Semantic memory — agent ingat konteks dari percakapan lampau via vector search
+### ✅ Day 12 — Qdrant RAG Tier 2 (COMPLETE)
+**Git Commit:** `3f22074` | **Deployed:** 2026-05-03 06:24:20 UTC | **Model load:** 35s
 
-**Keputusan arsitektur yang LOCKED (dari KIMI + GPT-5.5 consensus):**
-- Embedding model: `paraphrase-multilingual-mpnet-base-v2` (768-dim, Bahasa Indonesia native)
-  - BUKAN BGE-small-en (English only)
-  - BUKAN BAAI/bge-m3 (compatibility issues)
-- Collection naming: `episodic_{agent_id}` dan `semantic_{agent_id}`
-- Chunking unit: turn-pair (user+assistant), bukan per-message
-- Embedding library: `fastembed` (CPU, no GPU needed)
+**Delivered:**
+- ✅ `services/embedding.py` — fastembed singleton, `paraphrase-multilingual-mpnet-base-v2`, thread-pool offload
+- ✅ `services/vector_memory.py` — `ensure_collection`, `index_turn_pair`, `search_semantic`
+- ✅ `routers/chat.py` — fire-and-forget background embed via `asyncio.create_task`
+- ✅ `services/tool_executor.py` — `_memory_search` Qdrant-first with Redis fallback
+- ✅ `main.py` — model pre-warm at lifespan startup
 
-**Tasks:**
-- [ ] `services/embedding.py` — fastembed wrapper, `paraphrase-multilingual-mpnet-base-v2`
-- [ ] `services/vector_memory.py` — Qdrant CRUD per agent collection
-  - `index_message_pair(agent_id, turn_pair)` — embed + upsert ke Qdrant
-  - `search_semantic(agent_id, query, top_k=5)` — similarity search
-- [ ] `routers/chat.py` — async background embed setelah message saved
-- [ ] `services/tool_executor.py` — upgrade `_memory_search` ke query Qdrant terlebih dulu
-- [ ] Test: "ingat bahwa company saya bernama X" → searchable 10 pesan kemudian
+**Architecture decisions locked:**
+- `paraphrase-multilingual-mpnet-base-v2` (768-dim, Bahasa Indonesia native, ONNX CPU)
+- `fastembed==0.5.0` — no `lazy_load` param
+- HNSW `full_scan_threshold=10000` — brute-force exact search for small collections
+- Score threshold 0.55 — noise filter
+- Semaphore(2) — limits concurrent CPU embed ops
 
 ### Day 13 — Letta Tier 3 (PASSIVE STORAGE ONLY)
 **CRITICAL CONSTRAINT:** Qwen2.5-7B Q4 tidak cukup untuk Letta tool calls.

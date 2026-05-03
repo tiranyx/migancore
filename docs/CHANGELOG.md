@@ -6,7 +6,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [0.3.2] — 2026-05-03
+## [0.3.2] — 2026-05-03 (Day 11 + Day 12)
 
 ### Added
 - **Tool Policy Taxonomy** (`services/tool_policy.py`)
@@ -45,6 +45,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **H3** `models/`: `tools` table now has ORM model
 - **H5** `deps/rate_limit.py`: In-memory storage replaced with Redis backend
 - **C3** `tool_executor.py`: `python_repl` now has import blacklist + policy gate
+
+---
+
+### Added (Day 12 — Qdrant RAG Tier 2)
+- **Embedding Service** (`services/embedding.py`) — NEW FILE
+  - Model: `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` (768-dim, Bahasa Indonesia native)
+  - Singleton `TextEmbedding` with asyncio.Lock double-checked init — prevents memory leak from multiple loads
+  - `embed_text()` offloads ONNX inference to thread pool via `run_in_threadpool`
+  - `format_turn_pair()` — "Pengguna:/Asisten:" labels, 300-char truncation per side
+  - Pre-warmed at lifespan startup — avoids 35s cold start on first chat request
+- **Vector Memory Service** (`services/vector_memory.py`) — NEW FILE
+  - Per-agent Qdrant collections: `episodic_{agent_id}`
+  - `ensure_collection()` — idempotent, HNSW brute-force for <10k vectors, handles concurrent race
+  - `index_turn_pair()` — embed turn pair → upsert PointStruct, asyncio.Semaphore(2) for CPU protection
+  - `search_semantic()` — cosine similarity search, score_threshold=0.55, graceful degradation to `[]`
+  - AsyncQdrantClient singleton with asyncio.Lock
+- **Semantic Memory in Tool Executor** (`services/tool_executor.py`)
+  - `_memory_search` now tries Qdrant semantic search first (Tier 2)
+  - Falls back to Redis K-V substring search (Tier 1) if Qdrant unavailable or empty
+  - Response includes `source` field: `"qdrant_semantic"` or `"redis_kv"`
+- **Background Embedding in Chat** (`routers/chat.py`)
+  - `asyncio.create_task(index_turn_pair(...))` fires after `db.commit()` — never blocks HTTP response
 
 ---
 

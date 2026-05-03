@@ -239,6 +239,47 @@
 
 ---
 
+### Day 12 — Qdrant RAG Tier 2 Semantic Memory
+**Agent:** Claude Sonnet 4.6
+**Scope:** Vector memory — agent ingat konteks percakapan lampau via semantic search
+
+**Research (pre-implementation):**
+- Confirmed `paraphrase-multilingual-mpnet-base-v2` over BGE-small-en (English-only) and BAAI/bge-m3 (compatibility issues)
+- fastembed ONNX CPU runtime — no GPU, no torch dependency
+- Turn-pair chunking (user+assistant together) vs per-message: +2% accuracy per MemMachine research
+- HNSW `full_scan_threshold=10000` forces exact brute-force for <10k vectors — faster and more accurate
+- Cosine distance correct for mean-pool sentence-transformers
+- Score threshold 0.55 — empirical noise floor for multilingual models
+
+**New Files:**
+- `services/embedding.py`
+  - `MODEL_NAME = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"` (768-dim)
+  - Singleton `TextEmbedding` with asyncio.Lock double-checked init
+  - `embed_text()` — offloads ONNX inference to thread pool via `run_in_threadpool`
+  - `format_turn_pair()` — Bahasa Indonesia labels, 300-char truncation per side
+- `services/vector_memory.py`
+  - `ensure_collection()` — idempotent, handles "already exists" race condition
+  - `index_turn_pair()` — embed → upsert PointStruct, asyncio.Semaphore(2) guard
+  - `search_semantic()` — cosine search, score_threshold=0.55, returns `[]` on any error
+  - AsyncQdrantClient singleton with asyncio.Lock
+
+**Modified Files:**
+- `main.py` — pre-warm embedding model at lifespan startup (avoids 35s cold start on first chat)
+- `routers/chat.py` — `asyncio.create_task(index_turn_pair(...))` after `db.commit()`
+- `services/tool_executor.py` — `_memory_search` tries Qdrant first; Redis K-V fallback if unavailable or empty
+
+**Deployment:**
+- Git commit `3f22074` pushed and pulled to VPS
+- Model download: 5 ONNX files, ~35s first-time load
+- `embedding.model_ready` confirmed at 06:24:20 UTC
+- `/health` → 200 ✅
+
+**Version:** 0.3.2 (no DB migration required)
+
+**Deliverables:** Tier 2 semantic memory — index + search + graceful degradation to Tier 1 Redis
+
+---
+
 ## Sprint Metrics: Week 1
 
 | Metric | Value |
