@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 16 — Episodic RAG Retrieval)
-**API Version:** 0.3.6
-**Git Commit:** `4eaa610`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 17 — Admin Monitoring)
+**API Version:** 0.3.7
+**Git Commit:** `fac8e9a`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 16 (COMPLETE) → Day 17 (NEXT) |
-| API Version | 0.3.6 |
-| Git Commit | `TBD` |
+| Sprint Day | Day 17 (COMPLETE) → Day 18 (NEXT) |
+| API Version | 0.3.7 |
+| Git Commit | `fac8e9a` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -92,6 +92,23 @@
   - `mission` + `knowledge` blocks injected as context sections
 - ✅ Letta container: `ado-letta-1`, port 8283 internal, `letta_db` fully migrated
 - ✅ E2E verified: 3 blocks created, `letta_agent_id` persisted, logs confirmed
+
+### Admin Monitoring — CAI Flywheel Visibility (Day 17, Claude)
+- ✅ `routers/admin.py` — read-only admin endpoints, X-Admin-Key auth
+  - `GET /v1/admin/stats` — pair count, unused, avg score, distribution, 24h/7d rate, training readiness
+  - `GET /v1/admin/preference-pairs` — paginated listing with `score_max`, `unused_only` filters
+  - `GET /v1/admin/export` — JSONL stream in Unsloth/TRL DPO-compatible format (prompt/chosen/rejected)
+  - Auth: X-Admin-Key header → `settings.ADMIN_SECRET_KEY` (503 unconfigured, 401 wrong)
+  - Training readiness thresholds: not_ready <500 | approaching 500-999 | ready 1000+ | ideal 2000+
+- ✅ `models/preference_pair.py` — PreferencePair SQLAlchemy ORM model
+- ✅ `config.py` — `ADMIN_SECRET_KEY` setting (env var)
+- ✅ `docker-compose.yml` — `ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}` in API environment block
+- ✅ **E2E verified:** 3 real CAI pairs discovered! All endpoints 200. JSONL valid. Auth guards: no-key→401, wrong-key→401, correct-key→200
+
+**E2E results:**
+- `total_pairs: 3` | `unused_pairs: 3` | `avg_judge_score: 3.0` | `by_source: {cai_pipeline: 3}`
+- `training_readiness.status: "not_ready"` | `progress_toward_1k_pct: 0.3`
+- JSONL export: 3 lines, ALL LINES VALID JSON ✓
 
 ### Episodic Context Retrieval — Qdrant RAG (Day 16, Claude)
 - ✅ `services/vector_retrieval.py` — semantic retrieval + formatter, NEW FILE
@@ -179,6 +196,27 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 17 — Admin Monitoring + CAI Visibility (COMPLETE)
+**Git Commit:** `fac8e9a` | **Deployed:** 2026-05-03 | **Version:** 0.3.7
+
+**Delivered:**
+- ✅ `routers/admin.py` — 3 endpoints: /stats, /preference-pairs, /export (JSONL)
+- ✅ `models/preference_pair.py` — PreferencePair ORM model registered in models/__init__.py
+- ✅ `config.py` — ADMIN_SECRET_KEY setting
+- ✅ `docker-compose.yml` — ADMIN_SECRET_KEY env wired to API container
+
+**Research findings (Day 17 research agent, arxiv 2025-2026):**
+- SimPO > DPO for first run: noise-tolerant, no reference model, +6.4pts AlpacaEval 2
+- Minimum: 500 pairs any signal / 1000 reliable / 2000 ideal (arxiv 2502.14560)
+- RunPod cost: ~$2-4 per 7B QLoRA run (RTX 4090, 2hr)
+- HyDE/query rewriting: SKIP — CPU latency too high on 7B
+- Hybrid search BM42: good ROI → planned Day 18
+
+**Architecture decisions locked:**
+- Training algorithm: SimPO (not DPO) for first run — see ARCHITECTURE DECISIONS
+- Admin endpoints: READ ONLY — never mutate training data
+- Export format: Unsloth/TRL-compatible JSONL (prompt/chosen/rejected)
 
 ### ✅ Day 16 — Episodic RAG Retrieval (COMPLETE)
 **Git Commit:** `4eaa610` | **Deployed:** 2026-05-03 | **Version:** 0.3.6
@@ -307,7 +345,8 @@ Tidak ada blocker saat ini.
 | Knowledge extraction | Qwen2.5-0.5B | Fast, low RAM, structured output task — no need for 7B |
 | CAI judge model | Qwen2.5-7B | Research (arxiv 2509.13332): 0.5B fails Chat Hard (<50% accuracy), 7B achieves ~75% |
 | CAI sampling | 50% of turns | CPU resource management — critique + revise = 2 sequential 7B calls |
-| DPO pipeline | Accumulate pairs now, train Week 4 | RunPod RTX 4090 $0.34/hr, 500+ pairs target |
+| Training algorithm | SimPO (NOT DPO) for first run | Noise-tolerant, no reference model, +6.4pts AlpacaEval 2 (arxiv 2405.14734) — CAI pairs will have label noise |
+| DPO pipeline | Accumulate pairs now, train Week 3-4 | RunPod RTX 4090, $2-4/run; need 1000+ pairs minimum (arxiv 2502.14560) |
 | Knowledge scope | Sync chat only | Stream endpoint: async persist pattern makes nested task complex. Defer. |
 | Langfuse | DEFERRED (Week 3) | Belum ada yang perlu diobservasi. structlog sudah cukup. |
 | Memory Tier 1 | Redis K-V | Fast, simple, TTL built-in |
@@ -340,6 +379,9 @@ Tidak ada blocker saat ini.
 - ❌ Jangan sort episodic retrieval by timestamp — sort by relevance score; recency-sort degrades accuracy 30%
 - ❌ Jangan inject >3 episodic chunks — 7B model overwhelmed; use TOP_K_INJECT=3
 - ❌ Jangan gunakan score_threshold <0.65 untuk RAG injection — noise masuk ke prompt = worse responses
+- ❌ Jangan launch training run sebelum /v1/admin/stats menunjukkan ≥1000 unused_pairs — minimum dataset threshold
+- ❌ Jangan gunakan DPO untuk first training run — gunakan SimPO (noise-tolerant, no reference model, +6.4pts)
+- ❌ Jangan implementasi HyDE/query rewriting — CPU latency penalty terlalu besar pada 7B inference
 
 ---
 
@@ -367,17 +409,18 @@ Tidak ada blocker saat ini.
 
 | Metric | Value |
 |--------|-------|
-| API endpoints | 14 (5 auth + 4 agents + 3 chat + 3 conversations) |
+| API endpoints | 17 (5 auth + 4 agents + 3 chat + 3 conversations + 3 admin) |
 | DB tables | 20 (includes papers, kg_entities, preference_pairs untuk Week 3-4) |
 | Memory tier | Tier 1: Redis K-V ✅ | Tier 2: Qdrant (Day 12) | Tier 3: Letta blocks (Day 13) |
 | Test coverage | E2E: 14/14 endpoints + 10/10 safety gates |
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
 | External URL | https://api.migancore.com (Let's Encrypt SSL) |
 | RunPod budget | $0 spent of $50 allocated |
-| Git | VPS ↔ GitHub ↔ Local = SYNCED @ 4eaa610 |
+| Git | VPS ↔ GitHub ↔ Local = SYNCED @ fac8e9a |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
-| DPO pairs accumulated | 1+ (flywheel started Day 15 — target: 500+ by Week 4) |
+| DPO pairs accumulated | **3** real pairs (CAI pipeline working since Day 15 — target: 1000+ before training) |
+| Admin monitoring | /v1/admin/stats + /preference-pairs + /export (JSONL), Day 17 ✅ |
 | Episodic RAG | Qdrant retrieval wired, score=0.65, top-k=3, sort-by-relevance, Day 16 ✅ |
 
 ---
@@ -403,3 +446,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 14) | Claude Sonnet 4.6 | Knowledge auto-extraction: fact_extractor.py (0.5B model), wired in chat.py. v0.3.4. No DB migration. |
 | 2026-05-03 (Day 15) | Claude Sonnet 4.6 | Constitutional AI pipeline: cai_pipeline.py (7B judge, critique+revise), CONSTITUTION.md (10 principles), 3rd create_task in chat.py. DPO flywheel started. v0.3.5. No DB migration. |
 | 2026-05-03 (Day 16) | Claude Sonnet 4.6 | Episodic RAG retrieval: vector_retrieval.py (retrieve+format), wired sync in chat.py before run_director(), injected as last system prompt section. Score 0.65, top-k=3, sort by relevance. Research-backed (Mem0, LangMem, arxiv). v0.3.6. No DB migration. |
+| 2026-05-03 (Day 17) | Claude Sonnet 4.6 | Admin monitoring: routers/admin.py (stats+list+export JSONL), PreferencePair ORM, ADMIN_SECRET_KEY config. 3 real CAI pairs discovered. Training readiness assessment built-in. Research: SimPO>DPO for first run. v0.3.7. No DB migration. |
