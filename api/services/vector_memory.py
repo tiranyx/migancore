@@ -149,14 +149,23 @@ async def search_semantic(
     agent_id: str,
     query: str,
     top_k: int = TOP_K_EPISODIC,
+    score_threshold: float = SCORE_THRESHOLD,
 ) -> list[dict]:
     """Search agent episodic memory by semantic similarity.
 
     Returns list of payloads (user_message, assistant_message, session_id,
-    turn_index, timestamp). Returns [] if Qdrant is unavailable or collection
-    doesn't exist yet — callers should fall back to Redis K-V.
+    turn_index, timestamp, _retrieval_score). Returns [] if Qdrant is
+    unavailable or collection doesn't exist yet.
 
-    Score threshold 0.55 filters noise below meaningful semantic similarity.
+    Args:
+        score_threshold: Minimum cosine similarity score. Default 0.55 for
+            tool_executor use. Callers like vector_retrieval use 0.65 for
+            stricter filtering (research: 0.70 English → 0.65 Bahasa Indonesia
+            due to 5-8% lower cross-lingual scores on multilingual MPNet).
+
+    Results include '_retrieval_score' key so callers can sort by relevance.
+    Qdrant already returns results sorted by score desc, but explicit key
+    enables caller-side re-sorting if combining multiple sources.
     """
     try:
         client = await _get_client()
@@ -168,10 +177,16 @@ async def search_semantic(
             collection_name=col_name,
             query_vector=vector,
             limit=top_k,
-            score_threshold=SCORE_THRESHOLD,
+            score_threshold=score_threshold,
             with_payload=True,
         )
-        return [r.payload for r in results]
+        # Inject retrieval score into payload — enables caller-side sorting
+        payloads = []
+        for r in results:
+            payload = dict(r.payload)
+            payload["_retrieval_score"] = round(r.score, 4)
+            payloads.append(payload)
+        return payloads
     except Exception as exc:
         logger.warning("qdrant.search_failed", agent=agent_id, error=str(exc))
         return []

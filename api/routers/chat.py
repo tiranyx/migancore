@@ -39,6 +39,7 @@ from services.tool_policy import load_tool_policies
 from services.cai_pipeline import run_cai_pipeline
 from services.fact_extractor import maybe_update_knowledge_block
 from services.vector_memory import index_turn_pair
+from services.vector_retrieval import retrieve_episodic_context, format_episodic_context
 
 
 async def _check_tenant_message_quota(db: AsyncSession, tenant: Tenant) -> None:
@@ -130,7 +131,13 @@ async def chat(
     # Day 13: Fetch Letta Tier 3 persona blocks (graceful degradation: {} if unavailable)
     letta_blocks = await get_letta_blocks(agent.letta_agent_id) if agent.letta_agent_id else {}
 
-    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks)
+    # Day 16: Retrieve semantically relevant past turns from Qdrant episodic memory.
+    # Synchronous (needed before prompt build), timeout-guarded (1.5s → [] on failure).
+    # Returns [] on first chat (collection empty) or Qdrant unavailable — safe default.
+    episodic_results = await retrieve_episodic_context(agent_id=agent_id, query=data.message)
+    episodic_context = format_episodic_context(episodic_results)
+
+    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks, episodic_context)
 
     conversation, history = await _get_or_create_conversation(
         db, data, agent, current_user
@@ -449,6 +456,7 @@ def _build_system_prompt(
     agent_cfg: dict | None,
     memory_summary_text: str,
     letta_blocks: dict | None = None,
+    episodic_context: str = "",
 ) -> str:
     """Construct system prompt: Letta blocks (Tier 3) > SOUL.md (Tier 0) + memory.
 
@@ -456,6 +464,17 @@ def _build_system_prompt(
     identity foundation — the Letta block is the evolved, persistent version.
     mission and knowledge blocks are injected as additional context sections.
     Falls back to soul_text + overrides if Letta is unavailable.
+
+    Day 16: episodic_context (Qdrant semantic retrieval) injected LAST — closest
+    to the user message = highest attention weight for 7B models. Sorted by
+    relevance (not recency) to exploit primacy attention bias.
+
+    System prompt injection order:
+      1. Persona (Letta Tier 3 or SOUL.md Tier 0)
+      2. Mission (Letta)
+      3. Knowledge (Letta, learned facts)
+      4. Memory summary (Redis Tier 1, K-V facts)
+      5. Episodic context (Qdrant Tier 2, semantically relevant past turns) ← Day 16
     """
     blocks = letta_blocks or {}
 
@@ -489,6 +508,11 @@ def _build_system_prompt(
     # Tier 1: Redis memory summary (recent K-V facts)
     if memory_summary_text:
         parts.append(f"\n{memory_summary_text}")
+
+    # Day 16: Tier 2 Qdrant episodic context — injected LAST for maximum attention
+    # Empty string = no-op (first chat, Qdrant unavailable, or no relevant turns found)
+    if episodic_context:
+        parts.append(f"\n{episodic_context}")
 
     return "\n".join(parts)
 

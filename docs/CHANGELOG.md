@@ -6,6 +6,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.6] — 2026-05-03 (Day 16)
+
+### Added
+- **Episodic Context Retrieval** (`services/vector_retrieval.py`) — NEW FILE
+  - `retrieve_episodic_context()` — async retrieval from Qdrant with 1.5s timeout guard
+  - `format_episodic_context()` — formats retrieved turns as numbered list, sorted by relevance
+  - Score threshold: 0.65 (stricter than index 0.55; research: 0.70 English → 0.65 Bahasa Indonesia)
+  - Top-k search=5, inject=3 — research: >3 chunks confuses 7B models (Mem0 production, 2025)
+  - Sort by relevance descending (NOT recency) — prevents "lost in the middle" degradation
+- **Qdrant retrieval wired in chat** (`routers/chat.py`)
+  - `retrieve_episodic_context()` called synchronously before `run_director()`
+  - `format_episodic_context()` result passed to `_build_system_prompt()`
+  - Injected as last section in system prompt (highest attention weight for 7B)
+- **`_build_system_prompt()` extended** (`routers/chat.py`)
+  - New `episodic_context: str = ""` parameter — backward compatible, empty = no-op
+  - Injection order: Persona → Mission → Knowledge → Redis → Qdrant Episodic (Day 16)
+- **Score exposed in search results** (`services/vector_memory.py`)
+  - `search_semantic()` now accepts `score_threshold` parameter (default: existing 0.55)
+  - `_retrieval_score` key added to returned payloads — enables caller-side sorting
+
+### Research Notes (docs/DAY16_RAG_RESEARCH.md)
+- Mem0 (arxiv 2504.19413): top-k=3 for 7B models; top-k=10+ overwhelms model
+- Lost in the Middle (arxiv 2505.15561): sort by relevance, NOT recency — 30% accuracy drop if recency-sorted
+- Zep/LangMem production: score threshold 0.70 English → 0.65 multilingual Bahasa Indonesia
+- CRAG/Self-RAG: NOT practical for CPU-only 7B without fine-tuning — skipped
+- Format: numbered [N] list with role-per-line outperforms chain-of-thought for 7B
+- Separate recency vs relevance: message history (last 5) handles recency; Qdrant handles relevance
+
+### Changed
+- Version bumped: `0.3.5` → `0.3.6`
+
+---
+
 ## [0.3.5] — 2026-05-03 (Day 15)
 
 ### Added

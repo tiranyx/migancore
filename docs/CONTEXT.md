@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 15 — Constitutional AI Pipeline)
-**API Version:** 0.3.5
-**Git Commit:** `3a256f4`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 16 — Episodic RAG Retrieval)
+**API Version:** 0.3.6
+**Git Commit:** `TBD`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 15 (COMPLETE) → Day 16 (NEXT) |
-| API Version | 0.3.5 |
-| Git Commit | `3a256f4` (chore: remove diagnostic logs — final clean state) |
+| Sprint Day | Day 16 (COMPLETE) → Day 17 (NEXT) |
+| API Version | 0.3.6 |
+| Git Commit | `TBD` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -93,6 +93,19 @@
 - ✅ Letta container: `ado-letta-1`, port 8283 internal, `letta_db` fully migrated
 - ✅ E2E verified: 3 blocks created, `letta_agent_id` persisted, logs confirmed
 
+### Episodic Context Retrieval — Qdrant RAG (Day 16, Claude)
+- ✅ `services/vector_retrieval.py` — semantic retrieval + formatter, NEW FILE
+  - `retrieve_episodic_context()` — asyncio.wait_for(1.5s), graceful [] on failure
+  - `format_episodic_context()` — numbered list [N], sorted by relevance desc, 150/200 char truncation
+  - Score threshold: 0.65 (stricter than index 0.55; Bahasa Indonesia multilingual calibration)
+  - Top-k search=5 → inject TOP_K_INJECT=3 (research: >3 confuses 7B models)
+- ✅ `routers/chat.py` — Qdrant retrieval wired synchronously BEFORE run_director()
+  - `episodic_context` injected as LAST section of system prompt (max attention weight)
+  - `_build_system_prompt()` extended: `episodic_context: str = ""` parameter (backward-compat)
+- ✅ `services/vector_memory.py` — `search_semantic()` upgraded
+  - New `score_threshold` parameter (default: 0.55, overridable)
+  - `_retrieval_score` key added to payloads for caller-side sorting
+
 ### Constitutional AI Pipeline — Preference Data (Day 15, Claude)
 - ✅ `services/cai_pipeline.py` — Constitutional AI critique-revise, fire-and-forget
   - `run_cai_pipeline()` — entry point, 50% sampling gate (`CAI_SAMPLE_RATE=0.5`)
@@ -166,6 +179,24 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 16 — Episodic RAG Retrieval (COMPLETE)
+**Git Commit:** `TBD` | **Deployed:** 2026-05-03 | **Version:** 0.3.6
+
+**Delivered:**
+- ✅ `services/vector_retrieval.py` — retrieve_episodic_context() + format_episodic_context()
+- ✅ `routers/chat.py` — synchronous Qdrant retrieval before run_director(), injected last in system prompt
+- ✅ `services/vector_memory.py` — score_threshold param + _retrieval_score in payload
+
+**Architecture decisions locked:**
+- Score threshold 0.65 (not 0.55) — research shows 0.65 is optimal for Bahasa Indonesia on multilingual MPNet
+- Top-k: search=5, inject=3 — Mem0 production finding: >3 chunks confuses 7B models
+- Sort by relevance (not recency) — "lost in the middle" research: recency-sorted degrades 30%
+- Synchronous (not background) — retrieval result needed BEFORE Ollama inference
+- Inject LAST in system prompt — primacy attention bias exploitation for 7B models
+- Separate recency vs relevance concerns: history=last 5 turns, Qdrant=semantic match
+
+---
 
 ### ✅ Day 15 — Constitutional AI Pipeline (COMPLETE)
 **Git Commit:** `TBD` | **Deployed:** 2026-05-03 | **Version:** 0.3.5
@@ -304,6 +335,9 @@ Tidak ada blocker saat ini.
 - ❌ Jangan pakai 0.5B sebagai CAI judge — fails on Chat Hard tasks (research: <50% accuracy)
 - ❌ Jangan block HTTP response untuk critique/revise — adds 30-60s latency; always fire-and-forget
 - ❌ Jangan store ALL preference pairs tanpa quality filter — DPO degrades dengan noisy data
+- ❌ Jangan sort episodic retrieval by timestamp — sort by relevance score; recency-sort degrades accuracy 30%
+- ❌ Jangan inject >3 episodic chunks — 7B model overwhelmed; use TOP_K_INJECT=3
+- ❌ Jangan gunakan score_threshold <0.65 untuk RAG injection — noise masuk ke prompt = worse responses
 
 ---
 
@@ -341,7 +375,8 @@ Tidak ada blocker saat ini.
 | Git | VPS ↔ GitHub ↔ Local = SYNCED @ TBD |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
-| DPO pairs accumulated | 0 (flywheel starts Day 15 — target: 500+ by Week 4) |
+| DPO pairs accumulated | 1+ (flywheel started Day 15 — target: 500+ by Week 4) |
+| Episodic RAG | Qdrant retrieval wired, score=0.65, top-k=3, sort-by-relevance, Day 16 ✅ |
 
 ---
 
@@ -365,3 +400,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 13) | Claude Sonnet 4.6 | Letta Tier 3: fact_extractor.py, persona blocks, 3-block architecture, E2E verified. v0.3.3. |
 | 2026-05-03 (Day 14) | Claude Sonnet 4.6 | Knowledge auto-extraction: fact_extractor.py (0.5B model), wired in chat.py. v0.3.4. No DB migration. |
 | 2026-05-03 (Day 15) | Claude Sonnet 4.6 | Constitutional AI pipeline: cai_pipeline.py (7B judge, critique+revise), CONSTITUTION.md (10 principles), 3rd create_task in chat.py. DPO flywheel started. v0.3.5. No DB migration. |
+| 2026-05-03 (Day 16) | Claude Sonnet 4.6 | Episodic RAG retrieval: vector_retrieval.py (retrieve+format), wired sync in chat.py before run_director(), injected as last system prompt section. Score 0.65, top-k=3, sort by relevance. Research-backed (Mem0, LangMem, arxiv). v0.3.6. No DB migration. |
