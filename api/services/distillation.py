@@ -154,17 +154,26 @@ async def _judge_pair(
 # Generate single pair
 # ---------------------------------------------------------------------------
 async def _generate_student_response(prompt: str) -> str:
-    """Run prompt through MiganCore-7B (the student)."""
+    """Run prompt through MiganCore-7B (the student).
+
+    Reduced num_predict to 250 (from 600) — distillation only needs a
+    REPRESENTATIVE student response, not exhaustive. Faster on CPU VPS,
+    avoids 90s Ollama timeout. Long student responses also bias judge toward
+    teacher (length-bias) — shorter student keeps comparisons fair.
+    """
+    import httpx
     system = _build_teacher_system_prompt()
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
-    async with OllamaClient() as client:
+    # Use longer read timeout (200s) for distillation — CPU VPS sometimes 60-150s
+    long_timeout = httpx.Timeout(200.0, connect=5.0, read=200.0)
+    async with OllamaClient(timeout=long_timeout) as client:
         resp = await client.chat(
             model=settings.DEFAULT_MODEL,
             messages=messages,
-            options={"num_predict": 600, "temperature": 0.7, "num_ctx": 4096},
+            options={"num_predict": 250, "temperature": 0.7, "num_ctx": 4096},
         )
     return resp.get("message", {}).get("content", "")
 
