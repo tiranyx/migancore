@@ -26,12 +26,19 @@ import random
 import uuid
 from datetime import datetime, timezone
 
+import httpx
 import structlog
 from sqlalchemy import text
 
 from config import settings
 from models.base import AsyncSessionLocal
 from services.ollama import OllamaClient, OllamaError
+
+# CAI calls need longer total timeout than the default 60s.
+# Critique: ~400 tokens at 10 tok/s ≈ 40–60s
+# Revision: ~800 tokens at 10 tok/s ≈ 80–130s
+# Use 5-minute total to be safe on CPU-only VPS.
+_CAI_TIMEOUT = httpx.Timeout(300.0, connect=5.0, read=30.0)
 
 logger = structlog.get_logger()
 
@@ -88,7 +95,7 @@ async def _critique(user_message: str, assistant_response: str) -> dict | None:
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        async with OllamaClient() as client:
+        async with OllamaClient(timeout=_CAI_TIMEOUT) as client:
             data = await client.chat(
                 model=JUDGE_MODEL,
                 messages=messages,
@@ -148,7 +155,7 @@ async def _revise(
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        async with OllamaClient() as client:
+        async with OllamaClient(timeout=_CAI_TIMEOUT) as client:
             data = await client.chat(
                 model=JUDGE_MODEL,
                 messages=messages,
