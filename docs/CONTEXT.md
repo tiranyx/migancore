@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 13 — Letta Tier 3)
-**API Version:** 0.3.3
-**Git Commit:** `df47884`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 14 — Knowledge Auto-Extraction)
+**API Version:** 0.3.4
+**Git Commit:** `TBD — commit after this update`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 13 (COMPLETE) → Day 14 (NEXT) |
-| API Version | 0.3.3 |
-| Git Commit | `df47884` (VPS + GitHub + Local = SYNCED) |
+| Sprint Day | Day 14 (COMPLETE) → Day 15 (NEXT) |
+| API Version | 0.3.4 |
+| Git Commit | `TBD — see SPRINT_LOG.md` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -93,6 +93,17 @@
 - ✅ Letta container: `ado-letta-1`, port 8283 internal, `letta_db` fully migrated
 - ✅ E2E verified: 3 blocks created, `letta_agent_id` persisted, logs confirmed
 
+### Knowledge Block Auto-Extraction (Day 14, Claude)
+- ✅ `services/fact_extractor.py` — Ollama 0.5B fact extraction, fire-and-forget
+  - `extract_facts()` — structured extraction prompt, output validation (bullet lines only)
+  - `maybe_update_knowledge_block()` — appends date-sectioned facts to Letta knowledge block
+  - `_trim_knowledge_if_needed()` — FIFO section trim at 3600-char threshold
+  - Format: `[YYYY-MM-DD]\n- fact1\n- fact2` — date-sectioned, LLM-readable
+  - Dedup: shows last 500 chars of existing knowledge to avoid re-extraction
+- ✅ `routers/chat.py` — knowledge extraction wired as second `asyncio.create_task` after chat commit
+  - Only fires when `agent.letta_agent_id` is set
+  - Zero latency impact — fully fire-and-forget
+
 ### Memory Service (Day 7, Claude)
 - ✅ `services/memory.py` — Redis K-V Tier 1
   - Key pattern: `mem:{tenant_id}:{agent_id}:{namespace}:{key}`, 30d TTL
@@ -142,6 +153,21 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 14 — Knowledge Block Auto-Extraction (COMPLETE)
+**Git Commit:** `TBD` | **Deployed:** 2026-05-03 | **Version:** 0.3.4
+
+**Delivered:**
+- ✅ `services/fact_extractor.py` — Qwen2.5-0.5B extraction, date-sectioned format, FIFO trim
+- ✅ `routers/chat.py` — fire-and-forget `asyncio.create_task(maybe_update_knowledge_block(...))`
+
+**Architecture decisions locked:**
+- EXTRACT_MODEL = `qwen2.5:0.5b` (not 7B) — avoids CPU resource contention, extraction is simple structured task
+- Scope: sync chat ONLY — stream endpoint deferred (assistant message persists async there)
+- knowledge block ONLY — persona and mission remain manually managed
+- FIFO trim threshold: 3600 chars → section pop → hard cap at 4000
+
+---
 
 ### ✅ Day 13 — Letta Tier 3 Persona Memory (COMPLETE)
 **Git Commit:** `df47884` | **Deployed:** 2026-05-03 06:58 UTC | **Version:** 0.3.3
@@ -215,6 +241,8 @@ Tidak ada blocker saat ini.
 |----------|--------|--------|
 | Celery | DISABLED | RAM terlalu mahal untuk seed stage. asyncio.create_task cukup. |
 | Letta | PASSIVE STORAGE ONLY | Qwen2.5-7B Q4 tidak support Letta tool calls. Use blocks API only. |
+| Knowledge extraction | Qwen2.5-0.5B | Fast, low RAM, structured output task — no need for 7B |
+| Knowledge scope | Sync chat only | Stream endpoint: async persist pattern makes nested task complex. Defer. |
 | Langfuse | DEFERRED (Week 3) | Belum ada yang perlu diobservasi. structlog sudah cukup. |
 | Memory Tier 1 | Redis K-V | Fast, simple, TTL built-in |
 | Memory Tier 2 | Qdrant + fastembed (Day 12) | Semantic similarity, multilingual |
@@ -274,7 +302,8 @@ Tidak ada blocker saat ini.
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
 | External URL | https://api.migancore.com (Let's Encrypt SSL) |
 | RunPod budget | $0 spent of $50 allocated |
-| Git | VPS ↔ GitHub ↔ Local = SYNCED @ c8a066b |
+| Git | VPS ↔ GitHub ↔ Local = SYNCED @ TBD |
+| Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 
 ---
 
@@ -294,4 +323,6 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 7-9) | Kimi Code CLI | Audit + fix Day 7-9, wire director.py, deploy v0.3.0, E2E all pass |
 | 2026-05-03 (Day 10) | Kimi Code CLI | Schema sync, agent spawning endpoint, v0.3.1, E2E all pass |
 | 2026-05-03 (Day 11) | Kimi Code CLI | Safety gates: tool policy 6-class, max_agents, spawn depth, persona lock, REPL blacklist, tenant quota, Redis rate limiter. v0.3.2. E2E 10/10 |
-| 2026-05-03 (Day 12) | Claude Sonnet 4.6 | Full audit + handoff: sync all repos (VPS↔GitHub↔local @ c8a066b), fix version 0.3.0→0.3.2, setup api.migancore.com HTTPS (Let's Encrypt). CONTEXT.md updated. Ready for Qdrant RAG. |
+| 2026-05-03 (Day 12) | Claude Sonnet 4.6 | Full audit + handoff: sync all repos, fix version, setup HTTPS. Ready for Qdrant RAG. |
+| 2026-05-03 (Day 13) | Claude Sonnet 4.6 | Letta Tier 3: fact_extractor.py, persona blocks, 3-block architecture, E2E verified. v0.3.3. |
+| 2026-05-03 (Day 14) | Claude Sonnet 4.6 | Knowledge auto-extraction: fact_extractor.py (0.5B model), wired in chat.py. v0.3.4. No DB migration. |

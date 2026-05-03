@@ -239,6 +239,57 @@
 
 ---
 
+### Day 14 — Knowledge Block Auto-Extraction
+**Agent:** Claude Sonnet 4.6
+**Scope:** Self-evolving memory — knowledge block grows from real conversations
+
+**Pre-Implementation Research (documented in DAY14_KNOWLEDGE_EXTRACTION_RESEARCH.md):**
+- Gap identified: Day 13 created knowledge block but it stayed as placeholder forever
+- Model selection: Qwen2.5-0.5B (already on Ollama) for extraction — fast, low RAM, no resource contention with 7B chat model
+- Format decision: date-sectioned bullet points `[YYYY-MM-DD]\n- fact` — FIFO-trimmable, LLM-parseable
+- Dedup strategy: show last 500 chars of existing knowledge to LLM — LLM-based natural dedup
+- Trim strategy: `re.split(r'\n\n(?=\[)', ...)` → FIFO section pop when exceeding 3600 chars
+- Qdrant vs Letta knowledge: complementary — Qdrant = episodic turns, Letta = semantic user profile
+- Risk analysis: 0.5B output validation (bullet line filter + TIDAK ADA detection), no loop risk, no latency risk
+
+**New Files:**
+- `services/fact_extractor.py`
+  - `EXTRACT_MODEL = "qwen2.5:0.5b"` — fast extraction model
+  - `extract_facts(user_message, assistant_response, existing_knowledge) -> str | None`
+    - Calls 0.5B with structured extraction prompt in Bahasa Indonesia
+    - Validates output: only keeps lines starting with `- `
+    - Returns None if output contains "TIDAK ADA" or is too short
+  - `maybe_update_knowledge_block(letta_agent_id, user_message, assistant_response, letta_blocks) -> None`
+    - Fire-and-forget wrapper, never raises
+    - Appends date-sectioned facts to existing knowledge block
+  - `_trim_knowledge_if_needed(current, new_section) -> str`
+    - FIFO trimming via regex split on `\n\n(?=\[)` section boundaries
+    - Threshold: 3600 chars (leaves 400 char buffer)
+    - Hard cap: `[:KNOWLEDGE_LIMIT]` (4000 chars)
+
+**Modified Files:**
+- `routers/chat.py`
+  - Added import: `from services.fact_extractor import maybe_update_knowledge_block`
+  - After `asyncio.create_task(index_turn_pair(...))`, adds:
+    ```python
+    if agent.letta_agent_id:
+        asyncio.create_task(maybe_update_knowledge_block(...))
+    ```
+  - Only sync chat endpoint (stream endpoint: future scope)
+- `main.py` — version `0.3.2` → `0.3.4`
+
+**Architecture locked:**
+- 0.5B for extraction (not 7B) — avoids CPU resource contention
+- knowledge block ONLY (not persona/mission auto-update)
+- Sync chat endpoint ONLY — stream endpoint deferred
+- NEVER blocks HTTP response
+
+**Version:** 0.3.3 → 0.3.4 (no DB migration required)
+
+**Deliverables:** Knowledge block auto-extraction — agents learn facts about users from every conversation turn
+
+---
+
 ### Day 13 — Letta Tier 3 Persistent Persona Memory
 **Agent:** Claude Sonnet 4.6
 **Scope:** Persona persistence — agent identity survives across sessions via Letta block storage

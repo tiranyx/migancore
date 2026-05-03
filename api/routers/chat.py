@@ -31,6 +31,7 @@ from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
 from services.tool_executor import ToolContext, build_ollama_tools_spec
 from services.tool_policy import load_tool_policies
+from services.fact_extractor import maybe_update_knowledge_block
 from services.vector_memory import index_turn_pair
 
 
@@ -199,6 +200,17 @@ async def chat(
             turn_index=conversation.message_count,
         )
     )
+
+    # Day 14: Background knowledge extraction — updates Letta knowledge block with new facts
+    if agent.letta_agent_id:
+        asyncio.create_task(
+            maybe_update_knowledge_block(
+                letta_agent_id=agent.letta_agent_id,
+                user_message=data.message,
+                assistant_response=assistant_content,
+                letta_blocks=letta_blocks,
+            )
+        )
 
     logger.info(
         "chat.response",

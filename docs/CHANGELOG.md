@@ -6,6 +6,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.4] — 2026-05-03 (Day 14)
+
+### Added
+- **Fact Extractor Service** (`services/fact_extractor.py`) — NEW FILE
+  - `extract_facts()` — calls Qwen2.5-0.5B to extract new user facts from a conversation turn
+  - `maybe_update_knowledge_block()` — fire-and-forget wrapper; appends extracted facts to Letta knowledge block
+  - `_trim_knowledge_if_needed()` — FIFO section trimming when approaching 4000-char limit
+  - Date-sectioned format: `[YYYY-MM-DD]\n- fact1\n- fact2` — human and LLM readable
+  - LLM-based deduplication: shows last 500 chars of existing knowledge to avoid re-extraction
+  - `EXTRACT_MODEL = "qwen2.5:0.5b"` — fast, low RAM, no resource contention with 7B chat model
+- **Knowledge Extraction Wired in Chat** (`routers/chat.py`)
+  - After `index_turn_pair` background task, adds `maybe_update_knowledge_block` as second create_task
+  - Only fires when `agent.letta_agent_id` is set (no Letta = no-op)
+  - Zero latency impact on HTTP response — fully fire-and-forget
+
+### Changed
+- Version bumped: `0.3.2` → `0.3.4` in `main.py` (skipped 0.3.3 tag, now matching Day 13 docs)
+
+### Research Notes (docs/DAY14_KNOWLEDGE_EXTRACTION_RESEARCH.md)
+- Decision rationale: 0.5B vs 7B for extraction, date-sectioned format, FIFO trim strategy
+- Complementary to Qdrant Tier 2: Qdrant = episodic turns, Letta knowledge = semantic user profile
+- Scope-out rationale: stream endpoint, mission auto-update, persona evolution deferred
+
+---
+
 ## [0.3.3] — 2026-05-03 (Day 13)
 
 ### Added
