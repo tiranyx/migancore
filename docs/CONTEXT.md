@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 22 — Chat UI + app.migancore.com)
-**API Version:** 0.4.1
-**Git Commit:** `a8538d5`
+**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 25 — Sprint Fixes: SSE heartbeat + Day 24 tool E2E PASS)
+**API Version:** 0.4.3
+**Git Commit:** `22e7d85`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -15,10 +15,12 @@
 
 | Field | Value |
 |-------|-------|
-| Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 22 (COMPLETE) → Day 23/24 (NEXT) |
-| API Version | 0.4.1 |
-| Git Commit | `a8538d5` |
+| Phase | Week 3 — Tool Expansion + Production Hardening |
+| Sprint Day | Day 25 (COMPLETE) → Day 26 (MCP Server NEXT) |
+| API Version | 0.4.3 |
+| Git Commit | `22e7d85` |
+| Tool Catalog | 9 tools live: web_search, python_repl, memory_*, spawn_agent, http_get, **generate_image** (fal.ai), **read_file**, **write_file** (sandboxed) |
+| External APIs | fal.ai $10 funded ($0.006 used) · ElevenLabs/Firecrawl pending |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (API) · **https://app.migancore.com** (Chat UI) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |

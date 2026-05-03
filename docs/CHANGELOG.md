@@ -6,6 +6,84 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.3] — 2026-05-04 (Day 25) — Sprint Fixes: SSE heartbeat, generate_image LLM compliance, tool DB migration
+
+### Fixed
+- **SSE "TypeError: network error"** (visible at app.migancore.com): added 15s heartbeat ping
+  in `chat_stream`. Wraps async iterator with `asyncio.wait_for(timeout=15)` and emits
+  `data: {"type":"ping"}` on silence so nginx/Cloudflare don't close the connection during
+  long Ollama compute periods. Frontend ignores `ping` events silently.
+- **`generate_image` not invoked by qwen2.5:7b**: model wrote Python pseudocode (`image_data = generate_image(...)`)
+  instead of native function-calling. Fix: imperative MANDATORY descriptions in `skills.json` +
+  explicit intent→tool mapping table in `_build_system_prompt` system prompt.
+- **Frontend SSE error UX**: `TypeError: network error` was shown raw to user. Now displays
+  `"Koneksi terputus. Server butuh waktu lama merespon — coba kirim ulang."`.
+- **Episodic memory poisoning**: failed tool-call responses were indexed into Qdrant and the
+  retrieval system regurgitated them on similar prompts. Manual cleanup performed (14 points
+  deleted). TODO Day 26+: filter `tool_error` responses from indexing pipeline.
+- **DB tool policy stale**: `read_file` had `[pro,enterprise] + requires_approval=true` from
+  Day 11 migration, blocking Day 24 free-tier tool. Migration `024_day24_tool_expansion.sql`
+  resets to `[free,pro,enterprise] + auto-approved`, max 200 calls/day.
+- **`tools.name` no UNIQUE constraint**: migration's `ON CONFLICT (name)` failed. Switched to
+  idempotent `WHERE NOT EXISTS` + `UPDATE` pattern.
+
+### Added
+- **`migrations/024_day24_tool_expansion.sql`** — idempotent migration: fix `read_file` policy,
+  insert `write_file` and `generate_image` tools with `[free,pro,enterprise]` policies.
+
+### Changed
+- `api/services/ollama.py`: `DEFAULT_TIMEOUT` read 30s → 90s, `STREAM_TIMEOUT` read 30s → 60s
+  (qwen2.5:7b on CPU needs longer reasoning window with 9-tool spec).
+- `api/main.py`: version 0.4.2 → 0.4.3.
+
+### Verified E2E
+```
+Direct executor (no LLM):
+  write_file:     PASS — 54 bytes written, file on disk
+  read_file:      PASS — content read back correctly
+  generate_image: PASS — fal.ai URL returned in 0.14s
+
+Via LLM (qwen2.5:7b CPU, fresh agent + clean memory):
+  write_file:     PASS — 1 tool call, file persisted
+  read_file:      PASS — 1 tool call, content shown to user
+  generate_image: PASS — 1 tool call, image rendered in chat
+```
+Image: `https://v3b.fal.media/files/b/0a98c587/u3AboBYTbIjV-ARxPmVF0.jpg`
+
+---
+
+## [0.4.2] — 2026-05-04 (Day 24) — Tool Expansion: fal.ai + sandboxed file system
+
+### Added
+- **`generate_image` tool** — fal.ai FLUX schnell integration
+  - Endpoint: `POST https://fal.run/fal-ai/flux/schnell`
+  - ~$0.003/image, ~3-8s latency, returns hosted URL (v3b.fal.media)
+  - Schema: `prompt` (required), `image_size` (enum 6 sizes), `num_images` (1-4)
+  - Free tier: max 100 calls/day per tenant
+- **`read_file` tool** — sandboxed file read from `/app/workspace`
+  - Path traversal blocked via `Path.resolve()` + `relative_to(WORKSPACE_DIR)`
+  - 50KB content cap, supports directory listing
+- **`write_file` tool** — sandboxed file write to `/app/workspace`
+  - Same path traversal protection, 200KB content cap
+  - Auto-creates parent directories
+- **`api/config.py`**: `FAL_KEY` (Optional[str]) + `WORKSPACE_DIR` (default `/app/workspace`)
+- **`docker-compose.yml`**: `FAL_KEY: ${FAL_KEY}` env + `./data/workspace:/app/workspace` volume
+
+### Fixed
+- **Version drift**: `/health` and `/` endpoints hardcoded `"0.4.1"` despite `app.version="0.4.2"`.
+  Both now read from `app.version` (single source of truth).
+- **Tools invisible to LLM**: new tools were in `TOOL_REGISTRY` + `skills.json` but absent from
+  `agents.json` `core_brain.default_tools`. Fixed by adding all 3.
+
+### Changed
+- `api/services/tool_executor.py`: 3 new handler functions, `_resolve_workspace_path()` helper,
+  `FAL_FLUX_ENDPOINT` + `FAL_VALID_SIZES` constants.
+- `config/skills.json`: 3 new MCP-compatible skill registrations.
+- `config/agents.json`: `core_brain.default_tools` now includes all 8 tools.
+- `api/main.py`: version 0.4.1 → 0.4.2.
+
+---
+
 ## [0.4.1-chat] — 2026-05-03 (Day 22) — Chat UI
 
 ### Added

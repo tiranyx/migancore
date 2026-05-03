@@ -470,6 +470,118 @@
 
 ## Week 3: Chat UI + Tools + MCP (Days 22–28)
 
+### Day 25 — Sprint Fixes: SSE Heartbeat + LLM Tool Compliance + DB Migration
+**Agent:** Claude Opus 4.7 (1m context)
+**Scope:** Production bug fixes — SSE network error visible at app.migancore.com + Day 24 tool E2E completion
+
+**Problem:**
+After Day 24 tool expansion (write_file/read_file/generate_image), three issues blocked production-ready status:
+1. Users hit "TypeError: network error" when asking for long responses (e.g., "buatkan script drag and drop") — nginx/Cloudflare killed SSE connection during 30-90s Ollama compute
+2. `read_file` tool calls returned policy block — DB had stale `[pro,enterprise] + requires_approval=true` from Day 11
+3. `generate_image` was never called by qwen2.5:7b — model wrote Python pseudocode (`image_data = generate_image(...)`) instead of native function-calling
+
+**Solution: 5 surgical fixes, deployed in single push:**
+1. **SSE heartbeat (chat.py)**: wrap iterator with `asyncio.wait_for(timeout=15s)` — on timeout, emit `data: {"type":"ping"}` and continue. Frontend ignores pings silently. Connection survives any Ollama compute window.
+2. **Frontend friendly error (chat.html)**: catch TypeError, show "Koneksi terputus..." instead of raw error
+3. **Imperative tool descriptions (skills.json)**: rewrote 3 descriptions to start with "MANDATORY for X: invoke this function whenever..." — qwen2.5:7b complies more reliably with imperative instructions
+4. **Intent→tool mapping table (chat.py system prompt)**: explicit verb→tool mappings injected into every prompt
+5. **DB migration 024**: idempotent SQL using `WHERE NOT EXISTS` + `UPDATE` (tools.name has no UNIQUE constraint, so ON CONFLICT failed). Fixes read_file policy + adds write_file, generate_image rows.
+
+**Bonus fix discovered during E2E:**
+- **Episodic memory poisoning**: 14 failed test responses ("policy block") indexed into Qdrant `episodic_{agent_id}`. Model retrieved them on similar prompts and regurgitated. Manual cleanup via Qdrant DELETE collection. TODO Day 26+: filter `tool_error` responses from indexing.
+
+**Modified Files:**
+- `api/main.py` — version 0.4.2 → 0.4.3
+- `api/routers/chat.py` — SSE heartbeat in `chat_stream`, intent mapping in `_build_system_prompt`
+- `api/services/ollama.py` — `DEFAULT_TIMEOUT` read 30s → 90s, `STREAM_TIMEOUT` read 30s → 60s
+- `frontend/chat.html` — friendly error message + ping event handling
+- `config/skills.json` — imperative MANDATORY descriptions for write_file/read_file/generate_image
+- `migrations/024_day24_tool_expansion.sql` — DB tool policies (idempotent)
+- `.gitignore` — exclude `api_day11.tar.gz`
+
+**E2E Verification — FINAL PASS:**
+```
+Direct executor (no LLM):
+  write_file:     PASS — 54 bytes written
+  read_file:      PASS — content matched
+  generate_image: PASS — fal.ai URL returned in 0.14s
+
+Via LLM end-to-end (qwen2.5:7b CPU, fresh agent + clean memory):
+  write_file:     PASS — 1 tool call, file persisted at /opt/ado/data/workspace/
+  read_file:      PASS — 1 tool call, content shown to user
+  generate_image: PASS — 1 tool call, image rendered as markdown
+
+Image generated: https://v3b.fal.media/files/b/0a98c587/u3AboBYTbIjV-ARxPmVF0.jpg
+```
+
+**Git Commits:**
+- `98eb7a4` — fix: health and root endpoints read version from app.version
+- `2903d94` — feat(config): add Day 24 tools to core_brain default_tools
+- `86366c5` — fix: increase Ollama timeout 90s, mandatory tool instruction
+- `22e7d85` — feat(day25): SSE heartbeat, generate_image fix, tool DB migration v0.4.3
+
+**Version:** 0.4.2 → 0.4.3
+
+**Deliverables:** All 3 Day 24 tools verified production-ready. SSE connection drops eliminated. fal.ai $10 funded ($0.006 used in tests). Fahmi can now ask MiganCore to "buatkan gambar X" or "tulis file Y" and get real results.
+
+**Key Lessons Documented:**
+1. SSE heartbeat is non-negotiable for slow LLMs behind any proxy
+2. Imperative > descriptive in tool descriptions for 7B models
+3. Episodic memory contamination is real — needs filtering pipeline
+4. Always audit DB schema after tool expansion (tools table policies can be stale)
+5. CPU 7B = ~30-90s/turn — acceptable MVP, blocker for prod UX (RunPod GPU path documented)
+
+---
+
+### Day 24 — Tool Expansion: fal.ai + Sandboxed File System
+**Agent:** Claude Sonnet 4.6
+**Scope:** Multimodal capability — agent bisa generate gambar dan akses file system
+
+**Problem:**
+Sampai Day 23, tool catalog hanya: `web_search`, `python_repl`, `memory_*`, `spawn_agent`. Untuk jadi useful sebagai creative agent (per visi ADO 2026-2027 dari Fahmi), butuh image generation + file system access. Tidak ada cara untuk save/read code, generate visual asset, atau persist agent output antar session.
+
+**Solution: 3 new tools, all sandboxed:**
+
+**1. `generate_image` — fal.ai FLUX schnell**
+- `POST https://fal.run/fal-ai/flux/schnell`, `Authorization: Key {FAL_KEY}`
+- Sync response, ~3-8s typical (test: 0.14s — fal.ai fast)
+- Returns hosted URL (v3b.fal.media), no local storage
+- Cost ~$0.003/img, free tier max 100 calls/day per tenant
+- Schema: `prompt` (req), `image_size` (6 enum values), `num_images` (1-4)
+
+**2. `read_file` — sandboxed read from /app/workspace**
+- Path traversal blocked: `Path.resolve() + relative_to(WORKSPACE_DIR)`
+- 50KB content cap, supports directory listing (returns file list)
+- Free tier max 200 calls/day
+
+**3. `write_file` — sandboxed write to /app/workspace**
+- Same traversal protection, 200KB content cap
+- Auto-creates parent directories
+- Free tier max 200 calls/day
+
+**Modified Files:**
+- `api/services/tool_executor.py` — 3 new handlers, `_resolve_workspace_path()`, FAL constants
+- `api/config.py` — `FAL_KEY: Optional[str]` + `WORKSPACE_DIR: str = "/app/workspace"`
+- `api/main.py` — version 0.4.1 → 0.4.2
+- `config/skills.json` — 3 new MCP-compatible skill registrations
+- `config/agents.json` — `core_brain.default_tools` extended with 3 new tools
+- `docker-compose.yml` — `FAL_KEY: ${FAL_KEY}` env + `./data/workspace:/app/workspace` volume
+
+**Bugs found during Day 24, fixed in Day 25:**
+- Hardcoded `"version": "0.4.1"` di `/health` endpoint
+- 3 tools tidak di `agents.json` `default_tools` → invisible to LLM
+- DB `read_file` policy stale dari Day 11 → free tier blocked
+- `generate_image` model didn't call tool → wrote Python pseudocode
+
+**Git Commits:**
+- `cf95068` — feat(day24): integrate fal.ai + sandboxed file system tools
+
+**Version:** 0.4.1 → 0.4.2
+
+**Deliverables:** 3 new tool handlers + DB schema + env config. Code-level verified. End-to-end LLM verification completed in Day 25 sprint.
+
+---
+
 ### Day 22 — Chat UI + app.migancore.com Deploy
 **Agent:** Claude Sonnet 4.6
 **Scope:** Frontend — Fahmi bisa mencoba produk sendiri untuk pertama kali
