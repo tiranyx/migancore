@@ -47,7 +47,7 @@ services:
       test: ["CMD", "pg_isready", "-U", "ado"]
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:v1.12.0
     restart: unless-stopped
     volumes:
       - ./data/qdrant:/qdrant/storage
@@ -106,6 +106,7 @@ services:
     volumes:
       - /etc/ado/keys:/etc/ado/keys:ro
       - ./config:/app/config:ro
+      - fastembed_cache:/app/.cache/fastembed   # Persist model downloads across rebuilds
     depends_on: [postgres, qdrant, redis, ollama]
     deploy:
       resources:
@@ -160,6 +161,9 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - ./data/caddy:/data
       - ./config/caddy:/config
+
+volumes:
+  fastembed_cache:   # Persistent fastembed model cache (dense + sparse BM42 models)
 
 networks:
   default:

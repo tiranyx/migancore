@@ -91,9 +91,11 @@ async def lifespan(app: FastAPI):
     # 2. Eager-load JWT keys — fail fast if keys are missing
     from services.jwt import _get_keys
     _get_keys()
-    # 3. Pre-warm fastembed model — avoids 10-30s cold start on first chat
-    from services.embedding import get_model
+    # 3. Pre-warm dense fastembed model — avoids 10-30s cold start on first chat
+    from services.embedding import get_model, get_sparse_model
     await get_model()
+    # 4. Pre-warm BM42 sparse model — optional, degrades gracefully if unavailable
+    await get_sparse_model()
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
@@ -102,7 +104,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.3.7",
+    version="0.3.8",
     lifespan=lifespan,
 )
 
@@ -157,7 +159,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "migancore-api",
-        "version": "0.3.7",
+        "version": "0.3.8",
     }
 
 
@@ -190,7 +192,7 @@ async def root():
     """API root — returns service metadata."""
     return {
         "name": "MiganCore",
-        "version": "0.3.7",
+        "version": "0.3.8",
         "tagline": "Every vision deserves a digital organism.",
         "endpoints": {
             "health": "/health",
