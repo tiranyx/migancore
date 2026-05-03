@@ -60,6 +60,28 @@ def _build_mcp():
     # stateless_http=True → no session bookkeeping, every request is independent.
     # This simplifies ops but means no server-initiated sampling. Acceptable for
     # Day 26 (just exposing tools, not full bi-directional protocol).
+    # Transport security: explicit allowlist of Host headers + Origins.
+    # FastMCP defaults reject foreign hosts (DNS rebinding protection). For our
+    # production deployment behind nginx the Host header is api.migancore.com.
+    from mcp.server.transport_security import TransportSecuritySettings
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "127.0.0.1",
+            "localhost",
+            "127.0.0.1:18000",
+            "api.migancore.com",
+            "*.migancore.com",
+        ],
+        allowed_origins=[
+            "http://127.0.0.1",
+            "http://localhost",
+            "http://127.0.0.1:18000",
+            "https://api.migancore.com",
+            "https://app.migancore.com",
+        ],
+    )
+
     mcp = FastMCP(
         name="migancore",
         instructions=(
@@ -72,6 +94,7 @@ def _build_mcp():
         # Endpoint at the mount root — when mounted at /mcp, the JSON-RPC endpoint
         # is /mcp itself (NOT /mcp/mcp). Default is /mcp which would double-up.
         streamable_http_path="/",
+        transport_security=transport_security,
     )
 
     # ---------- TOOL CONTEXT EXTRACTION ----------
