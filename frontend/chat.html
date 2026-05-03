@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiganCore — Chat</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- React 18 + Babel -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* ===========================
+       DESIGN SYSTEM TOKENS
+    =========================== */
+    :root {
+      --bg-0: #07100e;
+      --bg-1: #0d1f1a;
+      --bg-2: #142920;
+      --orange: #ff8a24;
+      --orange-dim: rgba(255, 138, 36, 0.12);
+      --orange-border: rgba(255, 138, 36, 0.4);
+      --green: #2fe39a;
+      --green-dim: rgba(47, 227, 154, 0.10);
+      --green-border: rgba(47, 227, 154, 0.25);
+      --text: #e9f5ee;
+      --text-dim: #93b3a5;
+      --border: rgba(47, 227, 154, 0.15);
+      --mono: 'JetBrains Mono', monospace;
+      --display: 'Orbitron', sans-serif;
+      --sans: 'Inter', sans-serif;
+      --radius: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-0);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow: hidden;
+    }
+
+    /* ===========================
+       BOOT SEQUENCE
+    =========================== */
+    .boot-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-0);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      gap: 2rem;
+    }
+
+    .boot-logo {
+      font-family: var(--display);
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+      font-weight: 900;
+      color: var(--orange);
+      letter-spacing: 0.2em;
+    }
+
+    .boot-terminal {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      width: min(420px, 90vw);
+      padding: 1.25rem;
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .boot-line {
+      padding: 2px 0;
+      opacity: 0;
+      animation: fadeSlide 0.25s ease forwards;
+    }
+
+    .boot-line.ok { color: var(--green); }
+    .boot-line.dim { color: var(--text-dim); }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ===========================
+       LOGIN SCREEN
+    =========================== */
+    .auth-screen {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: var(--bg-0);
+    }
+
+    .auth-card {
+      width: min(420px, 100%);
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .auth-logo {
+      font-family: var(--display);
+      font-size: 1.2rem;
+      font-weight: 900;
+      color: var(--orange);
+      letter-spacing: 0.18em;
+      text-align: center;
+      margin-bottom: 0.3rem;
+    }
+
+    .auth-tagline {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-align: center;
+      letter-spacing: 0.1em;
+      margin-bottom: 1.75rem;
+    }
+
+    .tabs {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 0.6rem;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      background: var(--orange-dim);
+      color: var(--orange);
+    }
+
+    .form-group { margin-bottom: 0.9rem; }
+
+    .form-label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.35rem;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 0.6rem 0.875rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus { border-color: var(--orange); }
+    .form-input::placeholder { color: var(--text-dim); }
+
+    .btn-primary {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--orange);
+      border: none;
+      border-radius: var(--radius);
+      color: #000;
+      font-family: var(--display);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #ff9c40;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .form-error {
+      padding: 0.6rem 0.875rem;
+      background: rgba(255, 68, 68, 0.1);
+      border: 1px solid rgba(255, 68, 68, 0.3);
+      border-radius: 6px;
+      font-size: 0.78rem;
+      color: #ff6b6b;
+      margin-bottom: 1rem;
+    }
+
+    /* ===========================
+       APP LAYOUT
+    =========================== */
+    .app {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ===========================
+       SIDEBAR
+    =========================== */
+    .sidebar {
+      width: 256px;
+      background: var(--bg-1);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      padding: 1.25rem 0.875rem;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding-bottom: 1.25rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-name {
+      font-family: var(--display);
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--orange);
+      letter-spacing: 0.12em;
+    }
+
+    .btn-new {
+      width: 100%;
+      padding: 0.6rem 0.875rem;
+      background: var(--orange-dim);
+      border: 1px solid var(--orange-border);
+      border-radius: 6px;
+      color: var(--orange);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all 0.2s;
+      text-align: left;
+      margin-bottom: 1rem;
+    }
+
+    .btn-new:hover { background: rgba(255, 138, 36, 0.22); }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .conv-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 1rem;
+    }
+
+    .conv-item {
+      padding: 0.55rem 0.75rem;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.15s;
+    }
+
+    .conv-item:hover, .conv-item.active {
+      background: var(--green-dim);
+      color: var(--text);
+    }
+
+    .empty-convs {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      padding: 0.4rem 0.75rem;
+      font-family: var(--mono);
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+    }
+
+    .user-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .user-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--green-dim);
+      border: 1px solid var(--green-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--green);
+      flex-shrink: 0;
+      font-weight: 500;
+    }
+
+    .user-email {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .btn-logout {
+      width: 100%;
+      padding: 0.45rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      transition: all 0.2s;
+    }
+
+    .btn-logout:hover { border-color: #ff5555; color: #ff6b6b; }
+
+    /* ===========================
+       CHAT AREA
+    =========================== */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .chat-header {
+      padding: 0.875rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-1);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .dot-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      animation: livePulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(47,227,154,0.7); }
+      50% { opacity: 0.75; box-shadow: 0 0 0 5px rgba(47,227,154,0); }
+    }
+
+    .header-agent {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--green);
+    }
+
+    .header-model {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    /* ===========================
+       MESSAGES
+    =========================== */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.125rem;
+    }
+
+    /* Empty state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .empty-logo {
+      font-family: var(--display);
+      font-size: 1.75rem;
+      font-weight: 900;
+      color: var(--orange);
+      letter-spacing: 0.2em;
+    }
+
+    .empty-sub {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      letter-spacing: 0.12em;
+    }
+
+    .hint-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 1.25rem;
+      max-width: 520px;
+    }
+
+    .hint-chip {
+      padding: 0.5rem 0.875rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      background: var(--bg-1);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .hint-chip:hover {
+      border-color: var(--orange);
+      color: var(--orange);
+      background: var(--orange-dim);
+    }
+
+    /* Message bubbles */
+    .msg-row {
+      display: flex;
+      gap: 0.625rem;
+      max-width: 82%;
+    }
+
+    .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
+    .msg-row.assistant { align-self: flex-start; }
+
+    .msg-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      font-weight: 500;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .msg-row.user .msg-avatar {
+      background: var(--orange-dim);
+      border: 1px solid var(--orange-border);
+      color: var(--orange);
+    }
+
+    .msg-row.assistant .msg-avatar {
+      background: var(--green-dim);
+      border: 1px solid var(--green-border);
+      color: var(--green);
+    }
+
+    .msg-bubble {
+      padding: 0.7rem 0.975rem;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg-row.user .msg-bubble {
+      background: var(--orange-dim);
+      border: 1px solid rgba(255, 138, 36, 0.25);
+      border-top-right-radius: 3px;
+    }
+
+    .msg-row.assistant .msg-bubble {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-top-left-radius: 3px;
+    }
+
+    .msg-bubble.streaming::after {
+      content: '▋';
+      color: var(--green);
+      animation: blink 0.9s step-end infinite;
+    }
+
+    .msg-bubble.error-bubble { color: #ff6b6b; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Tool calls badge */
+    .tool-badge {
+      display: inline-block;
+      margin-top: 0.4rem;
+      padding: 0.2rem 0.5rem;
+      background: rgba(47, 227, 154, 0.1);
+      border: 1px solid var(--green-border);
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--green);
+      letter-spacing: 0.06em;
+    }
+
+    /* ===========================
+       INPUT AREA
+    =========================== */
+    .input-area {
+      padding: 0.875rem 1.5rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg-1);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.625rem;
+      align-items: flex-end;
+    }
+
+    .chat-input {
+      flex: 1;
+      min-height: 44px;
+      max-height: 160px;
+      padding: 0.625rem 0.975rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.875rem;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    .chat-input:focus { border-color: var(--orange); }
+    .chat-input::placeholder { color: var(--text-dim); }
+    .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-action {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .btn-action.send {
+      background: var(--orange);
+    }
+
+    .btn-action.send:hover:not(:disabled) {
+      background: #ff9c40;
+      transform: scale(1.05);
+    }
+
+    .btn-action.send:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-action.stop {
+      background: rgba(255, 85, 85, 0.15);
+      border: 1px solid rgba(255, 85, 85, 0.4);
+    }
+
+    .btn-action.stop:hover { background: rgba(255, 85, 85, 0.25); }
+
+    .input-hint {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--text-dim);
+      margin-top: 0.35rem;
+      letter-spacing: 0.04em;
+    }
+
+    /* ===========================
+       INIT / LOADING SCREEN
+    =========================== */
+    .center-screen {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      letter-spacing: 0.12em;
+    }
+
+    /* ===========================
+       SCROLLBAR
+    =========================== */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--green); }
+
+    /* ===========================
+       MOBILE
+    =========================== */
+    @media (max-width: 640px) {
+      .sidebar { display: none; }
+      .messages { padding: 1rem; }
+      .input-area { padding: 0.75rem 1rem; }
+      .msg-row { max-width: 95%; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+  // ===========================
+  // CONFIG
+  // ===========================
+  const API_BASE = 'https://api.migancore.com';
+
+  // ===========================
+  // LOCAL STORAGE HELPERS
+  // ===========================
+  const LS = {
+    get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del: (k) => localStorage.removeItem(k),
+  };
+
+  // ===========================
+  // API HELPERS
+  // ===========================
+  async function apiFetch(path, opts = {}) {
+    const token = LS.get('token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (opts.headers) Object.assign(headers, opts.headers);
+
+    const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return body;
+  }
+
+  const api = {
+    register: (d) => apiFetch('/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: d.email,
+        password: d.password,
+        display_name: d.displayName || null,
+        tenant_name: d.tenantName,
+        tenant_slug: d.tenantSlug,
+      }),
+    }),
+
+    login: (d) => apiFetch('/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: d.email, password: d.password }),
+    }),
+
+    me: () => apiFetch('/v1/auth/me'),
+
+    createAgent: (name) => apiFetch('/v1/agents', {
+      method: 'POST',
+      body: JSON.stringify({ name, description: 'Personal MiganCore agent', visibility: 'private' }),
+    }),
+
+    chat: (agentId, message, convId) => apiFetch(`/v1/agents/${agentId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message, conversation_id: convId || null }),
+    }),
+  };
+
+  // ===========================
+  // SSE STREAMING
+  // ===========================
+  function startStream(agentId, message, convId, { onChunk, onStart, onDone, onError }) {
+    const token = LS.get('token');
+    const ctrl = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/v1/agents/${agentId}/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ message, conversation_id: convId || null }),
+          signal: ctrl.signal,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          onError(err.detail || `HTTP ${res.status}`);
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const ev = JSON.parse(line.slice(6));
+              if (ev.type === 'start')  onStart?.(ev.conversation_id);
+              if (ev.type === 'chunk')  onChunk?.(ev.content || '');
+              if (ev.type === 'done')   onDone?.(ev.conversation_id);
+              if (ev.type === 'error')  onError?.(ev.message || 'Stream error');
+            } catch {}
+          }
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') onError?.(String(err));
+      }
+    })();
+
+    return () => ctrl.abort();
+  }
+
+  // ===========================
+  // BOOT SEQUENCE
+  // ===========================
+  const BOOT_LINES = [
+    { text: '> MIGANCORE v0.4.1 INITIALIZING...', cls: 'dim' },
+    { text: '> NEURAL ENGINE.............. [OK]', cls: 'ok'  },
+    { text: '> MEMORY SUBSYSTEM........... [OK]', cls: 'ok'  },
+    { text: '> TOOL EXECUTOR.............. [OK]', cls: 'ok'  },
+    { text: '> HYBRID SEARCH.............. [OK]', cls: 'ok'  },
+    { text: '> AUTONOMOUS SYNTHESIS........ [OK]', cls: 'ok'  },
+    { text: '> CORE ONLINE — READY.', cls: 'ok'  },
+  ];
+
+  function BootSequence({ onDone }) {
+    const [lines, setLines] = useState([]);
+
+    useEffect(() => {
+      if (sessionStorage.getItem('mc_booted')) { onDone(); return; }
+
+      let i = 0;
+      const step = () => {
+        if (i < BOOT_LINES.length) {
+          setLines(p => [...p, BOOT_LINES[i++]]);
+          setTimeout(step, 300);
+        } else {
+          sessionStorage.setItem('mc_booted', '1');
+          setTimeout(onDone, 600);
+        }
+      };
+      setTimeout(step, 150);
+    }, []);
+
+    return (
+      <div className="boot-screen">
+        <div className="boot-logo">MIGANCORE</div>
+        <div className="boot-terminal">
+          {lines.map((l, i) => (
+            <div key={i} className={`boot-line ${l.cls}`}>{l.text}</div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ===========================
+  // BRAND LOGO SVG
+  // ===========================
+  function BrandSVG() {
+    return (
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="13" cy="13" r="12" stroke="#ff8a24" strokeWidth="1.5"/>
+        <circle cx="13" cy="13" r="5.5" stroke="#2fe39a" strokeWidth="1.5"/>
+        <line x1="13" y1="1" x2="13" y2="7.5" stroke="#ff8a24" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="13" y1="18.5" x2="13" y2="25" stroke="#ff8a24" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="1" y1="13" x2="7.5" y2="13" stroke="#ff8a24" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="18.5" y1="13" x2="25" y2="13" stroke="#ff8a24" strokeWidth="1.5" strokeLinecap="round"/>
+        <circle cx="13" cy="13" r="2" fill="#2fe39a"/>
+      </svg>
+    );
+  }
+
+  // ===========================
+  // SEND ICON
+  // ===========================
+  function SendIcon() {
+    return (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+        <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    );
+  }
+
+  // ===========================
+  // STOP ICON
+  // ===========================
+  function StopIcon() {
+    return (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="#ff6b6b">
+        <rect x="5" y="5" width="14" height="14" rx="2"/>
+      </svg>
+    );
+  }
+
+  // ===========================
+  // AUTH SCREEN
+  // ===========================
+  function AuthScreen({ onSuccess }) {
+    const [tab, setTab] = useState('login');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    // Login state
+    const [lEmail, setLEmail] = useState('');
+    const [lPass, setLPass]   = useState('');
+
+    // Register state
+    const [rEmail, setREmail]   = useState('');
+    const [rPass, setRPass]     = useState('');
+    const [rName, setRName]     = useState('');
+    const [rTName, setRTName]   = useState('');
+    const [rTSlug, setRTSlug]   = useState('');
+
+    const switchTab = (t) => { setTab(t); setError(''); };
+
+    // Auto-slug from tenant name
+    const onTenantName = (v) => {
+      setRTName(v);
+      setRTSlug(
+        v.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 30)
+      );
+    };
+
+    const afterAuth = async (data) => {
+      LS.set('token', data.access_token);
+      LS.set('refresh_token', data.refresh_token);
+      try {
+        const me = await api.me();
+        onSuccess(me);
+      } catch {
+        onSuccess({});
+      }
+    };
+
+    const handleLogin = async (e) => {
+      e.preventDefault();
+      setLoading(true); setError('');
+      try {
+        const data = await api.login({ email: lEmail, password: lPass });
+        await afterAuth(data);
+      } catch (err) {
+        setError(err.message);
+      } finally { setLoading(false); }
+    };
+
+    const handleRegister = async (e) => {
+      e.preventDefault();
+      setLoading(true); setError('');
+      try {
+        const data = await api.register({ email: rEmail, password: rPass, displayName: rName, tenantName: rTName, tenantSlug: rTSlug });
+        await afterAuth(data);
+      } catch (err) {
+        setError(err.message);
+      } finally { setLoading(false); }
+    };
+
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <div className="auth-logo">MIGANCORE</div>
+          <div className="auth-tagline">CORE AI ENGINE · AUTONOMOUS DIGITAL ORGANISM</div>
+
+          <div className="tabs">
+            <button className={`tab ${tab === 'login' ? 'active' : ''}`} onClick={() => switchTab('login')}>LOGIN</button>
+            <button className={`tab ${tab === 'register' ? 'active' : ''}`} onClick={() => switchTab('register')}>REGISTER</button>
+          </div>
+
+          {error && <div className="form-error">{error}</div>}
+
+          {tab === 'login' ? (
+            <form onSubmit={handleLogin}>
+              <div className="form-group">
+                <label className="form-label">EMAIL</label>
+                <input className="form-input" type="email" placeholder="you@example.com"
+                  value={lEmail} onChange={e => setLEmail(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">PASSWORD</label>
+                <input className="form-input" type="password" placeholder="••••••••"
+                  value={lPass} onChange={e => setLPass(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'AUTHENTICATING...' : 'LOGIN →'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleRegister}>
+              <div className="form-group">
+                <label className="form-label">DISPLAY NAME (opsional)</label>
+                <input className="form-input" type="text" placeholder="Nama kamu"
+                  value={rName} onChange={e => setRName(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">EMAIL</label>
+                <input className="form-input" type="email" placeholder="you@example.com"
+                  value={rEmail} onChange={e => setREmail(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">PASSWORD (min 8 karakter)</label>
+                <input className="form-input" type="password" placeholder="Min. 8 karakter"
+                  value={rPass} onChange={e => setRPass(e.target.value)} required minLength={8} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">NAMA WORKSPACE</label>
+                <input className="form-input" type="text" placeholder="MiganCore Studio"
+                  value={rTName} onChange={e => onTenantName(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">WORKSPACE ID (auto-generated, bisa diubah)</label>
+                <input className="form-input" type="text" placeholder="migancore-studio"
+                  value={rTSlug} onChange={e => setRTSlug(e.target.value)} required
+                  pattern="[a-z0-9\-]+" title="Hanya huruf kecil, angka, dan tanda hubung" />
+              </div>
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'MEMBUAT AKUN...' : 'BUAT AKUN →'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===========================
+  // MESSAGE COMPONENT
+  // ===========================
+  function Msg({ role, content, streaming, toolCount }) {
+    const label = role === 'user' ? 'YOU' : 'MC';
+    const errClass = content.startsWith('⚠') ? ' error-bubble' : '';
+    return (
+      <div className={`msg-row ${role}`}>
+        <div className="msg-avatar">{label}</div>
+        <div>
+          <div className={`msg-bubble${streaming ? ' streaming' : ''}${errClass}`}>
+            {content}
+          </div>
+          {toolCount > 0 && (
+            <div className="tool-badge">⚙ {toolCount} tool call{toolCount > 1 ? 's' : ''}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===========================
+  // CHAT SCREEN
+  // ===========================
+  const HINTS = [
+    'Apa yang bisa kamu lakukan?',
+    'Jelaskan arsitektur MiganCore',
+    'Tulis puisi tentang AI',
+    'Bantu saya brainstorm ide produk',
+    'Apa itu DPO training?',
+    'Bagaimana cara deploy ke VPS?',
+  ];
+
+  function ChatScreen({ user, onLogout }) {
+    const [msgs, setMsgs]           = useState([]);
+    const [input, setInput]         = useState('');
+    const [busy, setBusy]           = useState(false);
+    const [agentId, setAgentId]     = useState(null);
+    const [agentName, setAgentName] = useState('MiganCore');
+    const [convId, setConvId]       = useState(null);
+    const [convList, setConvList]   = useState([]);
+    const [initErr, setInitErr]     = useState('');
+    const [initing, setIniting]     = useState(true);
+
+    const endRef     = useRef(null);
+    const taRef      = useRef(null);
+    const stopRef    = useRef(null);
+    const streamMsgId = useRef(null);
+
+    // ─── Init: ensure agent ───────────────────────────────
+    useEffect(() => {
+      (async () => {
+        try {
+          let aid  = LS.get('agent_id');
+          let aname = LS.get('agent_name') || 'MiganCore';
+          if (!aid) {
+            const agent = await api.createAgent('MiganCore');
+            aid   = agent.id;
+            aname = agent.name;
+            LS.set('agent_id',   aid);
+            LS.set('agent_name', aname);
+          }
+          setAgentId(aid);
+          setAgentName(aname);
+        } catch (err) {
+          setInitErr(`Failed to init agent: ${err.message}`);
+        } finally {
+          setIniting(false);
+        }
+      })();
+    }, []);
+
+    // ─── Restore session ──────────────────────────────────
+    useEffect(() => {
+      const saved = LS.get('mc_msgs');
+      if (Array.isArray(saved)) setMsgs(saved);
+
+      const cid = LS.get('mc_conv');
+      if (cid) setConvId(cid);
+
+      const cl = LS.get('mc_convlist');
+      if (Array.isArray(cl)) setConvList(cl);
+    }, []);
+
+    // ─── Auto-scroll ──────────────────────────────────────
+    useEffect(() => {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [msgs]);
+
+    // ─── Persist messages ─────────────────────────────────
+    useEffect(() => {
+      if (msgs.length > 0) LS.set('mc_msgs', msgs.slice(-60));
+    }, [msgs]);
+
+    // ─── New chat ─────────────────────────────────────────
+    const newChat = useCallback(() => {
+      if (msgs.length > 0 && convId) {
+        const first = msgs.find(m => m.role === 'user');
+        const title = first?.content.slice(0, 42) || 'Chat';
+        const updated = [{ id: convId, title }, ...convList.slice(0, 19)];
+        setConvList(updated);
+        LS.set('mc_convlist', updated);
+      }
+      setMsgs([]);
+      setConvId(null);
+      setInput('');
+      LS.del('mc_msgs');
+      LS.del('mc_conv');
+    }, [msgs, convId, convList]);
+
+    // ─── Send message ─────────────────────────────────────
+    const send = useCallback((txt) => {
+      const text = (typeof txt === 'string' ? txt : input).trim();
+      if (!text || busy || !agentId) return;
+
+      setInput('');
+      if (taRef.current) { taRef.current.style.height = 'auto'; }
+
+      const uid = Date.now();
+      const aid = uid + 1;
+      streamMsgId.current = aid;
+
+      setMsgs(p => [
+        ...p,
+        { id: uid, role: 'user', content: text },
+        { id: aid, role: 'assistant', content: '', streaming: true, toolCount: 0 },
+      ]);
+      setBusy(true);
+
+      let localConvId = convId;
+
+      const stop = startStream(agentId, text, localConvId, {
+        onStart: (cid) => {
+          localConvId = cid;
+          setConvId(cid);
+          LS.set('mc_conv', cid);
+        },
+        onChunk: (chunk) => {
+          setMsgs(p => p.map(m =>
+            m.id === aid ? { ...m, content: m.content + chunk } : m
+          ));
+        },
+        onDone: () => {
+          setMsgs(p => p.map(m =>
+            m.id === aid ? { ...m, streaming: false } : m
+          ));
+          setBusy(false);
+          stopRef.current = null;
+        },
+        onError: (msg) => {
+          setMsgs(p => p.map(m =>
+            m.id === aid ? { ...m, content: `⚠ ${msg}`, streaming: false } : m
+          ));
+          setBusy(false);
+          stopRef.current = null;
+        },
+      });
+
+      stopRef.current = stop;
+    }, [input, busy, agentId, convId]);
+
+    const stop = () => {
+      stopRef.current?.();
+      setMsgs(p => p.map(m => m.streaming ? { ...m, streaming: false } : m));
+      setBusy(false);
+      stopRef.current = null;
+    };
+
+    const onKey = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send(input);
+      }
+    };
+
+    const onInput = (e) => {
+      setInput(e.target.value);
+      e.target.style.height = 'auto';
+      e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+    };
+
+    const logout = () => {
+      ['token', 'refresh_token', 'agent_id', 'agent_name', 'mc_msgs', 'mc_conv', 'mc_convlist'].forEach(k => LS.del(k));
+      onLogout();
+    };
+
+    if (initing) {
+      return (
+        <div className="center-screen">
+          <div className="spinner"/>
+          <div className="loading-label">INITIALIZING AGENT...</div>
+        </div>
+      );
+    }
+
+    if (initErr) {
+      return (
+        <div className="center-screen">
+          <div style={{ color: '#ff6b6b', fontFamily: 'var(--mono)', fontSize: '0.8rem', padding: '2rem', textAlign: 'center' }}>
+            ⚠ {initErr}<br/>
+            <button onClick={logout} style={{ marginTop: '1rem', padding: '0.5rem 1rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: '0.7rem' }}>
+              LOGOUT & RETRY
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const userInitial = (user?.email?.[0] || 'U').toUpperCase();
+
+    return (
+      <div className="app">
+        {/* ── Sidebar ── */}
+        <aside className="sidebar">
+          <div className="sidebar-brand">
+            <BrandSVG />
+            <span className="brand-name">MIGANCORE</span>
+          </div>
+
+          <button className="btn-new" onClick={newChat}>+ NEW CHAT</button>
+
+          <div className="section-label">RIWAYAT CHAT</div>
+          <div className="conv-list">
+            {convList.length === 0
+              ? <div className="empty-convs">Belum ada chat</div>
+              : convList.map(c => (
+                  <div
+                    key={c.id}
+                    className={`conv-item ${c.id === convId ? 'active' : ''}`}
+                    title={c.title}
+                  >
+                    {c.title}
+                  </div>
+                ))
+            }
+          </div>
+
+          <div className="sidebar-footer">
+            <div className="user-row">
+              <div className="user-avatar">{userInitial}</div>
+              <div className="user-email">{user?.email || 'user'}</div>
+            </div>
+            <button className="btn-logout" onClick={logout}>LOGOUT</button>
+          </div>
+        </aside>
+
+        {/* ── Main ── */}
+        <main className="chat-area">
+          {/* Header */}
+          <div className="chat-header">
+            <div className="dot-pulse"/>
+            <span className="header-agent">{agentName}</span>
+            <span className="header-model">qwen2.5:7b · streaming</span>
+          </div>
+
+          {/* Messages */}
+          <div className="messages">
+            {msgs.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-logo">MIGANCORE</div>
+                <div className="empty-sub">CORE AI ENGINE — SIAP MEMBANTU</div>
+                <div className="hint-grid">
+                  {HINTS.map(h => (
+                    <div key={h} className="hint-chip" onClick={() => send(h)}>{h}</div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              msgs.map(m => (
+                <Msg
+                  key={m.id}
+                  role={m.role}
+                  content={m.content}
+                  streaming={m.streaming}
+                  toolCount={m.toolCount || 0}
+                />
+              ))
+            )}
+            <div ref={endRef}/>
+          </div>
+
+          {/* Input */}
+          <div className="input-area">
+            <div className="input-row">
+              <textarea
+                ref={taRef}
+                className="chat-input"
+                placeholder="Ketik pesan... (Enter kirim · Shift+Enter baris baru)"
+                value={input}
+                onChange={onInput}
+                onKeyDown={onKey}
+                disabled={busy}
+                rows={1}
+              />
+              {busy ? (
+                <button className="btn-action stop" onClick={stop} title="Stop streaming">
+                  <StopIcon/>
+                </button>
+              ) : (
+                <button className="btn-action send" onClick={() => send(input)} disabled={!input.trim()}>
+                  <SendIcon/>
+                </button>
+              )}
+            </div>
+            <div className="input-hint">ENTER kirim · SHIFT+ENTER baris baru · respon streaming real-time</div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ===========================
+  // APP ROOT
+  // ===========================
+  function App() {
+    // phase: 'boot' | 'auth' | 'chat'
+    const [phase, setPhase] = useState('boot');
+    const [user, setUser]   = useState(null);
+
+    const onBootDone = useCallback(async () => {
+      const token = LS.get('token');
+      if (!token) { setPhase('auth'); return; }
+      try {
+        const me = await api.me();
+        setUser(me);
+        setPhase('chat');
+      } catch {
+        LS.del('token');
+        LS.del('refresh_token');
+        setPhase('auth');
+      }
+    }, []);
+
+    const onAuthSuccess = useCallback((me) => {
+      setUser(me);
+      setPhase('chat');
+    }, []);
+
+    const onLogout = useCallback(() => {
+      setUser(null);
+      setPhase('auth');
+    }, []);
+
+    if (phase === 'boot') return <BootSequence onDone={onBootDone}/>;
+    if (phase === 'auth') return <AuthScreen onSuccess={onAuthSuccess}/>;
+    if (phase === 'chat') return <ChatScreen user={user} onLogout={onLogout}/>;
+
+    return (
+      <div className="center-screen">
+        <div className="spinner"/>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
