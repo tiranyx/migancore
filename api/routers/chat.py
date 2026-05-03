@@ -328,17 +328,37 @@ async def chat_stream(
         data.message,
     )
 
-    # Phase 2: SSE generator
+    # Phase 2: SSE generator with heartbeat (Day 25)
+    # Heartbeat prevents nginx/Cloudflare from closing connection during long
+    # Ollama processing periods (CPU-only inference can take 30-60s on 7B model).
+    # Pattern: race each iterator.__anext__() against 15s timeout — on timeout,
+    # emit a ping event (frontend ignores it) and continue waiting for real chunk.
+    HEARTBEAT_INTERVAL = 15.0
+
     async def generate():
         yield _sse({"type": "start", "conversation_id": str(conversation_id)})
 
         full_response: list[str] = []
+        stream_iter = OllamaClient().chat_stream(
+            model=model,
+            messages=messages,
+            options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
+        ).__aiter__()
+
         try:
-            async for chunk, done in OllamaClient().chat_stream(
-                model=model,
-                messages=messages,
-                options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
-            ):
+            while True:
+                try:
+                    chunk, done = await asyncio.wait_for(
+                        stream_iter.__anext__(),
+                        timeout=HEARTBEAT_INTERVAL,
+                    )
+                except asyncio.TimeoutError:
+                    # 15s of Ollama silence — keep connection alive
+                    yield _sse({"type": "ping"})
+                    continue
+                except StopAsyncIteration:
+                    break
+
                 if chunk:
                     full_response.append(chunk)
                     yield _sse({"type": "chunk", "content": chunk})
@@ -363,6 +383,9 @@ async def chat_stream(
         except OllamaError as exc:
             logger.error("chat.stream.ollama_error", error=str(exc))
             yield _sse({"type": "error", "message": str(exc)})
+        except Exception as exc:
+            logger.error("chat.stream.unexpected", error=str(exc), exc_info=True)
+            yield _sse({"type": "error", "message": f"Stream error: {exc}"})
 
     return StreamingResponse(
         generate(),
@@ -501,15 +524,28 @@ def _build_system_prompt(
     parts.append(f"\nYou are currently operating as: {agent.name}")
     parts.append("Always respond in character. Never break the fourth wall.")
 
-    # Tool usage mandate — injected early so it overrides persona resistance
+    # Tool usage mandate — injected early so it overrides persona resistance.
     # Without this, 7B models often describe actions instead of calling tools.
+    # Day 25: more explicit intent-mapping to overcome qwen2.5-7B bias toward
+    # python pseudocode for create/save/generate verbs.
     parts.append(
         "\n[TOOL USAGE — MANDATORY]\n"
-        "You have access to tools (functions). When the user asks you to perform an action "
-        "that matches a tool's capability, you MUST call the tool — do not describe the action "
-        "or instruct the user to do it themselves. Available tools include: "
-        "web_search, memory_write, memory_search, python_repl, generate_image, read_file, write_file. "
-        "If a tool call fails, explain the error briefly and offer an alternative."
+        "You have access to tools (function calls). When the user's request matches a tool's "
+        "capability, you MUST invoke the tool via function-calling — NEVER write code that "
+        "appears to call a tool, NEVER describe what the tool would do, NEVER instruct the user "
+        "to perform the action manually.\n"
+        "\n"
+        "Intent → Tool mapping (use when matched):\n"
+        "  - create/write/save/generate a FILE → write_file\n"
+        "  - read/open/view/show/check FILE content → read_file\n"
+        "  - generate/create/make an IMAGE/picture/visual → generate_image\n"
+        "  - search the web / look up current info → web_search\n"
+        "  - remember/save a fact → memory_write\n"
+        "  - recall/find past facts → memory_search\n"
+        "  - run/execute Python code (computation only) → python_repl\n"
+        "\n"
+        "If a tool call fails (policy block, error), report the failure briefly and offer a "
+        "plain-text alternative. Do NOT silently fall back to describing the action."
     )
 
     # Inject Letta mission block (active goal context)

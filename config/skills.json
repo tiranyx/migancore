@@ -138,7 +138,7 @@
     {
       "id": "read_file",
       "name": "Read File",
-      "description": "Read contents of a file from the workspace",
+      "description": "MANDATORY for reading file content: invoke this function whenever the user asks to read, open, view, show, or check the content of a file. Returns the file contents as text (capped at 50KB). For directory listings, pass a directory path.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
@@ -182,7 +182,7 @@
     {
       "id": "generate_image",
       "name": "Generate Image",
-      "description": "Generate an image from a text prompt using fal.ai FLUX schnell. Returns a URL to the generated image. Use for creative visuals, illustrations, marketing assets, or any image creation task.",
+      "description": "MANDATORY for image generation: invoke this function whenever the user requests an image, picture, illustration, visual, artwork, banner, or any visual asset. Do NOT describe the image or generate code — call this function directly. Uses fal.ai FLUX schnell, returns a URL to the generated image (~3-8s).",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
@@ -215,7 +215,7 @@
     {
       "id": "write_file",
       "name": "Write File",
-      "description": "Write content to a file in the agent's sandboxed workspace. Creates parent directories automatically. Use for saving code, configs, or any text content.",
+      "description": "MANDATORY for creating/writing files: invoke this function whenever the user asks to create, write, save, or generate a file (script, config, document, code, etc.). Do NOT describe the action or instruct the user to do it manually — call this function directly. Creates parent directories automatically. Sandboxed to agent's workspace.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {

@@ -810,11 +810,17 @@
               if (ev.type === 'chunk')  onChunk?.(ev.content || '');
               if (ev.type === 'done')   onDone?.(ev.conversation_id);
               if (ev.type === 'error')  onError?.(ev.message || 'Stream error');
+              // ev.type === 'ping' — heartbeat, ignore silently
             } catch {}
           }
         }
       } catch (err) {
-        if (err.name !== 'AbortError') onError?.(String(err));
+        if (err.name === 'AbortError') return;
+        // Day 25: friendlier error for SSE drops (TypeError: network error, etc.)
+        const friendly = err.name === 'TypeError'
+          ? 'Koneksi terputus. Server butuh waktu lama merespon — coba kirim ulang.'
+          : String(err);
+        onError?.(friendly);
       }
     })();
 
