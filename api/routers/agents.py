@@ -4,6 +4,7 @@ Agent router — CRUD for autonomous agents + Spawning (Day 10).
 Day 6 MVP: POST /v1/agents (create agent)
 Day 10:    POST /v1/agents/{id}/spawn (spawn child agent)
            GET  /v1/agents/{id}/children (list direct children)
+Day 13:    Letta Tier 3 wiring — create/spawn auto-provisions Letta persona agent
 """
 
 import secrets
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
 from models import Agent, User, Tenant
+from services.config_loader import load_soul_md
+from services.letta import ensure_letta_agent
 
 MAX_GENERATION_DEPTH = 5
 
@@ -134,9 +137,23 @@ async def create_agent(
     )
     db.add(agent)
     await db.commit()
-    # Re-set tenant context before refresh since SET LOCAL is cleared on commit
     await set_tenant_context(db, str(current_user.tenant_id))
     await db.refresh(agent)
+
+    # Day 13: Provision Letta Tier 3 persona agent (never blocks response on failure)
+    soul_text = load_soul_md(None)
+    letta_id = await ensure_letta_agent(
+        migancore_agent_id=str(agent.id),
+        agent_name=agent.name,
+        soul_text=soul_text,
+        persona_overrides=None,
+        existing_letta_id=None,
+    )
+    if letta_id:
+        agent.letta_agent_id = letta_id
+        await db.commit()
+        await set_tenant_context(db, str(current_user.tenant_id))
+        await db.refresh(agent)
 
     return AgentResponse(
         id=str(agent.id),
@@ -256,11 +273,10 @@ async def spawn_agent(
     db.add(child)
     await db.commit()
 
-    # 5. Re-set tenant context after commit
     await set_tenant_context(db, str(tenant_id))
     await db.refresh(child)
 
-    # 6. Copy parent's tool grants to child (raw SQL, no ORM for junction table yet)
+    # Copy parent's tool grants to child (raw SQL, no ORM for junction table yet)
     await db.execute(
         text(
             """
@@ -278,6 +294,21 @@ async def spawn_agent(
         },
     )
     await db.commit()
+
+    # Day 13: Provision Letta persona for child, inheriting parent's merged persona_blob
+    soul_text = load_soul_md(None)
+    letta_id = await ensure_letta_agent(
+        migancore_agent_id=str(child.id),
+        agent_name=child.name,
+        soul_text=soul_text,
+        persona_overrides=child_persona or None,
+        existing_letta_id=None,
+    )
+    if letta_id:
+        child.letta_agent_id = letta_id
+        await db.commit()
+        await set_tenant_context(db, str(tenant_id))
+        await db.refresh(child)
 
     return AgentResponse(
         id=str(child.id),

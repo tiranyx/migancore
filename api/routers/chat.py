@@ -25,6 +25,7 @@ from deps.db import get_db, set_tenant_context
 from deps.rate_limit import limiter
 from models import User, Agent, Conversation, Message, Tenant
 from services.config_loader import get_agent_config, load_soul_md
+from services.letta import get_blocks as get_letta_blocks
 from services.memory import memory_summary
 from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
@@ -118,7 +119,11 @@ async def chat(
     agent_cfg = get_agent_config(agent_id)
     soul_text, model = _load_persona(agent_cfg)
     mem = await memory_summary(tenant_id, agent_id)
-    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem)
+
+    # Day 13: Fetch Letta Tier 3 persona blocks (graceful degradation: {} if unavailable)
+    letta_blocks = await get_letta_blocks(agent.letta_agent_id) if agent.letta_agent_id else {}
+
+    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks)
 
     conversation, history = await _get_or_create_conversation(
         db, data, agent, current_user
@@ -408,22 +413,45 @@ def _build_system_prompt(
     soul_text: str,
     agent_cfg: dict | None,
     memory_summary_text: str,
+    letta_blocks: dict | None = None,
 ) -> str:
-    """Construct system prompt: SOUL.md + persona overrides + memory."""
-    parts = [soul_text.strip()]
+    """Construct system prompt: Letta blocks (Tier 3) > SOUL.md (Tier 0) + memory.
 
-    if agent_cfg:
-        persona = agent_cfg.get("persona_overrides", {})
-        if persona.get("voice"):
-            parts.append(f"\nVoice: {persona['voice']}")
-        if persona.get("tone"):
-            parts.append(f"Tone: {persona['tone']}")
-        if persona.get("values"):
-            parts.append(f"Values: {', '.join(persona['values'])}")
+    Day 13: If letta_blocks has a 'persona' block, it replaces soul_text as the
+    identity foundation — the Letta block is the evolved, persistent version.
+    mission and knowledge blocks are injected as additional context sections.
+    Falls back to soul_text + overrides if Letta is unavailable.
+    """
+    blocks = letta_blocks or {}
+
+    # Tier 3: Letta persona block overrides soul_text (it IS the evolved soul)
+    if blocks.get("persona"):
+        parts = [blocks["persona"]]
+    else:
+        # Tier 0 fallback: static SOUL.md + agent config overrides
+        parts = [soul_text.strip()]
+        if agent_cfg:
+            persona = agent_cfg.get("persona_overrides", {})
+            if persona.get("voice"):
+                parts.append(f"\nVoice: {persona['voice']}")
+            if persona.get("tone"):
+                parts.append(f"Tone: {persona['tone']}")
+            if persona.get("values"):
+                parts.append(f"Values: {', '.join(persona['values'])}")
 
     parts.append(f"\nYou are currently operating as: {agent.name}")
     parts.append("Always respond in character. Never break the fourth wall.")
 
+    # Inject Letta mission block (active goal context)
+    if blocks.get("mission"):
+        parts.append(f"\n[MISI AKTIF]\n{blocks['mission']}")
+
+    # Inject Letta knowledge block (learned facts about owner/context)
+    knowledge = blocks.get("knowledge", "")
+    if knowledge and "Belum ada pengetahuan" not in knowledge:
+        parts.append(f"\n[KONTEKS DIKETAHUI]\n{knowledge}")
+
+    # Tier 1: Redis memory summary (recent K-V facts)
     if memory_summary_text:
         parts.append(f"\n{memory_summary_text}")
 
