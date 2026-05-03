@@ -11,11 +11,11 @@ from collections.abc import AsyncGenerator
 import httpx
 from config import settings
 
-# Default: 60s total, 5s connect, 30s read between chunks
-DEFAULT_TIMEOUT = httpx.Timeout(60.0, connect=5.0, read=30.0)
+# Default: 90s total, 5s connect, 90s read — 7B model with 8-tool spec needs up to 60s to reason
+DEFAULT_TIMEOUT = httpx.Timeout(90.0, connect=5.0, read=90.0)
 
-# Streaming: no total timeout (response can be long), but 30s between chunks
-STREAM_TIMEOUT = httpx.Timeout(None, connect=5.0, read=30.0)
+# Streaming: no total timeout (response can be long), but 60s between chunks
+STREAM_TIMEOUT = httpx.Timeout(None, connect=5.0, read=60.0)
 
 
 class OllamaError(Exception):

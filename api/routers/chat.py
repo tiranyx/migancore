@@ -501,6 +501,17 @@ def _build_system_prompt(
     parts.append(f"\nYou are currently operating as: {agent.name}")
     parts.append("Always respond in character. Never break the fourth wall.")
 
+    # Tool usage mandate — injected early so it overrides persona resistance
+    # Without this, 7B models often describe actions instead of calling tools.
+    parts.append(
+        "\n[TOOL USAGE — MANDATORY]\n"
+        "You have access to tools (functions). When the user asks you to perform an action "
+        "that matches a tool's capability, you MUST call the tool — do not describe the action "
+        "or instruct the user to do it themselves. Available tools include: "
+        "web_search, memory_write, memory_search, python_repl, generate_image, read_file, write_file. "
+        "If a tool call fails, explain the error briefly and offer an alternative."
+    )
+
     # Inject Letta mission block (active goal context)
     if blocks.get("mission"):
         parts.append(f"\n[MISI AKTIF]\n{blocks['mission']}")
