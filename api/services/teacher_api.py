@@ -150,15 +150,14 @@ async def call_kimi(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    # Kimi K2 series quirks (per platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model.md):
-    # - temperature must be 1.0 (server enforces internally)
-    # - Default has thinking ENABLED — output goes to reasoning_content, not content
-    # - For distillation we disable thinking: cheaper, faster, content-only response
+    # Kimi K2 series quirks (per platform.kimi.ai/docs):
+    # - With thinking ENABLED (default): temperature must be 1.0
+    # - With thinking DISABLED: temperature must be 0.6 (back to standard mode)
+    # - Output split: reasoning_content (chain-of-thought) + content (final answer)
+    # For distillation we disable thinking: cheaper, faster, content-only response
     is_k2 = model.startswith("kimi-k2")
-    temp = 1.0 if is_k2 else 0.6
-    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temp}
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.6}
     if is_k2:
-        # Disable thinking to get clean content response (cost-efficient for distillation)
         payload["thinking"] = {"type": "disabled"}
     headers = {
         "Authorization": f"Bearer {settings.KIMI_API_KEY}",
