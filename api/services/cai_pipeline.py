@@ -32,7 +32,7 @@ import structlog
 from sqlalchemy import text
 
 from config import settings
-from models.base import AsyncSessionLocal
+import models.base as _models_base  # Use module ref, not value ref — AsyncSessionLocal is set lazily by init_engine()
 from services.ollama import OllamaClient, OllamaError
 
 # CAI calls need read=None: Ollama non-streaming runs all inference server-side
@@ -194,10 +194,10 @@ async def _store_preference_pair(
     preference_pairs has no RLS — it is a global training table, not tenant-scoped.
     Uses AsyncSessionLocal directly (background task, no request DB session available).
     """
-    if AsyncSessionLocal is None:
+    if _models_base.AsyncSessionLocal is None:
         return
     try:
-        async with AsyncSessionLocal() as db:
+        async with _models_base.AsyncSessionLocal() as db:
             await db.execute(
                 text(
                     "INSERT INTO preference_pairs "
