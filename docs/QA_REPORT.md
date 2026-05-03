@@ -74,6 +74,8 @@
 |----|------|-------|--------|-----|
 | C1 | `chat.py:444-540` | `_run_agentic_loop` is dead code (replaced by director) | Confusion, maintenance burden | Remove function |
 | C2 | `chat.py:51-59` | `ChatResponse` missing `reasoning_trace` field | Debugging info computed but not exposed | Add field to schema |
+| C3 | `tool_executor.py` | `python_repl` uses bare `subprocess.run(["python", "-c", code])` | LLM-generated code can escape sandbox | Use gVisor/nsjail or dedicated micro-VM |
+| C4 | `config_loader.py:76-78` | `load_soul_md` has path traversal vulnerability | `../` in path can escape CONFIG_DIR | Restrict resolved paths to CONFIG_DIR |
 
 ### 3.2 High Issues
 
@@ -83,6 +85,9 @@
 | H2 | `agents.py` | No soft-delete endpoint for agents | Agents can only be deleted via DB | Add `DELETE /v1/agents/{id}` |
 | H3 | `models/` | `tools` and `agent_tool_grants` tables have no ORM models | Cannot manage tools via SQLAlchemy | Add ORM models |
 | H4 | `.git` | `api/.venv` tracked in git | Bloats repo, platform-specific | `git rm -r --cached api/.venv` |
+| H5 | `deps/rate_limit.py` | In-memory rate limit storage breaks under multiple workers | Rate limits ineffective with scale | Switch to Redis-backed storage |
+| H6 | `models/agent.py` | Missing `model_version_id` UUID FK (exists in SQL, not ORM) | Schema mismatch | Add to ORM |
+| H7 | `migrations/` | Several tables missing FORCE RLS for table owners | Potential data leakage | Add `ALTER TABLE ... FORCE ROW LEVEL SECURITY` |
 
 ### 3.3 Medium Issues
 
@@ -218,6 +223,9 @@
 5. Create ORM models for `tools` and `agent_tool_grants`
 6. Add `DELETE /v1/agents/{id}` soft delete
 7. Add `reasoning_trace` to `ChatResponse`
+8. Fix path traversal in `load_soul_md`
+9. Add `model_version_id` to ORM
+10. Force RLS on all tenant-scoped tables
 
 ### Nice to Have (P2)
 8. Add missing indexes
