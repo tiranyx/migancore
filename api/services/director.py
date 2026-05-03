@@ -87,7 +87,13 @@ async def reason_node(state: AgentState) -> dict:
 
     async with OllamaClient() as client:
         if use_tools:
-            resp = await client.chat_with_tools(model, messages, tools_spec, options)
+            try:
+                resp = await client.chat_with_tools(model, messages, tools_spec, options)
+            except Exception as exc:
+                # Ollama version may not support tool calling (e.g. 404)
+                # Fallback to plain chat without tools
+                logger.warning("director.tools_unsupported", error=str(exc), fallback="plain_chat")
+                resp = await client.chat(model, messages, options=options)
         else:
             resp = await client.chat(model, messages, options=options)
 
