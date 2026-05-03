@@ -228,62 +228,86 @@ def get_mcp_app():
 
     Auth: every request to the mounted app must include `Authorization: Bearer <jwt>`.
     The JWT is verified against MiganCore's RS256 keys (services/jwt.py).
-    Tenant context is attached to the request scope for tools to read.
-    """
-    from starlette.middleware.base import BaseHTTPMiddleware
-    from starlette.responses import JSONResponse
+    Tenant context is attached to the ASGI scope for downstream use.
 
+    IMPORTANT: We use a pure ASGI middleware (not Starlette's BaseHTTPMiddleware)
+    because BaseHTTPMiddleware is incompatible with streaming responses (it buffers
+    the entire response body before forwarding, which breaks SSE). The MCP transport
+    uses SSE for server→client messages, so this matters.
+    """
     mcp = get_mcp()
     asgi_app = mcp.streamable_http_app()
 
-    class JWTAuthMiddleware(BaseHTTPMiddleware):
-        """Enforce Bearer JWT on every MCP request.
+    def _send_401(detail: str):
+        """Build a minimal ASGI 401 response."""
+        body = json.dumps({
+            "error": "unauthorized",
+            "detail": detail,
+        }).encode()
+        return [
+            {
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"www-authenticate", b'Bearer realm="migancore-mcp"'),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            },
+            {"type": "http.response.body", "body": body},
+        ]
 
-        Allow OPTIONS through (CORS preflight). Reject missing/invalid tokens
-        with 401. Attach tenant_id/subject to request.state for downstream use.
-        """
+    async def jwt_auth_asgi(scope, receive, send):
+        """Pure ASGI JWT auth middleware (SSE-safe — does NOT buffer response)."""
+        # Skip non-http scopes
+        if scope["type"] != "http":
+            await asgi_app(scope, receive, send)
+            return
 
-        async def dispatch(self, request, call_next):
-            # CORS preflight
-            if request.method == "OPTIONS":
-                return await call_next(request)
+        method = scope.get("method", "")
+        path = scope.get("path", "")
 
-            auth_header = request.headers.get("authorization", "")
-            if not auth_header.lower().startswith("bearer "):
-                logger.warning("mcp.auth.missing_bearer", path=request.url.path)
-                return JSONResponse(
-                    {"error": "missing_bearer_token", "detail": "Authorization: Bearer <jwt> required"},
-                    status_code=401,
-                    headers={"WWW-Authenticate": 'Bearer realm="migancore-mcp"'},
-                )
+        # Allow CORS preflight
+        if method == "OPTIONS":
+            await asgi_app(scope, receive, send)
+            return
 
-            token = auth_header[7:].strip()
-            try:
-                payload = decode_token(token, token_type="access")
-            except PyJWTError as exc:
-                logger.warning("mcp.auth.invalid_token", error=str(exc), path=request.url.path)
-                return JSONResponse(
-                    {"error": "invalid_token", "detail": str(exc)},
-                    status_code=401,
-                    headers={"WWW-Authenticate": 'Bearer realm="migancore-mcp"'},
-                )
+        # Extract Authorization header from raw ASGI headers
+        auth_header = ""
+        for k, v in scope.get("headers", []):
+            if k.lower() == b"authorization":
+                auth_header = v.decode("latin-1", errors="ignore")
+                break
 
-            tenant_id = payload.get("tenant_id")
-            subject = payload.get("sub")
-            if not tenant_id or not subject:
-                logger.warning("mcp.auth.missing_claims", path=request.url.path)
-                return JSONResponse(
-                    {"error": "invalid_claims", "detail": "tenant_id and sub claims required"},
-                    status_code=401,
-                )
+        if not auth_header.lower().startswith("bearer "):
+            logger.warning("mcp.auth.missing_bearer", path=path)
+            for msg in _send_401("Authorization: Bearer <jwt> required"):
+                await send(msg)
+            return
 
-            # Attach to request scope so tools can extract via context
-            request.state.tenant_id = tenant_id
-            request.state.subject = subject
-            request.state.scopes = (payload.get("scope") or "").split() if payload.get("scope") else []
+        token = auth_header[7:].strip()
+        try:
+            payload = decode_token(token, token_type="access")
+        except PyJWTError as exc:
+            logger.warning("mcp.auth.invalid_token", error=str(exc), path=path)
+            for msg in _send_401(f"invalid_token: {exc}"):
+                await send(msg)
+            return
 
-            logger.info("mcp.auth.ok", subject=subject, tenant_id=tenant_id, path=request.url.path)
-            return await call_next(request)
+        tenant_id = payload.get("tenant_id")
+        subject = payload.get("sub")
+        if not tenant_id or not subject:
+            logger.warning("mcp.auth.missing_claims", path=path)
+            for msg in _send_401("tenant_id and sub claims required"):
+                await send(msg)
+            return
 
-    asgi_app.add_middleware(JWTAuthMiddleware)
-    return asgi_app
+        # Attach to scope.state for downstream tool wrappers
+        scope.setdefault("state", {})
+        scope["state"]["tenant_id"] = tenant_id
+        scope["state"]["subject"] = subject
+
+        logger.info("mcp.auth.ok", subject=subject, tenant_id=tenant_id, path=path)
+        await asgi_app(scope, receive, send)
+
+    return jwt_auth_asgi
