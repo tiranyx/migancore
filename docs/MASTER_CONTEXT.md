@@ -288,15 +288,43 @@ When deploying changes:
 
 ---
 
-## 10. WEEK 2 ROADMAP (Preview)
+## 10. WEEK 2 ROADMAP (3-Agent Consensus)
 
-| Day | Feature | Dependencies |
-|-----|---------|-------------|
-| 11 | Letta integration | Letta container, memory blocks |
-| 12 | Qdrant semantic memory | Vector embeddings, RAG |
-| 13-14 | MCP (Model Context Protocol) | Tool standardization |
-| 15 | Training pipeline v1 | Dataset collection, preference pairs |
+Deep research completed by Kimi + GPT-5.5 + Claude Code. Full details in `WEEK2_SYNTHESIS.md`.
+
+| Day | Feature | Priority | Approach | Complexity |
+|-----|---------|----------|----------|------------|
+| 11 | **Safety Gate + Tool Policy** | 🔴 P0 | 6-class tool policy, approval gates, spawn limits | Medium |
+| 12 | **Qdrant RAG Tier 2** | 🟡 P1 | Turn-pair chunking + paraphrase-multilingual-mpnet | Medium |
+| 13 | **Letta Tier 3 Memory** | 🟡 P1 | Passive storage only (blocks.retrieve/update) | Medium |
+| 14 | **MCP Adapter** | 🟡 P1 | Expose 3 tools, consume external via Streamable HTTP | Medium |
+| 15-17 | **Data Ledger** | 🟢 P2 | Auto-collect chat logs, user feedback, PII scrubber | Medium |
+
+### Key Decisions (3-Agent Consensus)
+- **Safety First:** Tool policy framework before any new features (GPT-5.5: "jangan tambah otak sebelum sistem imun")
+- **Letta:** Passive storage ONLY — don't invoke agents.messages.create() (Claude: Q4 model below Letta threshold)
+- **Chunking:** Turn-pair (user+assistant) not per-message (Claude)
+- **Embedding:** paraphrase-multilingual-mpnet-base-v2 (Claude: bge-m3 buggy, BGE English-only)
+- **MCP Transport:** Streamable HTTP (NOT legacy HTTP+SSE) — spec 2025-03-26 (GPT-5.5)
+- **Training:** Data ledger dulu, DPO nanti. Min 500 pairs before training (GPT-5.5)
+- **Training Cost:** RunPod RTX 4090 Community Cloud $0.34/hr, 500 pairs × 3 epochs = $0.10 (Claude)
+- **Training Method:** DPO (not GRPO) — GRPO for reasoning, DPO for chat alignment (Claude)
 
 ---
 
-*End of MASTER_CONTEXT.md — Last updated by Kimi Code CLI, Day 10*
+## 11. DOCUMENT INVENTORY
+
+| Document | Purpose | Update Frequency |
+|----------|---------|------------------|
+| `MASTER_CONTEXT.md` | Living project RAM | Every session |
+| `SPRINT_LOG.md` | Completed sprint history | End of each day |
+| `CHANGELOG.md` | Version history | Every release |
+| `FOUNDER_JOURNAL.md` | Strategic decisions | As needed |
+| `QA_REPORT.md` | Audit findings | After major changes |
+| `WEEK2_RESEARCH.md` | Deep research for upcoming work | Before sprint |
+| `WEEK2_SYNTHESIS.md` | Consolidated research (Kimi + GPT-5.5 + Claude) | After research complete |
+| `AGENT_PROMPTS.md` | Prompt templates for multi-agent research | As needed |
+
+---
+
+*End of MASTER_CONTEXT.md — Last updated by Kimi Code CLI, Day 10+Research*
