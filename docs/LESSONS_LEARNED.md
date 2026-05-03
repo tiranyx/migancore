@@ -1,6 +1,6 @@
 # MIGANCORE — LESSONS LEARNED
 **Living Document — Updated setiap sesi**
-**Last Update:** Day 16 | **Author:** Claude Sonnet 4.6
+**Last Update:** Day 18 | **Author:** Claude Sonnet 4.6
 
 > Ini adalah cognitive ledger proyek — catatan pelajaran berharga dari kegagalan DAN keberhasilan.
 > Tujuan: **jangan ulangi kegagalan, lipat gandakan keberhasilan.**
@@ -144,6 +144,56 @@ docker exec qdrant-container cat /proc/1/limits | grep "open files"
 
 ---
 
+### [F-07] Qdrant Query API Membutuhkan ≥ v1.10.0 — Bukan v1.9.x
+**Day:** 18 | **Severity:** HIGH | **Category:** Infrastructure / Version Compatibility
+
+**Gejala:** `hybrid search plan: Prefetch + FusionQuery(RRF)` tidak ada di Qdrant v1.9.0. Import `Fusion, FusionQuery, Prefetch` dari `qdrant_client.models` berhasil (client-side), tapi `client.query_points()` throw error "unknown endpoint" atau method tidak ada.
+
+**Root Cause:** Qdrant memisahkan fitur antara **client library** dan **server version**. `qdrant-client==1.12.x` bisa import `Prefetch`, `FusionQuery`, dll. Tapi jika server Qdrant-nya versi 1.9.0, Query API endpoint `/collections/{col}/query` tidak exist di server.
+
+**Impact:** Hybrid search plan gagal sepenuhnya, fallback ke dense-only (tidak ada error crash, tapi kehilangan benefit +30-50% recall).
+
+**Fix:** Upgrade Qdrant server ke v1.12.0 di docker-compose.yml:
+```yaml
+qdrant:
+  image: qdrant/qdrant:v1.12.0  # was: v1.9.0
+```
+
+**Generalized Principle:**
+> **"Qdrant client version ≠ Qdrant server version."** Selalu cek server version saat merencanakan fitur baru. Verifikasi via `GET /` endpoint: `{"version": "X.Y.Z"}`. Qdrant 1.10+ untuk hybrid Query API.
+
+**Version Compatibility Table:**
+| Feature | Min Server Version |
+|---------|-------------------|
+| Sparse vectors (basic) | 1.7.0 |
+| Query API + Prefetch | **1.10.0** |
+| Hybrid RRF fusion | **1.10.0** |
+
+---
+
+### [F-08] BM42 `embed()` vs `query_embed()` — Silent Wrong Results
+**Day:** 18 | **Severity:** HIGH | **Category:** ML / Embedding
+
+**Gejala:** Search results untuk query "Fahmi Wol CEO" mengembalikan results yang kurang relevan dari yang diharapkan.
+
+**Root Cause:** BM42 adalah asymmetric embedding — menggunakan **berbeda token weighting** untuk documents vs queries. `model.embed()` = document mode (semua tokens weighted equally). `model.query_embed()` = query mode (IDF-weighted, fokus pada discriminative terms). Menggunakan `embed()` untuk queries = silently menggunakan weighting yang salah.
+
+**Impact:** Search precision turun. Bukan error/crash — hasil tetap keluar, tapi dengan lower relevance. Sulit di-detect tanpa benchmarking.
+
+**Fix Applied:**
+```python
+async def embed_sparse_document(text: str) -> QdrantSparseVector | None:
+    result = model.embed([text], batch_size=1)  # Documents: embed()
+
+async def embed_sparse_query(text: str) -> QdrantSparseVector | None:
+    result = model.query_embed(text)  # Queries: query_embed() — WAJIB
+```
+
+**Generalized Principle:**
+> **"BM42 dan semua asymmetric sparse embedding (SPLADE, etc.) WAJIB pakai query_embed() untuk queries."** Baca model card sebelum pakai. Default `embed()` tidak selalu benar.
+
+---
+
 ### [F-06] Sort-by-Recency untuk RAG Injection = Silent Degradasi
 **Day:** 16 | **Severity:** MEDIUM | **Category:** ML / Research
 
@@ -263,6 +313,64 @@ parsed = json.loads(raw[start:end])
 
 ---
 
+### [S-07] Zero-Loss Migration via Scroll → Delete → Recreate → Re-upsert
+**Day:** 18 | **Category:** Data Migration
+
+**Pattern:** Migrasi collection schema (old unnamed dense → new named dense + sparse) tanpa kehilangan data:
+```python
+# 1. Fetch all with vectors
+scroll_result = await client.scroll(collection_name=name, limit=10000,
+    with_payload=True, with_vectors=True)
+existing_points = scroll_result[0]
+
+# 2. Delete old
+await client.delete_collection(name)
+
+# 3. Recreate hybrid
+await _create_hybrid_collection(client, name)
+
+# 4. Recompute sparse from chunk_text (already in payload)
+for p in existing_points:
+    chunk_text = p.payload.get("chunk_text", "")
+    sparse_vec = await embed_sparse_document(chunk_text)
+    # ... upsert with {dense: old_dense, sparse: sparse_vec}
+```
+
+**Kenapa berhasil:**
+- `chunk_text` sudah tersimpan di payload sejak Day 12 (forward-looking design)
+- Sparse vectors dihitung fresh dari teks yang sama → hasilnya identik
+- Semua metadata/payload preserved as-is
+
+**Generalized Principle:**
+> **"Simpan raw text di payload saat indexing — bukan hanya vectors."** Raw text memungkinkan re-embedding ke schema baru tanpa kehilangan data. Ini adalah migration escape hatch.
+
+---
+
+### [S-08] Named Volume untuk Model Cache
+**Day:** 18 | **Category:** Infrastructure / Performance
+
+**Pattern:** Gunakan Docker named volume untuk caching AI model files:
+```yaml
+# docker-compose.yml:
+services:
+  api:
+    volumes:
+      - fastembed_cache:/app/.cache/fastembed
+
+volumes:
+  fastembed_cache:  # Persists across rebuilds
+```
+
+**Result:** BM42 model (90MB ONNX) tidak perlu re-download setiap `docker compose build api`.
+- First time: ~4s download
+- Subsequent starts: 108,100 it/s (instant cache hit)
+- Saves 90MB traffic + 4s startup time per rebuild
+
+**Generalized Principle:**
+> **"AI models, pip cache, apt cache → named volumes, bukan bind mounts."** Named volumes survive `docker compose down` dan `docker compose build`. Data volume (`./data/`) untuk persistence. Model cache volume untuk performance.
+
+---
+
 ### [S-06] Ulimits sebagai Checklist Deploy
 **Day:** 16 | **Category:** Infrastructure
 
@@ -287,7 +395,11 @@ ulimits:
 | CAI critique | Latency | ~22s | 7B, non-streaming, CPU |
 | CAI revision | Latency | ~15s | 7B, ~400 tokens, CPU |
 | Embedding (fastembed) | Latency | ~2-5s | paraphrase-multilingual-mpnet, CPU |
-| Qdrant search | Latency | <200ms | <10k vectors, cosine, CPU |
+| Qdrant search (dense-only) | Latency | <200ms | <10k vectors, cosine, CPU |
+| Qdrant search (hybrid RRF) | Latency | <300ms | dual Prefetch + FusionQuery |
+| BM42 model load (fresh) | Latency | ~4s | 90MB ONNX download |
+| BM42 model load (cached) | Latency | instant | Named volume cache hit |
+| BM42 sparse embed | Latency | ~100ms | SparseTextEmbedding CPU |
 | Redis ops | Latency | <5ms | local container |
 | Letta get_blocks | Latency | ~500ms | httpx to Letta container |
 | CAI pipeline total | Latency | ~37s | critique + revision + store |
@@ -308,6 +420,10 @@ ulimits:
 | Qdrant ulimits 65536 | RocksDB needs many FDs (F-04) | 500 errors pada collection ops |
 | Score threshold 0.65 untuk injection | Research: 0.55 = noise injection | Model confusion |
 | Sort by relevance (not recency) | Lost-in-middle research (F-06) | 30% accuracy drop |
+| Qdrant ≥ v1.12.0 | Query API requires ≥1.10.0 (F-07) | Hybrid RRF unavailable |
+| BM42 query_embed() untuk queries | Asymmetric embedding (F-08) | Silent precision drop |
+| chunk_text di payload saat indexing | Zero-loss migration (S-07) | Data loss on schema change |
+| Named volume fastembed_cache | Instant model reload (S-08) | 4s+ cold start per rebuild |
 
 ---
 

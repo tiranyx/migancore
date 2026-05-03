@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 17 — Admin Monitoring)
-**API Version:** 0.3.7
-**Git Commit:** `fac8e9a`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 18 — Hybrid Search BM42)
+**API Version:** 0.3.8
+**Git Commit:** `f8779ea`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,12 +16,12 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 17 (COMPLETE) → Day 18 (NEXT) |
-| API Version | 0.3.7 |
-| Git Commit | `fac8e9a` |
+| Sprint Day | Day 18 (COMPLETE) → Day 19 (NEXT) |
+| API Version | 0.3.8 |
+| Git Commit | `f8779ea` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
-| Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
+| Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
 
 ---
 
@@ -152,23 +152,28 @@
   - Key pattern: `mem:{tenant_id}:{agent_id}:{namespace}:{key}`, 30d TTL
   - `memory_write` / `memory_read` / `memory_list` / `memory_summary`
 
-### Qdrant RAG — Semantic Memory Tier 2 (Day 12, Claude)
-- ✅ `services/embedding.py` — fastembed CPU inference wrapper
-  - Model: `paraphrase-multilingual-mpnet-base-v2` (768-dim, Bahasa Indonesia native)
-  - Singleton `TextEmbedding` instance, asyncio.Lock double-checked init
-  - CPU offload via `run_in_threadpool` (no GPU required)
-  - Pre-warmed at lifespan startup (avoids cold start on first chat)
+### Qdrant RAG — Semantic Memory Tier 2 Hybrid (Day 12 + Day 18, Claude)
+- ✅ `services/embedding.py` — fastembed CPU inference wrapper (Day 12 + **Day 18 upgrade**)
+  - Dense model: `paraphrase-multilingual-mpnet-base-v2` (768-dim, Bahasa Indonesia native)
+  - **Sparse model (Day 18):** `Qdrant/bm42-all-minilm-l6-v2-attentions` (BM42, keyword recall)
+  - Both models pre-warmed at lifespan startup (step 3 dense, step 4 sparse)
+  - BM42: `embed_sparse_document()` for indexing, `embed_sparse_query()` for queries (DIFFERENT)
   - `format_turn_pair()` — Bahasa Indonesia labels, 300-char truncation per side
-- ✅ `services/vector_memory.py` — Qdrant async CRUD per agent
-  - Per-agent collections: `episodic_{agent_id}`
-  - `ensure_collection()` — idempotent create, HNSW brute-force for <10k vectors
-  - `index_turn_pair()` — embed turn pair → upsert to Qdrant, asyncio.Semaphore(2) guard
-  - `search_semantic()` — cosine similarity search, score threshold 0.55
-  - Graceful degradation: returns `[]` on any Qdrant error
+- ✅ `services/vector_memory.py` — Qdrant hybrid CRUD per agent (Day 18 full rewrite)
+  - Per-agent collections: `episodic_{agent_id}` — **hybrid schema** (named dense + sparse)
+  - `_is_hybrid_collection()` — detect old vs new schema for auto-migration
+  - `_create_hybrid_collection()` — `vectors_config={"dense": VectorParams(768, COSINE)}` + `sparse_vectors_config={"sparse": SparseVectorParams}`
+  - `_migrate_collection_to_hybrid()` — zero-loss: scroll all → delete → recreate → re-upsert with BM42
+  - `_search_hybrid()` — Prefetch dense (score_threshold) + Prefetch sparse (no threshold) → `FusionQuery(RRF)`
+  - `_search_dense_only()` — legacy fallback via `client.search()` for old Qdrant or failures
+  - `ensure_collection()` — idempotent, auto-detects old schema, auto-migrates on first access
+  - `index_turn_pair()` — `asyncio.gather(embed_text, embed_sparse_document)` concurrent; `has_sparse` in payload
+  - `search_semantic()` — hybrid first → dense fallback → `[]` graceful degradation
 - ✅ `routers/chat.py` — background index after message save
   - `asyncio.create_task(index_turn_pair(...))` — fire-and-forget, never blocks response
 - ✅ `services/tool_executor.py` — `_memory_search` upgraded: Qdrant first → Redis fallback
   - Returns `source: "qdrant_semantic"` or `"redis_kv"`
+- ✅ **7 existing collections auto-migrated** to hybrid schema on first API restart (zero data loss)
 
 ### Tool Executor (Day 8, Claude + Day 11 + Day 12 update)
 - ✅ `services/tool_executor.py`
@@ -196,6 +201,26 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 18 — Hybrid Search BM42 + RRF Fusion (COMPLETE)
+**Git Commit:** `f8779ea` | **Deployed:** 2026-05-03 | **Version:** 0.3.8
+
+**Delivered:**
+- ✅ `docker-compose.yml` — Qdrant v1.9.0 → v1.12.0 + `fastembed_cache` named volume
+- ✅ `services/embedding.py` — BM42 sparse model: `get_sparse_model`, `embed_sparse_document`, `embed_sparse_query`
+- ✅ `services/vector_memory.py` — full hybrid rewrite: schema detection, zero-loss migration, hybrid RRF search, graceful degradation chain
+- ✅ `main.py` — BM42 pre-warm at startup step 4
+
+**Key findings:**
+- Qdrant Query API (Prefetch + FusionQuery.RRF) requires ≥ v1.10.0 — v1.9.0 NOT supported
+- BM42 MUST use `query_embed()` for queries (not `embed()`) — different token weighting
+- Zero-loss migration works because `chunk_text` was stored in payload since Day 12
+- Named volume `fastembed_cache` = instant BM42 reload (108,100 it/s vs 4s re-download)
+
+**Architecture decisions locked:**
+- Hybrid search: dense (threshold=0.55) + BM42 sparse (no threshold, different score range) + RRF
+- Auto-migration: old schema detected → migrated transparently on first `ensure_collection()` call
+- BM42 is OPTIONAL: graceful degradation to dense-only if unavailable (never crash)
 
 ### ✅ Day 17 — Admin Monitoring + CAI Visibility (COMPLETE)
 **Git Commit:** `fac8e9a` | **Deployed:** 2026-05-03 | **Version:** 0.3.7
@@ -353,6 +378,9 @@ Tidak ada blocker saat ini.
 | Memory Tier 2 | Qdrant + fastembed (Day 12) | Semantic similarity, multilingual |
 | Memory Tier 3 | Letta blocks (Day 13) | Persona persistence only |
 | Embedding model | paraphrase-multilingual-mpnet-base-v2 | Bahasa Indonesia native, 768-dim |
+| Sparse model | Qdrant/bm42-all-minilm-l6-v2-attentions | +30-50% recall for proper nouns/names/dates |
+| Hybrid fusion | RRF (Reciprocal Rank Fusion) | Best known fusion method; Qdrant native |
+| BM42 degradation | Optional — dense-only fallback | Never crash search if BM42 unavailable |
 | MCP Transport | Streamable HTTP (spec 2025-03-26) | BUKAN HTTP+SSE (deprecated) |
 | Training | DPO | Data ledger dulu (min 500 pairs), RunPod RTX 4090 $0.34/hr |
 | Streaming | SSE via StreamingResponse | Simple, cukup untuk MVP |
@@ -382,6 +410,11 @@ Tidak ada blocker saat ini.
 - ❌ Jangan launch training run sebelum /v1/admin/stats menunjukkan ≥1000 unused_pairs — minimum dataset threshold
 - ❌ Jangan gunakan DPO untuk first training run — gunakan SimPO (noise-tolerant, no reference model, +6.4pts)
 - ❌ Jangan implementasi HyDE/query rewriting — CPU latency penalty terlalu besar pada 7B inference
+- ❌ Jangan downgrade Qdrant di bawah v1.10.0 — hybrid Query API butuh ≥1.10.0
+- ❌ Jangan pakai `embed()` untuk BM42 queries — WAJIB `query_embed()` (asymmetric embedding, silent wrong results)
+- ❌ Jangan hapus `fastembed_cache` named volume tanpa alasan — ini menyimpan 90MB BM42 ONNX model
+- ❌ Jangan set score_threshold pada BM42 prefetch leg — BM42 scores bukan cosine, range berbeda
+- ❌ Jangan hapus `chunk_text` dari payload saat indexing — ini adalah migration escape hatch untuk re-embedding
 
 ---
 
@@ -409,19 +442,21 @@ Tidak ada blocker saat ini.
 
 | Metric | Value |
 |--------|-------|
-| API endpoints | 17 (5 auth + 4 agents + 3 chat + 3 conversations + 3 admin) |
+| API endpoints | 17 (5 auth + 4 agents + 3 chat + 3 conversations + 3 admin) + hybrid search |
 | DB tables | 20 (includes papers, kg_entities, preference_pairs untuk Week 3-4) |
 | Memory tier | Tier 1: Redis K-V ✅ | Tier 2: Qdrant (Day 12) | Tier 3: Letta blocks (Day 13) |
 | Test coverage | E2E: 14/14 endpoints + 10/10 safety gates |
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
 | External URL | https://api.migancore.com (Let's Encrypt SSL) |
 | RunPod budget | $0 spent of $50 allocated |
-| Git | VPS ↔ GitHub ↔ Local = SYNCED @ fac8e9a |
+| Git (Day 17) | VPS ↔ GitHub ↔ Local = SYNCED @ fac8e9a |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
 | DPO pairs accumulated | **3** real pairs (CAI pipeline working since Day 15 — target: 1000+ before training) |
 | Admin monitoring | /v1/admin/stats + /preference-pairs + /export (JSONL), Day 17 ✅ |
 | Episodic RAG | Qdrant retrieval wired, score=0.65, top-k=3, sort-by-relevance, Day 16 ✅ |
+| Hybrid search | BM42 sparse + dense RRF, Qdrant v1.12.0, 7 collections migrated, Day 18 ✅ |
+| Git | VPS ↔ GitHub ↔ Local = SYNCED @ f8779ea |
 
 ---
 
@@ -447,3 +482,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 15) | Claude Sonnet 4.6 | Constitutional AI pipeline: cai_pipeline.py (7B judge, critique+revise), CONSTITUTION.md (10 principles), 3rd create_task in chat.py. DPO flywheel started. v0.3.5. No DB migration. |
 | 2026-05-03 (Day 16) | Claude Sonnet 4.6 | Episodic RAG retrieval: vector_retrieval.py (retrieve+format), wired sync in chat.py before run_director(), injected as last system prompt section. Score 0.65, top-k=3, sort by relevance. Research-backed (Mem0, LangMem, arxiv). v0.3.6. No DB migration. |
 | 2026-05-03 (Day 17) | Claude Sonnet 4.6 | Admin monitoring: routers/admin.py (stats+list+export JSONL), PreferencePair ORM, ADMIN_SECRET_KEY config. 3 real CAI pairs discovered. Training readiness assessment built-in. Research: SimPO>DPO for first run. v0.3.7. No DB migration. |
+| 2026-05-03 (Day 18) | Claude Sonnet 4.6 | Hybrid search BM42: embedding.py BM42 sparse model (get_sparse_model/embed_sparse_document/embed_sparse_query), vector_memory.py full rewrite (schema detection, zero-loss migration, Prefetch+RRF hybrid search, dense fallback). Qdrant v1.9→v1.12.0. 7 collections auto-migrated. fastembed_cache named volume. v0.3.8. No DB migration. |

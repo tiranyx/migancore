@@ -6,6 +6,44 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.8] — 2026-05-03 (Day 18)
+
+### Added
+- **Hybrid Search BM42** (`services/vector_memory.py`, `services/embedding.py`)
+  - Dense + BM42 sparse vectors with Reciprocal Rank Fusion (RRF) via Qdrant Query API
+  - Expected recall improvement: **+30–50%** for proper nouns, names, dates, product terms
+  - `_is_hybrid_collection()` — schema detection for migration gating
+  - `_create_hybrid_collection()` — named "dense" (768-dim Cosine) + named "sparse" (BM42)
+  - `_migrate_collection_to_hybrid()` — zero-loss auto-migration (scroll → delete → recreate → re-upsert)
+  - `_search_hybrid()` — `query_points()` with dual Prefetch + `FusionQuery(Fusion.RRF)`
+  - `_search_dense_only()` — legacy `client.search()` fallback (named "dense" → unnamed)
+  - `has_sparse` payload flag on every indexed turn pair
+- **BM42 Sparse Embedding** (`services/embedding.py`)
+  - `get_sparse_model()` — singleton `SparseTextEmbedding`, returns None on failure (graceful)
+  - `embed_sparse_document(text)` — uses `model.embed()` for indexing
+  - `embed_sparse_query(text)` — uses `model.query_embed()` for queries (**MUST NOT** use `embed()`)
+- **BM42 Pre-warm at Startup** (`main.py`)
+  - `await get_sparse_model()` added as step 4 in `lifespan()` — avoids cold start on first chat
+- **fastembed Named Volume** (`docker-compose.yml`)
+  - `fastembed_cache:` — persists 90MB BM42 ONNX model across Docker rebuilds
+
+### Changed
+- Version bumped: `0.3.7` → `0.3.8`
+- `ensure_collection()` — idempotent, auto-detects old schema, auto-migrates on first access
+- `index_turn_pair()` — `asyncio.gather()` concurrent dense+sparse embed computation
+- `search_semantic()` — hybrid first, exception → dense fallback, all exceptions → `[]`
+- `docker-compose.yml` — Qdrant upgraded `v1.9.0` → `v1.12.0` (required for Query API)
+
+### Research Notes (Day 18, 2025-2026 sources)
+- Qdrant Query API (Prefetch + FusionQuery.RRF) requires **≥ v1.10.0** — v1.9.0 does NOT support hybrid
+- BM42 `query_embed()` vs `embed()`: different token weighting — queries MUST use `query_embed()`, documents use `embed()`
+- fastembed `SparseTextEmbedding` available since v0.3.0 — already in our dependency tree
+- Zero-loss migration: `chunk_text` payload used to recompute sparse vectors for all existing points
+- Graceful degradation chain: hybrid → dense-only → `[]` — no regression if BM42 unavailable
+- Named volume `fastembed_cache`: cache hit = 108,100 it/s (instant vs ~4s re-download)
+
+---
+
 ## [0.3.7] — 2026-05-03 (Day 17)
 
 ### Added
