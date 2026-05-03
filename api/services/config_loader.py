@@ -35,11 +35,25 @@ def load_skills_config() -> dict:
 
 
 def get_agent_config(agent_id: str) -> dict | None:
-    """Get a single agent definition by ID."""
+    """Get a single agent definition by ID.
+
+    Falls back to the first public agent config if no exact match is found.
+    This ensures API-created agents (with random UUIDs) still inherit
+    default tools and persona from the core brain template.
+    """
     cfg = load_agents_config()
-    for agent in cfg.get("agents", []):
+    agents = cfg.get("agents", [])
+
+    # Exact match by ID
+    for agent in agents:
         if agent["id"] == agent_id:
             return agent
+
+    # Fallback: first public agent (core brain template)
+    for agent in agents:
+        if agent.get("visibility") == "public":
+            return agent
+
     return None
 
 
