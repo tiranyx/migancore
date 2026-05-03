@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
 **Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 16 — Episodic RAG Retrieval)
 **API Version:** 0.3.6
-**Git Commit:** `TBD`
+**Git Commit:** `4eaa610`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -181,12 +181,13 @@
 ## IN PROGRESS / NEXT SPRINT
 
 ### ✅ Day 16 — Episodic RAG Retrieval (COMPLETE)
-**Git Commit:** `TBD` | **Deployed:** 2026-05-03 | **Version:** 0.3.6
+**Git Commit:** `4eaa610` | **Deployed:** 2026-05-03 | **Version:** 0.3.6
 
 **Delivered:**
 - ✅ `services/vector_retrieval.py` — retrieve_episodic_context() + format_episodic_context()
 - ✅ `routers/chat.py` — synchronous Qdrant retrieval before run_director(), injected last in system prompt
 - ✅ `services/vector_memory.py` — score_threshold param + _retrieval_score in payload
+- ✅ `docker-compose.yml` — Qdrant ulimits nofile 1024→65536 (RocksDB Too many open files fix)
 
 **Architecture decisions locked:**
 - Score threshold 0.65 (not 0.55) — research shows 0.65 is optimal for Bahasa Indonesia on multilingual MPNet
@@ -285,6 +286,7 @@ Tidak ada blocker saat ini.
 
 | ID | Severity | Description | Fix |
 |----|----------|-------------|-----|
+| Q1 | FIXED (Day 16) | Qdrant "Too many open files" — RocksDB colpai 1024 fd limit saat create collection | `ulimits.nofile: 65536` di docker-compose.yml |
 | H4 | MEDIUM | `.venv` masih di-track git | `git rm -r --cached api/.venv` + `.gitignore` |
 | H2 | LOW | Alembic belum setup, migrations raw SQL | Setup sebelum beta |
 | H6 | LOW | `agent_tool_grants` tidak ada ORM model | Buat `models/agent_tool_grant.py` |
@@ -372,7 +374,7 @@ Tidak ada blocker saat ini.
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
 | External URL | https://api.migancore.com (Let's Encrypt SSL) |
 | RunPod budget | $0 spent of $50 allocated |
-| Git | VPS ↔ GitHub ↔ Local = SYNCED @ TBD |
+| Git | VPS ↔ GitHub ↔ Local = SYNCED @ 4eaa610 |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
 | DPO pairs accumulated | 1+ (flywheel started Day 15 — target: 500+ by Week 4) |
