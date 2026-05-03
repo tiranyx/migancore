@@ -2,12 +2,35 @@
 
 **Endpoint:** `https://api.migancore.com/mcp/`
 **Transport:** Streamable HTTP (MCP spec 2025-06-18)
-**Auth:** Bearer JWT (Authorization header)
+**Auth:** Bearer JWT (15min) **or** Bearer API key (`mgn_live_*`, long-lived) — Day 27
 **Protocol Version:** 2025-06-18
 
 ---
 
-## 1. Get a JWT Token
+## ⚡ ONE-LINE SETUP (Day 27 — Recommended)
+
+**Linux / macOS / WSL:**
+```bash
+curl -sL https://raw.githubusercontent.com/tiranyx/migancore/main/scripts/migan-setup.sh | bash
+```
+
+**Windows PowerShell:**
+```powershell
+iwr https://raw.githubusercontent.com/tiranyx/migancore/main/scripts/migan-setup.ps1 | iex
+```
+
+The script will:
+1. Prompt for MiganCore email + password
+2. Login (get JWT)
+3. Create a long-lived API key named `claude-code-<hostname>`
+4. Run `claude mcp add` to register it with Claude Code CLI
+5. Done — tools available in every Claude Code session forever
+
+---
+
+## Manual Setup (3 steps)
+
+### 1. Get a JWT Token (short-lived, 15 min)
 
 ```bash
 TOKEN=$(curl -s -X POST https://api.migancore.com/v1/auth/login \
@@ -21,11 +44,26 @@ echo "Token: $TOKEN"
 
 ---
 
-## 2. Connect from Claude Code CLI
+### 2a. (Optional but recommended) Convert JWT to long-lived API key
+
+```bash
+API_KEY=$(curl -s -X POST https://api.migancore.com/v1/api-keys \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-laptop"}' | jq -r .key)
+
+# API_KEY format: mgn_live_<id>_<secret>
+# This key NEVER expires until you revoke it.
+# SAVE IT NOW — the secret cannot be recovered.
+```
+
+### 2b. Connect from Claude Code CLI
+
+Use **either** the JWT (re-login every 15min) **or** the API key (permanent):
 
 ```bash
 claude mcp add --transport http migancore https://api.migancore.com/mcp/ \
-  --header "Authorization: Bearer $TOKEN"
+  --header "Authorization: Bearer $API_KEY"
 ```
 
 After this, in any Claude Code session, the following tools become available:
@@ -136,6 +174,52 @@ curl -X POST https://api.migancore.com/mcp/ \
 | `memory_write` | Save fact to long-term memory (Redis + Qdrant) | 500/day |
 | `memory_search` | Semantic search of saved facts | 1000/day |
 | `python_repl` | Sandboxed Python computation | enterprise plan only |
+
+---
+
+## 7a. API Key Management (Day 27)
+
+**Create a key:**
+```bash
+curl -X POST https://api.migancore.com/v1/api-keys \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-laptop","scopes":["tools:exec","chat:read"]}'
+# Returns: { "id": "...", "key": "mgn_live_...", "prefix": "mgn_live_abc123" }
+# SAVE THE 'key' FIELD NOW — it will not be shown again
+```
+
+**List your keys (no secrets shown):**
+```bash
+curl https://api.migancore.com/v1/api-keys -H "Authorization: Bearer $JWT"
+```
+
+**Revoke a key (idempotent, sub-1s propagation):**
+```bash
+curl -X DELETE https://api.migancore.com/v1/api-keys/{key_id} \
+  -H "Authorization: Bearer $JWT"
+```
+
+**API key format:** `mgn_live_<8hex_id>_<43char_secret>`
+- Total length: ~64 chars
+- Entropy: 256 bits (brute force infeasible)
+- Hashed in DB via HMAC-SHA256(server_pepper, key)
+- Same security model as Stripe/OpenAI/Anthropic API keys
+
+---
+
+## 7b. MCP Resources (Day 27)
+
+In addition to **Tools** (action functions), MiganCore exposes **Resources** (attachable context):
+
+| Resource URI | Returns |
+|--------------|---------|
+| `migancore://workspace` | Workspace root listing |
+| `migancore://workspace/{path}` | File contents (sandboxed, 50KB cap) |
+| `migancore://soul` | Mighan-Core SOUL.md persona |
+| `migancore://memory/help` | Memory tier reference |
+
+In Claude Code, mention with `@migancore:<resource>` syntax (auto-completes).
 
 ---
 

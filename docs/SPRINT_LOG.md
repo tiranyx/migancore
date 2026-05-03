@@ -470,6 +470,72 @@
 
 ## Week 3: Chat UI + Tools + MCP (Days 22–28)
 
+### Day 27 — API Keys + migan CLI + MCP Resources + TTS + Memory Pruning
+**Agent:** Claude Opus 4.7 (1m context)
+**Scope:** UX polish + capability expansion — make MCP setup trivial, expand to Resources/TTS, production-ready memory
+
+**Problem:**
+User feedback Day 26: setup MCP terlalu ribet (3 step + re-login tiap 15 menit). Plus 3 capability gaps untuk MCP jadi production-ready: tidak ada Resources (cuma Tools), tidak ada voice output, tidak ada memory cleanup.
+
+**Approach (mandatory protocol followed):**
+1. Read context: `week3_roadmap.md`, `day26_progress.md`
+2. Spawned 2 parallel research agents: (a) API keys + ElevenLabs, (b) MCP Resources + Qdrant pruning
+3. Documented `docs/DAY27_PLAN.md` (211 lines) with hypothesis/risk/benefit/adaptation
+4. Executed 8 phases sequentially
+5. E2E verified 11 tests
+6. Documented findings
+
+**Solution (5 features in single sprint):**
+
+**1. Long-lived API Keys** — `mgn_live_<id>_<secret>` format
+- HMAC-SHA256 (Stripe/OpenAI pattern), 256-bit entropy
+- Migration `025_day27_api_keys.sql` + `models/api_key.py` + `services/api_keys.py` + `routers/api_keys.py`
+- Both `deps/auth.py` and `mcp_server.py` middleware accept JWT or API key
+- Sub-1s revoke propagation (DB unique partial index)
+
+**2. `migan` CLI Setup Script**
+- `scripts/migan-setup.sh` (Linux/Mac/WSL) + `migan-setup.ps1` (Windows)
+- One-line: prompt creds → JWT → API key → `claude mcp add` → done
+- Idempotent (removes existing reg before re-adding)
+
+**3. MCP Resources** (4 templates)
+- `migancore://workspace/{path}`, `migancore://workspace`, `migancore://soul`, `migancore://memory/help`
+- `@mcp.resource()` decorator pattern from FastMCP SDK
+- Used in Claude Code via `@migancore:<uri>` syntax
+
+**4. TTS Tool** — `text_to_speech` via ElevenLabs `eleven_flash_v2_5`
+- 8th tool in registry
+- Returns base64-encoded mp3 + metadata
+- Free tier 10k chars/month, ~75ms TTFB
+- Auth via `xi-api-key` header (not Bearer)
+
+**5. Memory Pruning Daemon**
+- `services/memory_pruner.py` — daily asyncio task
+- Filter: `timestamp < now-30d AND importance < 0.7`
+- Auto-creates Qdrant payload indexes
+- Exception-wrapped — silent death prevention
+
+**E2E Verification (11 tests, all PASS):**
+JWT login, create API key, list keys, MCP init via API key (protocolVersion 2025-06-18), 8 tools listed, resources templates returned, concrete resources, workspace read, TTS graceful error without key, revoke HTTP 204, revoked key blocked HTTP 401.
+
+**Files Modified:**
+- NEW: `api/models/api_key.py`, `api/services/api_keys.py`, `api/services/memory_pruner.py`, `api/routers/api_keys.py`, `migrations/025_day27_api_keys.sql`, `scripts/migan-setup.sh`, `scripts/migan-setup.ps1`, `docs/DAY27_PLAN.md`
+- MODIFIED: `api/main.py`, `api/config.py`, `api/deps/auth.py`, `api/mcp_server.py`, `api/services/tool_executor.py`, `api/models/__init__.py`, `config/skills.json`, `config/agents.json`, `docker-compose.yml`
+
+**Git Commits:**
+- `ff80996` — feat(day27): API keys, migan CLI, MCP resources, TTS, memory pruning v0.4.5
+
+**Version:** 0.4.4 → 0.4.5
+
+**Deliverables:** Setup MCP yang tadinya 3 step (curl + manual claude mcp add) jadi 1 baris perintah. API keys eliminate 15-min re-login. Workspace + persona attachable ke Claude Code via `@migancore:`. Voice output siap (butuh ElevenLabs key). Memory tidak akan bloat infinitely.
+
+**Lessons (3 critical):**
+1. ElevenLabs uses `xi-api-key` header, not Authorization Bearer — always check vendor's actual auth scheme
+2. PostgreSQL `text[]` arrays in DEFAULT need `ARRAY[...]::text[]` cast
+3. asyncio background tasks dies silently on uncaught exception — always wrap loop body in try/except + retry sleep
+
+---
+
 ### Day 26 — MCP Streamable HTTP Server + Episodic Memory Poisoning Filter
 **Agent:** Claude Opus 4.7 (1m context)
 **Scope:** Distribution layer — expose MiganCore tools to MCP clients (Claude Desktop, Code, Cursor, Continue.dev)

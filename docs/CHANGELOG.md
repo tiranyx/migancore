@@ -6,6 +6,69 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.5] — 2026-05-04 (Day 27) — API Keys + migan CLI + MCP Resources + TTS + Memory Pruning
+
+### Added
+- **Long-lived API Keys** (`mgn_live_<id>_<secret>` format)
+  - `migrations/025_day27_api_keys.sql`: `api_keys` table with hashed lookup
+  - `services/api_keys.py`: HMAC-SHA256(pepper, key) — Stripe/OpenAI pattern
+  - `routers/api_keys.py`: POST/GET/DELETE `/v1/api-keys`
+  - `models/api_key.py`: ORM
+  - 256-bit secret entropy, hash indexed for sub-1s revoke propagation
+  - Default scopes: `tools:exec`, `chat:read`, `chat:write`
+- **`migan` CLI Setup Script**
+  - `scripts/migan-setup.sh` (Linux/Mac/WSL) + `migan-setup.ps1` (Windows)
+  - One-liner: `curl -sL .../migan-setup.sh | bash` — login, create API key, `claude mcp add`
+- **MCP Resources** (4 templates in `mcp_server.py`)
+  - `migancore://workspace/{path}` — sandboxed file read
+  - `migancore://workspace` — workspace root listing
+  - `migancore://soul` — Mighan-Core persona
+  - `migancore://memory/help` — memory tier reference
+  - Used in Claude Code via `@migancore:<uri>` syntax
+- **TTS Tool** — `text_to_speech` via ElevenLabs `eleven_flash_v2_5`
+  - 7th tool added to TOOL_REGISTRY (now 8 total)
+  - Returns base64-encoded mp3 + size + chars used
+  - Caps: 2500 chars/call, 2MB audio response
+  - Free tier: 10k chars/month
+- **Memory Pruning Daemon** — `services/memory_pruner.py`
+  - Background asyncio task, daily run (24h interval, 5min initial delay)
+  - Filter: `timestamp < now-30d AND importance < 0.7` (importance defaults to NULL = pinned)
+  - Auto-creates payload indexes on `timestamp` + `importance`
+  - Exception-wrapped — silent death prevention
+- **`docs/DAY27_PLAN.md`** — full sprint plan with hypothesis/risk/benefit/adaptation
+
+### Changed
+- `api/deps/auth.py` — `get_current_user()` accepts BOTH JWT and API key
+- `api/mcp_server.py` — middleware accepts both auth schemes; +4 resources; +1 tool (TTS)
+- `api/services/tool_executor.py` — `_text_to_speech()` handler + ELEVENLABS_TTS_ENDPOINT constant
+- `api/main.py` — pruner task + version 0.4.4 → 0.4.5
+- `api/config.py` — ELEVENLABS_*, API_KEY_PEPPER, MEMORY_PRUNE_* settings
+- `config/skills.json` — text_to_speech registration
+- `config/agents.json` — text_to_speech in core_brain default_tools
+- `docker-compose.yml` — ELEVENLABS_KEY + API_KEY_PEPPER env vars
+
+### Verified E2E (11 tests)
+```
+1. JWT login                  PASS
+2. Create API key             PASS — mgn_live_659906db... format OK
+3. List API keys              PASS — 1 found
+4. MCP init via API key       PASS — protocolVersion 2025-06-18
+5. tools/list                 PASS — 8 tools
+6. resources/templates/list   PASS
+7. resources/list concrete    PASS — 3 resources
+8. resources/read workspace   PASS — file listing returned
+9. TTS without key            PASS — graceful error
+10. Revoke API key            PASS — HTTP 204
+11. Revoked key blocked       PASS — HTTP 401 within 1s
+```
+
+### Lessons
+1. PostgreSQL `text[]` arrays vs JSON in DEFAULT clause — use `ARRAY[...]::text[]`
+2. ElevenLabs uses `xi-api-key` header, NOT `Authorization: Bearer`
+3. Memory pruner asyncio task MUST be wrapped in try/except — silent death otherwise
+
+---
+
 ## [0.4.4] — 2026-05-04 (Day 26) — MCP Streamable HTTP Server + Episodic Memory Poisoning Filter
 
 ### Added

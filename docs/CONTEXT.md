@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 26 — MCP Streamable HTTP Server + Episodic Filter)
-**API Version:** 0.4.4
-**Git Commit:** `6dfec87`
+**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 27 — API Keys + migan CLI + MCP Resources + TTS + Memory Pruning)
+**API Version:** 0.4.5
+**Git Commit:** `ff80996`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -15,14 +15,17 @@
 
 | Field | Value |
 |-------|-------|
-| Phase | Week 3 — Tool Expansion + Distribution Layer |
-| Sprint Day | Day 26 (COMPLETE) → Day 27 (TTS + Resources NEXT) |
-| API Version | 0.4.4 |
-| Git Commit | `6dfec87` |
-| Tool Catalog | 9 tools live: web_search, python_repl, memory_*, spawn_agent, http_get, generate_image (fal.ai), read_file, write_file |
-| **MCP Server** | ✅ **LIVE** at `https://api.migancore.com/mcp/` — 7 tools exposed, JWT auth |
+| Phase | Week 3 — Distribution Layer + Production Polish |
+| Sprint Day | Day 27 (COMPLETE) → Day 28 (Admin Dashboard + Handoff NEXT) |
+| API Version | 0.4.5 |
+| Git Commit | `ff80996` |
+| Tool Catalog | 10 tools: web_search, python_repl, memory_*, spawn_agent, http_get, generate_image, read_file, write_file, **text_to_speech** (Day 27) |
+| **MCP Server** | ✅ **LIVE** at `https://api.migancore.com/mcp/` — 8 tools + 4 resources |
+| **API Keys** | ✅ `mgn_live_*` long-lived (Day 27) — replaces 15-min JWT for headless clients |
+| **`migan` CLI** | ✅ one-line installer (`scripts/migan-setup.sh`/`.ps1`) |
 | Episodic Filter | ✅ tool-error responses skip Qdrant indexing (Day 26) |
-| External APIs | fal.ai $9.99 remaining (~$0.01 used) · ElevenLabs/Firecrawl pending |
+| Memory Pruner | ✅ daily daemon — points >30d AND importance<0.7 deleted (Day 27) |
+| External APIs | fal.ai $9.99 · ElevenLabs free tier ready (key not set yet) |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (API) · **https://app.migancore.com** (Chat UI) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
