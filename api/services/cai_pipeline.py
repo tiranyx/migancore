@@ -244,7 +244,9 @@ async def run_cai_pipeline(
       3. If score <= CRITIQUE_THRESHOLD: generate improved revision
       4. Store (revised=chosen, original=rejected) as DPO preference pair
     """
+    logger.info("cai.pipeline_entered", source_message_id=str(source_message_id))
     if random.random() > CAI_SAMPLE_RATE:
+        logger.info("cai.pipeline_sampled_out", source_message_id=str(source_message_id))
         return
 
     try:
