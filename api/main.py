@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.3.8",
+    version="0.3.9",
     lifespan=lifespan,
 )
 
@@ -159,7 +159,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "migancore-api",
-        "version": "0.3.8",
+        "version": "0.3.9",
     }
 
 
@@ -192,7 +192,7 @@ async def root():
     """API root — returns service metadata."""
     return {
         "name": "MiganCore",
-        "version": "0.3.8",
+        "version": "0.3.9",
         "tagline": "Every vision deserves a digital organism.",
         "endpoints": {
             "health": "/health",
