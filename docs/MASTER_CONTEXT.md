@@ -288,15 +288,38 @@ When deploying changes:
 
 ---
 
-## 10. WEEK 2 ROADMAP (Preview)
+## 10. WEEK 2 ROADMAP (Research Complete)
 
-| Day | Feature | Dependencies |
-|-----|---------|-------------|
-| 11 | Letta integration | Letta container, memory blocks |
-| 12 | Qdrant semantic memory | Vector embeddings, RAG |
-| 13-14 | MCP (Model Context Protocol) | Tool standardization |
-| 15 | Training pipeline v1 | Dataset collection, preference pairs |
+Deep research completed. Full details in `WEEK2_RESEARCH.md`.
+
+| Day | Feature | Approach | Complexity |
+|-----|---------|----------|------------|
+| 11 | **Letta Integration** | Hybrid Tier 3 memory (blocks) | Medium |
+| 12 | **Qdrant RAG** | Recursive chunking + BGE embeddings | Medium |
+| 13-14 | **MCP** | Convert skills.json → MCP server | Medium |
+| 15 | **Training Pipeline** | Unsloth + LoRA + DPO on RunPod | High |
+| 16-17 | **Model Versioning** | Deploy pipeline, A/B testing | Medium |
+
+### Key Decisions (Pre-made)
+- **Letta:** Use as Tier 3 memory, NOT replacement for our director
+- **Chunking:** Start recursive 512 tokens, iterate to semantic
+- **MCP:** Gradual migration of skills.json, keep existing tools working
+- **Training:** DPO (not RLHF) for MVP — simpler, no reward model
+- **GPU:** RunPod for training (VPS CPU too slow), export GGUF for Ollama
 
 ---
 
-*End of MASTER_CONTEXT.md — Last updated by Kimi Code CLI, Day 10*
+## 11. DOCUMENT INVENTORY
+
+| Document | Purpose | Update Frequency |
+|----------|---------|------------------|
+| `MASTER_CONTEXT.md` | Living project RAM | Every session |
+| `SPRINT_LOG.md` | Completed sprint history | End of each day |
+| `CHANGELOG.md` | Version history | Every release |
+| `FOUNDER_JOURNAL.md` | Strategic decisions | As needed |
+| `QA_REPORT.md` | Audit findings | After major changes |
+| `WEEK2_RESEARCH.md` | Deep research for upcoming work | Before sprint |
+
+---
+
+*End of MASTER_CONTEXT.md — Last updated by Kimi Code CLI, Day 10+Research*
