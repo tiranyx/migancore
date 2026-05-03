@@ -6,6 +6,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.3] — 2026-05-03 (Day 13)
+
+### Added
+- **Letta Client** (`services/letta.py`) — NEW FILE
+  - Singleton `httpx.AsyncClient` with `asyncio.Lock` for thread-safe init
+  - `ensure_letta_agent()` — idempotent get-or-create; creates 3 memory blocks:
+    `persona` (2000 chars) | `mission` (1000 chars) | `knowledge` (4000 chars)
+  - `get_blocks()` — returns `dict[label, value]`, `{}` on any Letta error
+  - `update_block()` — PATCH `/memory/block/{label}`, silent fail, never raises
+  - `format_persona_block()` — builds structured persona from soul_text + overrides
+  - Full graceful degradation: Letta down → chat continues with soul_text fallback
+- **Letta wiring in Agent Router** (`routers/agents.py`)
+  - `create_agent`: auto-provisions Letta agent after DB commit, saves `letta_agent_id`
+  - `spawn_agent`: child agent inherits merged `persona_blob` as Letta persona block
+- **Letta block injection in Chat** (`routers/chat.py`)
+  - Fetches Letta blocks before building system prompt
+  - `persona` block replaces static `soul_text` (Tier 3 > Tier 0 fallback chain)
+  - `mission` block injected as `[MISI AKTIF]` section
+  - `knowledge` block injected as `[KONTEKS DIKETAHUI]` (only if non-empty)
+
+### Research Notes (docs/DAY13_LETTA_RESEARCH.md)
+- Full VPS ecosystem map: MiganCore + Sidix + Mighantech3D + Ixonomic on same VPS
+- RunPod serverless: vLLM 80GB (LLM) + mighan-media-worker 48GB (media gen)
+- Letta port fix documented: server on 8283, EXPOSE says 8083 (Dockerfile mismatch)
+- `/memory` endpoint bug in Letta 0.6.0 documented — use `/memory/block` instead
+- RunPod vLLM future-proofing: `LLMConfig.model_endpoint_type: "vllm"` noted for Day 14+
+
+---
+
 ## [0.3.2] — 2026-05-03 (Day 11 + Day 12)
 
 ### Added

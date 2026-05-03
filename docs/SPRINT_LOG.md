@@ -239,6 +239,44 @@
 
 ---
 
+### Day 13 — Letta Tier 3 Persistent Persona Memory
+**Agent:** Claude Sonnet 4.6
+**Scope:** Persona persistence — agent identity survives across sessions via Letta block storage
+
+**Pre-Implementation Research (documented in DAY13_LETTA_RESEARCH.md):**
+- VPS ecosystem audit: Sidix (`/opt/sidix/`), Mighantech3D (`/root/mighantect-3d/`), Ixonomic all on same VPS
+- RunPod: `vLLM v2.14.0` (80GB) for LLM inference + `mighan-media-worker` (48GB) for media gen
+- Letta probe: listens on 8283 (not 8083 — EXPOSE mismatch), accessible via `http://letta:8283`
+- Letta `/memory` endpoint has 500 bug in 0.6.0 — use `/memory/block` instead
+- 72 REST endpoints mapped, `memgpt_agent` type selected, block schema confirmed
+- `letta-free` embedding avoids need for local embedding model in Letta agents
+- RunPod vLLM noted as Day 14+ opportunity: `LLMConfig.model_endpoint_type: "vllm"` ready
+
+**Architecture Decision: Multi-Block (not single persona block):**
+- `persona` block (2000 chars) — stable identity, replaces soul_text in system prompt
+- `mission` block (1000 chars) — active goals, can evolve per task
+- `knowledge` block (4000 chars) — learned facts about owner/context, grows Day 14+
+- Separates identity from context → selective updates without corrupting persona
+
+**New Files:**
+- `services/letta.py` — LettaClient singleton, `ensure_letta_agent`, `get_blocks`, `update_block`, `format_persona_block`
+
+**Modified Files:**
+- `routers/agents.py` — `create_agent` + `spawn_agent` auto-provision Letta agent
+- `routers/chat.py` — fetch blocks pre-prompt, inject persona/mission/knowledge
+
+**Deployment & Verification:**
+- Bug caught: `docker compose restart` uses old image → must use `docker compose up -d`
+- Bug caught: model cache not mounted → re-download on container recreate (35s)
+- E2E result: `letta.agent_created` log ✅, `letta_agent_id` in DB ✅, 3 blocks readable ✅
+- Chat: Tier 3 → Tier 0 fallback chain verified via `_build_system_prompt` logic
+
+**Version:** 0.3.2 → 0.3.3 (no DB migration — `letta_agent_id` column already exists from Day 10)
+
+**Deliverables:** Tier 3 persistent persona — every MiganCore agent auto-provisions a Letta agent with 3 memory blocks on creation
+
+---
+
 ### Day 12 — Qdrant RAG Tier 2 Semantic Memory
 **Agent:** Claude Sonnet 4.6
 **Scope:** Vector memory — agent ingat konteks percakapan lampau via semantic search

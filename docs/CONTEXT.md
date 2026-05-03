@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 12 — Qdrant RAG Tier 2)
-**API Version:** 0.3.2
-**Git Commit:** `3f22074`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 13 — Letta Tier 3)
+**API Version:** 0.3.3
+**Git Commit:** `df47884`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 12 (COMPLETE) → Day 13 (NEXT) |
-| API Version | 0.3.2 |
-| Git Commit | `3f22074` (VPS + GitHub + Local = SYNCED) |
+| Sprint Day | Day 13 (COMPLETE) → Day 14 (NEXT) |
+| API Version | 0.3.3 |
+| Git Commit | `df47884` (VPS + GitHub + Local = SYNCED) |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ Qdrant ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -78,6 +78,21 @@
 - ✅ `models/tool.py` — Tool ORM model (risk_level, policy JSONB, max_calls_per_day)
 - ✅ `migrations/011_day11_safety_gates.sql` — applied to live DB
 
+### Letta Tier 3 — Persona Block Persistence (Day 13, Claude)
+- ✅ `services/letta.py` — LettaClient singleton (httpx.AsyncClient)
+  - `ensure_letta_agent()` — get-or-create Letta agent with 3 memory blocks
+  - `get_blocks()` — `dict[label → value]`, returns `{}` on error (graceful degradation)
+  - `update_block()` — PATCH `/memory/block/{label}`, silent fail
+  - `format_persona_block()` — structured persona from soul_text + overrides
+- ✅ `routers/agents.py` — `create_agent` + `spawn_agent` auto-provision Letta agent
+  - Saves `letta_agent_id` to `agents` table after creation
+  - Spawn: child inherits merged `persona_blob` as Letta persona block
+- ✅ `routers/chat.py` — fetch blocks before prompt build; Tier 3 > Tier 0 fallback
+  - `persona` block replaces soul_text if Letta available
+  - `mission` + `knowledge` blocks injected as context sections
+- ✅ Letta container: `ado-letta-1`, port 8283 internal, `letta_db` fully migrated
+- ✅ E2E verified: 3 blocks created, `letta_agent_id` persisted, logs confirmed
+
 ### Memory Service (Day 7, Claude)
 - ✅ `services/memory.py` — Redis K-V Tier 1
   - Key pattern: `mem:{tenant_id}:{agent_id}:{namespace}:{key}`, 30d TTL
@@ -127,6 +142,25 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 13 — Letta Tier 3 Persona Memory (COMPLETE)
+**Git Commit:** `df47884` | **Deployed:** 2026-05-03 06:58 UTC | **Version:** 0.3.3
+
+**Delivered:**
+- ✅ `services/letta.py` — LettaClient singleton (httpx.AsyncClient), multi-block architecture
+  - `ensure_letta_agent()` — idempotent get-or-create, 3 blocks: `persona`/`mission`/`knowledge`
+  - `get_blocks()` — fetch all blocks → `dict[label, value]`, graceful degradation
+  - `update_block()` — PATCH by label, silent fail on error
+  - `format_persona_block()` — soul_text + overrides → structured Bahasa persona text
+- ✅ `routers/agents.py` — `create_agent` + `spawn_agent` auto-provision Letta agent, save `letta_agent_id`
+- ✅ `routers/chat.py` — fetch Letta blocks before prompt build; Tier 3 persona overrides Tier 0 soul_text
+- ✅ E2E verified: `letta.agent_created` log ✅, `letta_agent_id` in DB ✅, 3 blocks readable ✅
+
+**Architecture decisions locked:**
+- `memgpt_agent` type with `llm_config` → Ollama (ready to switch to RunPod vLLM Day 14+)
+- `letta-free` embedding (Letta hosted) — no local embedding needed for block storage
+- NEVER call `/v1/agents/{id}/messages` — Letta as storage only
+- `/memory/block` endpoint used (not `/memory` — has Letta 0.6.0 bug returning 500)
 
 ### ✅ Day 12 — Qdrant RAG Tier 2 (COMPLETE)
 **Git Commit:** `3f22074` | **Deployed:** 2026-05-03 06:24:20 UTC | **Model load:** 35s
