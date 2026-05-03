@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 20 — Context Window Management)
-**API Version:** 0.4.0
-**Git Commit:** `74e86e7`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 21 — Auto-rerun Synthetic Generation)
+**API Version:** 0.4.1
+**Git Commit:** `2ef988d`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 20 (COMPLETE) → Day 21 (NEXT) |
-| API Version | 0.4.0 |
-| Git Commit | `74e86e7` |
+| Sprint Day | Day 21 (COMPLETE) → Day 22 (NEXT) |
+| API Version | 0.4.1 |
+| Git Commit | `2ef988d` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -210,6 +210,27 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 21 — Auto-rerun Synthetic Generation (COMPLETE)
+**Git Commit:** `2ef988d` | **Deployed:** 2026-05-03 | **Version:** 0.4.1
+
+**Delivered:**
+- ✅ `services/synthetic_pipeline.py` — multi-round loop: `run_synthetic_generation(run_id, auto_target)`, `_count_synthetic_pairs()` DB helper, new Redis keys (round/cumulative_stored/target_pairs), zero_yield safety abort, `done_target_reached` status
+- ✅ `routers/admin.py` — `SyntheticStartRequest` body with `target_pairs`, `POST /start` returns `mode` + `target_pairs`, `GET /status` now includes round/cumulative_stored/target_pairs
+- ✅ `main.py` — version 0.4.0 → 0.4.1
+
+**E2E verified:**
+- `POST /synthetic/start {"target_pairs": 1000}` → `mode: auto_rerun` ✅
+- `GET /synthetic/status` → `round: 1, target_pairs: 1000, is_running: true` ✅
+- Auto-rerun task running in VPS background ✅
+
+**Architecture decisions locked:**
+- DB count (not in-memory) for target check → restart-safe across container deploys
+- `source_method LIKE 'synthetic%'` → counts all synthetic sources including future ones
+- zero_yield_abort → Ollama failure detection without infinite loop
+- `done_target_reached` status → distinguishable from single-run `done`
+
+---
 
 ### ✅ Day 20 — Context Window Management + Tool Executor Timeout (COMPLETE)
 **Git Commit:** `74e86e7` | **Deployed:** 2026-05-03 | **Version:** 0.4.0
@@ -480,6 +501,8 @@ Tidak ada blocker saat ini.
 - ❌ Jangan set `num_ctx` terlalu besar (>8192) tanpa benchmark — CPU inference O(n²) dengan context length
 - ❌ Jangan skip `_trim_history_to_budget()` saat menambah history — token budget tidak otomatis dikelola oleh Ollama
 - ❌ Jangan percaya notes lama tentang "upgrade needed" tanpa baca code actual — bisa jadi sudah diimplementasikan (F-11)
+- ❌ Jangan restart auto-rerun dengan target_pairs berbeda tanpa /stop dulu — asyncio.Lock mencegah dua task, tapi Redis state perlu bersih
+- ❌ Jangan set target_pairs terlalu kecil (< current DB count) — sistem akan exit immediately di round pertama setelah target check
 
 ---
 
@@ -514,12 +537,12 @@ Tidak ada blocker saat ini.
 | Stack services | 6 running (postgres, redis, qdrant, ollama, api, letta) |
 | External URL | https://api.migancore.com (Let's Encrypt SSL) |
 | RunPod budget | $0 spent of $50 allocated |
-| Git (Day 20) | VPS ↔ GitHub ↔ Local = SYNCED @ 74e86e7 |
+| Git (Day 21) | VPS ↔ GitHub ↔ Local = SYNCED @ 2ef988d |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
 | CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
 | DPO pairs accumulated | real (CAI) + synthetic (synthetic_seed_v1) — target: 1000+ before training |
 | Admin monitoring | /v1/admin/stats + /preference-pairs + /export (JSONL), Day 17 ✅ |
-| Synthetic generator | 120 seeds, 7 domains, Triple-Source, Day 19 ✅ |
+| Synthetic generator | auto-rerun with target_pairs=1000, running in background, Day 21 ✅ |
 | Episodic RAG | Qdrant retrieval wired, score=0.65, top-k=3, sort-by-relevance, Day 16 ✅ |
 | Hybrid search | BM42 sparse + dense RRF, Qdrant v1.12.0, 7 collections migrated, Day 18 ✅ |
 | Context window | num_ctx=4096 explicit, token budget trimming, Day 20 ✅ |
@@ -553,3 +576,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 18) | Claude Sonnet 4.6 | Hybrid search BM42: embedding.py BM42 sparse model (get_sparse_model/embed_sparse_document/embed_sparse_query), vector_memory.py full rewrite (schema detection, zero-loss migration, Prefetch+RRF hybrid search, dense fallback). Qdrant v1.9→v1.12.0. 7 collections auto-migrated. fastembed_cache named volume. v0.3.8. No DB migration. |
 | 2026-05-03 (Day 19) | Claude Sonnet 4.6 | Synthetic DPO generator: seed_bank.py (120 seeds, 7 domains, Triple-Source), synthetic_pipeline.py (generate→critique→revise, Redis tracking, graceful cancel), admin.py 3 new endpoints (start/status/stop), cai_pipeline.py source_method param + nullable source_message_id. v0.3.9. No DB migration. |
 | 2026-05-03 (Day 20) | Claude Sonnet 4.6 | Context window management: num_ctx=4096 explicit in all Ollama calls (chat.py + director.py), token budget trimming in chat.py (_estimate_tokens, _trim_history_to_budget, MAX_HISTORY_LOAD=10). Tool executor timeout: asyncio.wait_for(2.0s) in _memory_search → Redis fallback; corrected source label qdrant_hybrid. v0.4.0. No DB migration. |
+| 2026-05-03 (Day 21) | Claude Sonnet 4.6 | Auto-rerun synthetic generation: synthetic_pipeline.py multi-round loop with DB target check (_count_synthetic_pairs), new Redis keys (round/cumulative_stored/target_pairs), zero_yield safety abort. admin.py SyntheticStartRequest body. v0.4.1. No DB migration. |

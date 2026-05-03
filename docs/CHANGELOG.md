@@ -6,6 +6,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.1] — 2026-05-03 (Day 21)
+
+### Added
+- **Auto-rerun Synthetic Generation** (`services/synthetic_pipeline.py`)
+  - `start_synthetic_generation(target_pairs=None)` — new optional parameter
+  - `run_synthetic_generation(run_id, auto_target=None)` — loops multiple rounds until
+    DB total synthetic pairs >= `auto_target`. Backward compatible: `None` = single run.
+  - `_count_synthetic_pairs()` — `SELECT COUNT(*) FROM preference_pairs WHERE source_method LIKE 'synthetic%'`; counts across all runs including previous sessions
+  - New Redis keys: `synthetic:round`, `synthetic:cumulative_stored`, `synthetic:target_pairs`
+  - Safety: `zero_yield_abort` — if a full round stores 0 pairs (Ollama down?), stops with `status="error"` instead of looping forever
+  - New `status` value: `"done_target_reached"` — distinguishes auto-rerun completion from single-run completion
+  - New run_id per round for traceability in logs
+
+### Changed
+- **`GET /v1/admin/synthetic/status`** response now includes:
+  - `round` — current round number (1-based)
+  - `cumulative_stored` — total pairs stored across all rounds this session
+  - `target_pairs` — auto-rerun target (null in single-run mode)
+- **`POST /v1/admin/synthetic/start`** (`routers/admin.py`):
+  - Accepts optional JSON body: `{"target_pairs": 1000}`
+  - Response includes `mode` ("auto_rerun" | "single_run") and `target_pairs`
+  - No body = single-run mode (original behavior, backward compatible)
+- Version bumped: `0.4.0` → `0.4.1`
+
+### Usage
+```bash
+# Auto-rerun until 1000 pairs (set and forget):
+curl -X POST -H "X-Admin-Key: <key>" -H "Content-Type: application/json" \
+     -d '{"target_pairs": 1000}' https://api.migancore.com/v1/admin/synthetic/start
+
+# Single run (original behavior):
+curl -X POST -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/start
+
+# Stop anytime:
+curl -X POST -H "X-Admin-Key: <key>" https://api.migancore.com/v1/admin/synthetic/stop
+```
+
+---
+
 ## [0.4.0] — 2026-05-03 (Day 20)
 
 ### Added

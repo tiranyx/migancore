@@ -468,6 +468,65 @@
 
 ---
 
+### Day 21 — Auto-rerun Synthetic Generation
+**Agent:** Claude Sonnet 4.6
+**Scope:** DPO flywheel automation — eliminate manual re-trigger every 2-4 hours
+
+**Problem:**
+Each synthetic generation run processes 120 seeds and stops. Reaching 1000 pairs requires
+~15-20 runs = 30-80 hours of manual monitoring and `POST /start` calls. VPS is CPU-only and
+unattended — no monitoring infrastructure. Need set-and-forget automation.
+
+**Solution: Multi-round auto-rerun with DB target check:**
+- `start_synthetic_generation(target_pairs=1000)` starts a task that loops rounds
+- After each round (120 seeds): check DB total via COUNT query
+- If `total_in_db >= target_pairs` → stop (`done_target_reached`)
+- If round yields 0 pairs (Ollama down) → stop with error (safety)
+- Otherwise: new run_id, round_num+1, start next round
+- `stop_synthetic_generation()` cancels immediately at any point (unchanged)
+
+**Key Design Decision — Why DB count, not in-memory counter:**
+In-memory counter resets on container restart. The DB is the source of truth.
+`_count_synthetic_pairs()` counts ALL rows with `source_method LIKE 'synthetic%'` —
+this means pairs from previous sessions and previous runs count toward the target.
+Result: auto-rerun is restart-safe (re-run with same target after redeploy = picks up from where DB left off).
+
+**Modified Files:**
+- `api/services/synthetic_pipeline.py` (major update)
+  - New Redis keys: `synthetic:round`, `synthetic:cumulative_stored`, `synthetic:target_pairs`
+  - `_count_synthetic_pairs()` — new helper, DB COUNT query with AsyncSessionLocal pattern
+  - `run_synthetic_generation(run_id, auto_target=None)` — multi-round while loop with:
+    - Per-round Redis counter reset at start of each round
+    - `cumulative_stored` tracked across rounds (real-time in Redis)
+    - `zero_yield_abort` safety: break on 0 stored to avoid infinite loop
+    - `done_target_reached` status when DB >= target
+  - `get_synthetic_status()` — returns `round`, `cumulative_stored`, `target_pairs`
+  - `start_synthetic_generation(target_pairs=None)` — passes through to `auto_target`
+- `api/routers/admin.py` (endpoint update)
+  - `SyntheticStartRequest(BaseModel)` — `target_pairs: Optional[int] = None`
+  - `POST /synthetic/start` accepts optional JSON body, returns `mode` + `target_pairs`
+  - `GET /synthetic/status` docstring updated (round, cumulative_stored, target_pairs)
+- `api/main.py` — version 0.4.0 → 0.4.1
+
+**Backward Compatibility:**
+- `POST /synthetic/start` with no body = single-run mode (original behavior)
+- `get_synthetic_status()` returns `round=1` when `synthetic:round` not set in Redis
+
+**E2E Verification:**
+- `/health version: 0.4.1` ✅
+- `POST /synthetic/start {"target_pairs": 1000}` → `mode: auto_rerun, target_pairs: 1000` ✅
+- `GET /synthetic/status` → `round: 1, target_pairs: 1000, is_running: true` ✅
+- Auto-rerun task running in background — will run ~15 rounds until 1000 pairs reached ✅
+
+**Git Commits:**
+- `2ef988d` — feat: auto-rerun synthetic generation with target_pairs v0.4.1 (Day 21)
+
+**Version:** 0.4.0 → 0.4.1
+
+**Deliverables:** Synthetic generation is now fully autonomous — set `target_pairs=1000`, walk away, check /stats when ready
+
+---
+
 ### Day 20 — Context Window Management + Tool Executor Timeout
 **Agent:** Claude Sonnet 4.6
 **Scope:** Two targeted infrastructure fixes — context overflow prevention + tool loop reliability
