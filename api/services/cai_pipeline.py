@@ -21,6 +21,7 @@ DPO data flywheel:
   500+ pairs by Week 4 → DPO training on RunPod → Improved Qwen2.5-7B-v2
 """
 
+import asyncio
 import json
 import random
 import uuid
@@ -34,11 +35,12 @@ from config import settings
 from models.base import AsyncSessionLocal
 from services.ollama import OllamaClient, OllamaError
 
-# CAI calls need longer total timeout than the default 60s.
-# Critique: ~400 tokens at 10 tok/s ≈ 40–60s
-# Revision: ~800 tokens at 10 tok/s ≈ 80–130s
-# Use 5-minute total to be safe on CPU-only VPS.
-_CAI_TIMEOUT = httpx.Timeout(300.0, connect=5.0, read=30.0)
+# CAI calls need read=None: Ollama non-streaming runs all inference server-side
+# then sends the full response at once. With a finite read timeout, httpx times
+# out while waiting for the first byte (during Ollama's inference phase).
+# Critique: ~400 tokens at 10 tok/s ≈ 40–60s of waiting before first byte
+# Revision: ~800 tokens at 10 tok/s ≈ 80–130s of waiting before first byte
+_CAI_TIMEOUT = httpx.Timeout(connect=5.0, read=None, write=30.0, pool=10.0)
 
 logger = structlog.get_logger()
 
@@ -276,5 +278,8 @@ async def run_cai_pipeline(
             source_message_id=source_message_id,
         )
 
+    except asyncio.CancelledError:
+        logger.warning("cai.pipeline_cancelled", source_message_id=str(source_message_id))
+        raise  # CancelledError must be re-raised to properly cancel the task
     except Exception as exc:
         logger.warning("cai.pipeline_error", error=str(exc))
