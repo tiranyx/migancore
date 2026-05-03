@@ -240,6 +240,37 @@ async def ensure_collection(agent_id: str, col_type: str = "episodic") -> None:
         raise
 
 
+# Day 26: Markers used to detect tool-error/policy-block responses that should
+# NOT be indexed into episodic memory. Indexing them poisons future retrieval —
+# the model retrieves "I encountered a policy block" and regurgitates it as
+# response on semantically similar prompts. (Day 25 lesson: 14 poisoned points
+# manually purged from Qdrant after this was discovered.)
+_TOOL_ERROR_MARKERS = (
+    "policy block",
+    "policy restrictions",
+    "policy_blocked",
+    "encountered a policy",
+    "I attempted to",  # qwen pattern when failing tool call
+    "I encountered an issue",  # qwen pattern
+    "operation was blocked",
+    "blocked due to",
+    "requires plan",
+    "requires explicit approval",
+)
+
+
+def _is_tool_error_response(text: str) -> bool:
+    """Detect responses that indicate a failed tool call.
+
+    Returns True if the assistant's message starts with or prominently contains
+    a tool-error marker. Used to skip episodic indexing for poisoned outputs.
+    """
+    if not text:
+        return False
+    head = text[:300].lower()
+    return any(marker.lower() in head for marker in _TOOL_ERROR_MARKERS)
+
+
 async def index_turn_pair(
     agent_id: str,
     tenant_id: str,
@@ -256,7 +287,20 @@ async def index_turn_pair(
 
     Sparse vectors: computed from chunk_text using BM42.
     If BM42 unavailable, falls back to dense-only point (still searchable).
+
+    Day 26: Skips indexing if assistant_message is a tool-error response
+    (prevents episodic memory poisoning — model regurgitating past failures).
     """
+    # Day 26: episodic memory poisoning filter
+    if _is_tool_error_response(assistant_message):
+        logger.info(
+            "qdrant.turn_skipped_tool_error",
+            agent=agent_id,
+            session=session_id,
+            preview=assistant_message[:80],
+        )
+        return
+
     async with _embed_semaphore:
         try:
             await ensure_collection(agent_id)

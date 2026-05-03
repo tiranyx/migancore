@@ -24,6 +24,14 @@ from routers import admin as admin_router
 from routers import chat as chat_router
 from routers import conversations as conversations_router
 
+# Day 26: MCP Streamable HTTP server (lazy import — degrades gracefully if SDK missing)
+try:
+    from mcp_server import get_mcp_app
+    _MCP_AVAILABLE = True
+except Exception as _mcp_import_err:
+    _MCP_AVAILABLE = False
+    _MCP_IMPORT_ERROR = str(_mcp_import_err)
+
 logger = structlog.get_logger()
 
 
@@ -104,7 +112,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.4.3",
+    version="0.4.4",
     lifespan=lifespan,
 )
 
@@ -151,6 +159,17 @@ app.include_router(agents_router.router)
 app.include_router(admin_router.router)
 app.include_router(chat_router.router)
 app.include_router(conversations_router.router)
+
+# Day 26: Mount MCP Streamable HTTP server at /mcp
+# Degrades gracefully if `mcp` SDK is unavailable (e.g. dev container without rebuild).
+if _MCP_AVAILABLE:
+    try:
+        app.mount("/mcp", get_mcp_app())
+        logger.info("mcp.mounted", path="/mcp", transport="streamable-http")
+    except Exception as exc:
+        logger.error("mcp.mount_failed", error=str(exc))
+else:
+    logger.warning("mcp.unavailable", reason=_MCP_IMPORT_ERROR)
 
 
 @app.get("/health", tags=["system"])
