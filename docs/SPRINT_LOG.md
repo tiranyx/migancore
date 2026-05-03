@@ -468,6 +468,81 @@
 
 ---
 
+### Day 19 — Synthetic DPO Data Generator (Triple-Source Seed Architecture)
+**Agent:** Claude Sonnet 4.6
+**Scope:** DPO flywheel acceleration — from 3 real pairs to 1000+ via synthetic generation
+
+**Problem:**
+Only 3 DPO preference pairs accumulated after Day 18. SimPO training requires ≥1000 pairs.
+Real user traffic insufficient on CPU-only VPS without an established user base. Need accelerator.
+
+**Pre-Implementation Research:**
+- SynPO (arxiv 2410.06961): self-play synthetic generation with external critique prevents collapse
+- SimPO (arxiv 2405.14734): reference-free DPO, noise-tolerant — correct algorithm for synthetic data
+- SIDIX hallucination transfer risk: SIDIX uses auto-generated QA pairs with known hallucination issues.
+  Decision: use SIDIX **topic taxonomy ONLY** (framing patterns), NOT content/answers.
+  Risk if content used: bake SIDIX-specific facts, brand identity, and auto-hallucinations into MiganCore model.
+- MighanTech3D: 16 NPC AI agents with defined knowledge domains → 7 realistic user archetypes
+- `source_method` column already exists in preference_pairs — no DB migration needed
+
+**Triple-Source Seed Architecture:**
+- Source 1: MighanTech3D NPC personas → 7 knowledge domains → realistic user archetype seeds
+- Source 2: SIDIX topic taxonomy → question framing patterns (safe; no content imported)
+- Source 3: SynPO research patterns → diversity heuristics across task types
+- Result: 120 diverse seeds, ~17 per domain, balanced task distribution
+
+**New Files:**
+- `api/services/seed_bank.py` (NEW): 120 seed messages across 7 domains
+  - D1: Creative & Content (17) — article writing, copywriting, brand tone
+  - D2: Research & Analytics (17) — market research, data interpretation, frameworks
+  - D3: SEO & Metadata (17) — keyword strategy, schema markup, content taxonomy
+  - D4: Social & Distribution (17) — content calendar, virality, platform strategy
+  - D5: Design & Visual (17) — design brief, storyboard, brand guidelines
+  - D6: Operations & Management (18) — OKR, SOP, capacity planning, client comms
+  - D7: General AI Assistant (17) — AI literacy, reasoning, decision support
+- `api/services/synthetic_pipeline.py` (NEW): full generation pipeline
+  - `_generate_initial_response()`: Ollama call T=0.7 for response diversity
+  - `_process_seed()`: single seed through full generate→critique→revise CAI flow
+  - `run_synthetic_generation()`: background asyncio.Task, Redis tracking, graceful cancellation
+  - `get_synthetic_status()`: Redis counter reader for admin monitoring
+  - `start_synthetic_generation()`: creates asyncio.Task, enforces 1-at-a-time constraint
+  - `stop_synthetic_generation()`: cancels running task
+
+**Modified Files:**
+- `api/services/cai_pipeline.py`:
+  - `_store_preference_pair()`: `source_message_id` now optional (None for synthetic)
+  - Added `source_method: str = "cai_pipeline"` parameter — enables reuse by synthetic pipeline
+  - DB column was already there; no schema change needed
+- `api/routers/admin.py`: 3 new endpoints
+  - `POST /v1/admin/synthetic/start` — trigger run, returns run_id + monitor URLs
+  - `GET  /v1/admin/synthetic/status` — Redis counters: status/total/processed/stored/progress_pct
+  - `POST /v1/admin/synthetic/stop` — cancel task (async, status updates to "cancelled" in Redis)
+
+**Hallucination Safety Design:**
+- SIDIX content NOT imported: no QA pair answers, no corpus_qa, no finetune_sft.jsonl
+- Seeds are question templates, not domain facts
+- CAI critique gate: only responses scoring ≤3 (poor quality) get revised → paired stored
+- source_method="synthetic_seed_v1": allows filtering synthetic pairs out at training time
+- Expected filter rate: 40-50% of seeds produce a pair (same as real user traffic)
+
+**E2E Verification:**
+- `/health version: 0.3.9` ✅
+- `POST /v1/admin/synthetic/start` → `run_id` returned ✅
+- `GET /v1/admin/synthetic/status` → `status: running, total: 120` ✅
+- First seed processed: `processed=1, stored=1` ✅
+- DB verify: `source_method=synthetic_seed_v1, judge_score=3` stored ✅
+- Prompt preview: "Buatkan intro artikel tentang tren AI di Indonesia tahun 202..." ✅
+
+**Git Commits:**
+- `a9a7b65` — feat: synthetic DPO generator — Triple-Source seed bank v0.3.9 (Day 19)
+- `471e34b` — chore: bump version 0.3.8 → 0.3.9 (Day 19)
+
+**Version:** 0.3.8 → 0.3.9
+
+**Expected Yield:** ~50-60 pairs per run (40-50% filter rate). Re-run `/synthetic/start` as needed to accumulate toward 1000-pair SimPO readiness threshold.
+
+---
+
 ### Day 14 — Knowledge Block Auto-Extraction
 **Agent:** Claude Sonnet 4.6
 **Scope:** Self-evolving memory — knowledge block grows from real conversations

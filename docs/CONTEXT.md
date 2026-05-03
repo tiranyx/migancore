@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 18 — Hybrid Search BM42)
-**API Version:** 0.3.8
-**Git Commit:** `f8779ea`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 19 — Synthetic DPO Generator)
+**API Version:** 0.3.9
+**Git Commit:** `471e34b`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,9 +16,9 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 18 (COMPLETE) → Day 19 (NEXT) |
-| API Version | 0.3.8 |
-| Git Commit | `f8779ea` |
+| Sprint Day | Day 19 (COMPLETE) → Day 20 (NEXT) |
+| API Version | 0.3.9 |
+| Git Commit | `471e34b` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |
@@ -93,22 +93,28 @@
 - ✅ Letta container: `ado-letta-1`, port 8283 internal, `letta_db` fully migrated
 - ✅ E2E verified: 3 blocks created, `letta_agent_id` persisted, logs confirmed
 
-### Admin Monitoring — CAI Flywheel Visibility (Day 17, Claude)
-- ✅ `routers/admin.py` — read-only admin endpoints, X-Admin-Key auth
+### Admin Monitoring + Synthetic Generator (Day 17 + Day 19, Claude)
+- ✅ `routers/admin.py` — admin endpoints, X-Admin-Key auth
   - `GET /v1/admin/stats` — pair count, unused, avg score, distribution, 24h/7d rate, training readiness
   - `GET /v1/admin/preference-pairs` — paginated listing with `score_max`, `unused_only` filters
   - `GET /v1/admin/export` — JSONL stream in Unsloth/TRL DPO-compatible format (prompt/chosen/rejected)
+  - **`POST /v1/admin/synthetic/start`** — trigger synthetic generation run, returns run_id (Day 19)
+  - **`GET /v1/admin/synthetic/status`** — Redis counters: status/total/processed/stored/progress_pct (Day 19)
+  - **`POST /v1/admin/synthetic/stop`** — cancel running task (409 if already running) (Day 19)
   - Auth: X-Admin-Key header → `settings.ADMIN_SECRET_KEY` (503 unconfigured, 401 wrong)
   - Training readiness thresholds: not_ready <500 | approaching 500-999 | ready 1000+ | ideal 2000+
+- ✅ `services/synthetic_pipeline.py` — synthetic DPO generator (Day 19, NEW)
+  - `start_synthetic_generation()` — creates asyncio.Task, one-at-a-time (asyncio.Lock)
+  - `run_synthetic_generation()` — generates initial response (T=0.7) → CAI critique → revise if ≤3 → store
+  - `get_synthetic_status()` / `stop_synthetic_generation()` — status + cancellation
+  - Redis keys: `synthetic:status/run_id/total/processed/stored/started_at`
+  - source_method="synthetic_seed_v1" — distinguishes from real user pairs
+- ✅ `services/seed_bank.py` — 120 diverse seed messages (Day 19, NEW)
+  - 7 domains: Creative/Research/SEO/Social/Design/Ops/General AI
+  - Triple-Source: MighanTech3D NPCs + SIDIX taxonomy (framing only!) + SynPO patterns
 - ✅ `models/preference_pair.py` — PreferencePair SQLAlchemy ORM model
 - ✅ `config.py` — `ADMIN_SECRET_KEY` setting (env var)
-- ✅ `docker-compose.yml` — `ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}` in API environment block
-- ✅ **E2E verified:** 3 real CAI pairs discovered! All endpoints 200. JSONL valid. Auth guards: no-key→401, wrong-key→401, correct-key→200
-
-**E2E results:**
-- `total_pairs: 3` | `unused_pairs: 3` | `avg_judge_score: 3.0` | `by_source: {cai_pipeline: 3}`
-- `training_readiness.status: "not_ready"` | `progress_toward_1k_pct: 0.3`
-- JSONL export: 3 lines, ALL LINES VALID JSON ✓
+- ✅ **E2E verified (Day 19):** Synthetic start → run_id ✅ status: running/total:120 ✅ processed=1/stored=1 ✅ DB: source_method=synthetic_seed_v1 ✅
 
 ### Episodic Context Retrieval — Qdrant RAG (Day 16, Claude)
 - ✅ `services/vector_retrieval.py` — semantic retrieval + formatter, NEW FILE
@@ -201,6 +207,27 @@
 ---
 
 ## IN PROGRESS / NEXT SPRINT
+
+### ✅ Day 19 — Synthetic DPO Generator (COMPLETE)
+**Git Commits:** `a9a7b65`, `471e34b` | **Deployed:** 2026-05-03 | **Version:** 0.3.9
+
+**Delivered:**
+- ✅ `services/seed_bank.py` (NEW) — 120 diverse seed messages across 7 domains (Triple-Source architecture)
+- ✅ `services/synthetic_pipeline.py` (NEW) — full generate→critique→revise pipeline with Redis tracking
+- ✅ `routers/admin.py` — 3 new endpoints: /synthetic/start, /status, /stop
+- ✅ `services/cai_pipeline.py` — `_store_preference_pair()` now accepts `source_method` param + nullable `source_message_id`
+
+**E2E verified:**
+- Synthetic generation started (run_id=3f49eb65) ✅
+- First seed processed and stored: `source_method=synthetic_seed_v1, score=3` ✅
+- Redis tracking working: status/total/processed/stored all updating ✅
+- Generation running in background (120 seeds, ~2-4 hours on CPU-only VPS) ✅
+
+**Architecture decisions locked:**
+- One synthetic run at a time: `asyncio.Lock` prevents concurrent runs (CPU-only constraint)
+- SIDIX content NOT used as seeds: only topic taxonomy framing patterns (hallucination transfer risk)
+- source_method="synthetic_seed_v1": distinguishes from real CAI pairs for training provenance
+- CAI filter gate: only score ≤3 pairs stored (expected 40-50% yield from 120 seeds = 50-60 pairs)
 
 ### ✅ Day 18 — Hybrid Search BM42 + RRF Fusion (COMPLETE)
 **Git Commit:** `f8779ea` | **Deployed:** 2026-05-03 | **Version:** 0.3.8
@@ -372,6 +399,8 @@ Tidak ada blocker saat ini.
 | CAI sampling | 50% of turns | CPU resource management — critique + revise = 2 sequential 7B calls |
 | Training algorithm | SimPO (NOT DPO) for first run | Noise-tolerant, no reference model, +6.4pts AlpacaEval 2 (arxiv 2405.14734) — CAI pairs will have label noise |
 | DPO pipeline | Accumulate pairs now, train Week 3-4 | RunPod RTX 4090, $2-4/run; need 1000+ pairs minimum (arxiv 2502.14560) |
+| Synthetic seed source | MighanTech3D NPCs + SIDIX taxonomy (framing only) | Realistic archetypes + diverse framing; no hallucination transfer |
+| Synthetic generation cadence | Re-run /synthetic/start as needed | Each run adds ~50-60 pairs; stop/start anytime |
 | Knowledge scope | Sync chat only | Stream endpoint: async persist pattern makes nested task complex. Defer. |
 | Langfuse | DEFERRED (Week 3) | Belum ada yang perlu diobservasi. structlog sudah cukup. |
 | Memory Tier 1 | Redis K-V | Fast, simple, TTL built-in |
@@ -415,6 +444,9 @@ Tidak ada blocker saat ini.
 - ❌ Jangan hapus `fastembed_cache` named volume tanpa alasan — ini menyimpan 90MB BM42 ONNX model
 - ❌ Jangan set score_threshold pada BM42 prefetch leg — BM42 scores bukan cosine, range berbeda
 - ❌ Jangan hapus `chunk_text` dari payload saat indexing — ini adalah migration escape hatch untuk re-embedding
+- ❌ Jangan import SIDIX QA answers / corpus_qa / finetune_sft.jsonl sebagai seed data — hallucination transfer risk ke MiganCore model
+- ❌ Jangan jalankan dua synthetic generation task sekaligus — asyncio.Lock sudah ada, gunakan /stop dulu
+- ❌ Jangan filter semua synthetic pairs dari training set secara default — synthetic data valid, bedakan dengan source_method jika diperlukan
 
 ---
 

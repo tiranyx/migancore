@@ -1,6 +1,6 @@
 # MIGANCORE — LESSONS LEARNED
 **Living Document — Updated setiap sesi**
-**Last Update:** Day 18 | **Author:** Claude Sonnet 4.6
+**Last Update:** Day 19 | **Author:** Claude Sonnet 4.6
 
 > Ini adalah cognitive ledger proyek — catatan pelajaran berharga dari kegagalan DAN keberhasilan.
 > Tujuan: **jangan ulangi kegagalan, lipat gandakan keberhasilan.**
@@ -371,6 +371,55 @@ volumes:
 
 ---
 
+### [F-09] Synthetic Training Data Hallucination Transfer
+**Day:** 19 | **Severity:** HIGH | **Category:** ML Safety
+
+**Gejala Potensial:** Jika content dari SIDIX (QA pairs, corpus_qa, finetune_sft.jsonl) digunakan sebagai seed data untuk synthetic DPO generation, model yang dilatih akan mengadopsi:
+1. Fakta spesifik SIDIX yang mungkin salah (auto-generated hallucinations)
+2. Brand identity SIDIX (persona, tone, sidq/sanad/tabayyun terminology)
+3. Domain bias SIDIX yang tidak relevan untuk MiganCore
+
+**Root Cause:** Training data kontaminasi — model belajar dari data yang mengandung sinyal salah. Synthetic data menggandakan jumlah pairs, bukan hanya memperkenalkan sedikit noise. Skala besar = amplifikasi hallucination.
+
+**Impact:** Fine-tuned MiganCore model bisa hallucinate fakta SIDIX, menjawab dengan gaya SIDIX, atau confuse brand identity.
+
+**Fix:**
+- Import dari SIDIX: **HANYA** category names dan question framing patterns
+- **JANGAN** import: `qa_pairs` answers, `corpus_qa` content, `finetune_sft.jsonl`
+- Tag semua synthetic pairs: `source_method="synthetic_seed_v1"` → filter jika diperlukan
+- Use validation set setelah training: test dengan SIDIX-specific queries untuk deteksi kontaminasi
+
+**Generalized Principle:**
+> **"Synthetic ≠ Safe jika seed dari sumber yang biased."** Sebelum import data dari project lain, identifikasi: (1) Apa yang aman (taxonomy, framing)? (2) Apa yang berbahaya (content, facts, persona)? (3) Bagaimana cara membatasi transfer? Tag source_method selalu — ini adalah recovery hatch jika kontaminasi terjadi.
+
+---
+
+### [S-09] Source Method Tagging untuk Multi-Source Training Data
+**Day:** 19 | **Category:** ML Operations
+
+**Pattern:** Setiap kali menambahkan sumber baru untuk preference pairs, gunakan `source_method` yang berbeda. Ini memungkinkan:
+1. Analisis per-source di `/v1/admin/stats`
+2. Filtering di training script: `WHERE source_method = 'cai_pipeline'` untuk real-only training
+3. Audit trail: bisa debug masalah model dengan melihat distribusi training data
+
+**Implemented sources:**
+- `"cai_pipeline"` — real user conversations yang diproses CAI
+- `"synthetic_seed_v1"` — synthetic generation dari Triple-Source seed bank (Day 19)
+
+**Template untuk sumber baru:**
+```python
+await _store_preference_pair(
+    prompt=..., chosen=..., rejected=..., score=score,
+    source_message_id=None,          # None jika bukan dari message real
+    source_method="new_source_v1",   # Deskriptif + versi
+)
+```
+
+**Generalized Principle:**
+> **"Data provenance adalah fitur, bukan detail."** Schema harus sudah ada kolom `source_method` sejak awal. Setiap sumber baru = tag baru. Ini seperti git blame untuk training data — penting untuk debugging post-training surprises.
+
+---
+
 ### [S-06] Ulimits sebagai Checklist Deploy
 **Day:** 16 | **Category:** Infrastructure
 
@@ -404,6 +453,8 @@ ulimits:
 | Letta get_blocks | Latency | ~500ms | httpx to Letta container |
 | CAI pipeline total | Latency | ~37s | critique + revision + store |
 | HTTP response | Latency | ~30-45s | with tool calling, CPU 7B |
+| Synthetic generation (per seed) | Latency | ~60-120s | generate + critique + revise |
+| Synthetic full run (120 seeds) | Duration | ~2-4 hours | CPU-only, sequential |
 
 ---
 
@@ -424,6 +475,9 @@ ulimits:
 | BM42 query_embed() untuk queries | Asymmetric embedding (F-08) | Silent precision drop |
 | chunk_text di payload saat indexing | Zero-loss migration (S-07) | Data loss on schema change |
 | Named volume fastembed_cache | Instant model reload (S-08) | 4s+ cold start per rebuild |
+| SIDIX content NOT in seed bank | Hallucination transfer risk (F-09) | Model adopts SIDIX identity |
+| source_method tag on all pairs | Multi-source audit trail (S-09) | Can't filter by provenance |
+| asyncio.Semaphore(1) synthetic task | CPU-only VPS, no competition | Resource contention with inference |
 
 ---
 

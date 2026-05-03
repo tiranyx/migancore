@@ -6,6 +6,36 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.9] — 2026-05-03 (Day 19)
+
+### Added
+- **Synthetic DPO Generator** (`services/synthetic_pipeline.py`, `services/seed_bank.py`) — NEW FILES
+  - Triple-Source Seed Architecture: MighanTech3D NPC personas + SIDIX topic taxonomy (framing only) + SynPO research patterns
+  - 120 diverse seed messages across 7 domains (Creative, Research, SEO, Social, Design, Ops, General AI)
+  - Full CAI-gated pipeline: generate (T=0.7) → critique → revise → store
+  - Redis progress tracking: `synthetic:status/run_id/total/processed/stored/started_at`
+  - Graceful cancellation: `asyncio.CancelledError` → status="cancelled" in Redis
+  - Expected yield: ~50-60 pairs per run (40-50% filter rate)
+  - `source_method="synthetic_seed_v1"` tag for training data provenance separation
+- **Admin Synthetic Endpoints** (`routers/admin.py`)
+  - `POST /v1/admin/synthetic/start` — trigger generation, returns run_id
+  - `GET /v1/admin/synthetic/status` — Redis counters + progress_pct + is_running
+  - `POST /v1/admin/synthetic/stop` — cancel running task (409 if nothing running)
+
+### Changed
+- Version bumped: `0.3.8` → `0.3.9`
+- `_store_preference_pair()` (`services/cai_pipeline.py`):
+  - `source_message_id` is now optional (`None` accepted for synthetic pairs)
+  - Added `source_method: str = "cai_pipeline"` parameter — replaces hardcoded value
+
+### Safety Notes (Day 19 research)
+- SIDIX topic content NOT used as seeds — only question framing patterns extracted
+  Reason: SIDIX corpus has known hallucination issues; importing answers would transfer them into MiganCore
+- `source_method` tag allows filtering synthetic pairs at training time if needed
+- No DB migration required — `source_method` column existed since Day 17
+
+---
+
 ## [0.3.8] — 2026-05-03 (Day 18)
 
 ### Added
