@@ -38,6 +38,7 @@ import structlog
 
 from services.config_loader import load_skills_config
 from services.memory import memory_write, memory_list
+from services.tool_policy import ToolPolicyChecker, validate_python_code, PolicyViolation
 
 logger = structlog.get_logger()
 
@@ -53,6 +54,8 @@ DDG_ENDPOINT = "https://api.duckduckgo.com/"
 class ToolContext:
     tenant_id: str
     agent_id: str
+    tenant_plan: str = "free"
+    tool_policies: dict | None = None
 
 
 class ToolExecutionError(Exception):
@@ -181,12 +184,21 @@ async def _python_repl(args: dict, ctx: ToolContext) -> dict:
 
     subprocess gives a genuine sandbox boundary vs exec() which is trivially
     escaped via __subclasses__() or __import__. Output capped at 2000 chars.
+
+    Day 11: Added import blacklist validation (defense-in-depth).
     """
     code = args.get("code", "").strip()
     timeout = min(int(args.get("timeout", 30)), 30)
 
     if not code:
         raise ToolExecutionError("'code' is required")
+
+    # Policy layer: block dangerous imports
+    try:
+        validate_python_code(code)
+    except PolicyViolation as exc:
+        logger.warning("tool.python_repl.policy_violation", reason=exc.reason, agent=ctx.agent_id)
+        raise ToolExecutionError(f"Security policy violation: {exc.reason}") from exc
 
     try:
         result = await asyncio.wait_for(
@@ -238,10 +250,20 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
 # ---------------------------------------------------------------------------
 
 class ToolExecutor:
-    """Dispatches tool calls to handlers. All errors are caught and returned."""
+    """Dispatches tool calls to handlers. All errors are caught and returned.
+
+    Day 11: Added policy enforcement layer before handler dispatch.
+    """
 
     def __init__(self, ctx: ToolContext):
         self.ctx = ctx
+        self._checker: ToolPolicyChecker | None = None
+        if ctx.tool_policies is not None:
+            self._checker = ToolPolicyChecker(
+                tenant_plan=ctx.tenant_plan,
+                tenant_id=ctx.tenant_id,
+                tool_policies=ctx.tool_policies,
+            )
 
     async def execute(self, skill_id: str, arguments: dict) -> dict:
         """Execute a tool and return {"result": ..., "error": ..., "success": bool}."""
@@ -253,6 +275,25 @@ class ToolExecutor:
                 "error": f"Unknown tool '{skill_id}'. Available: {list(TOOL_REGISTRY)}",
                 "success": False,
             }
+
+        # Day 11: Policy enforcement
+        if self._checker is not None:
+            try:
+                await self._checker.check(skill_id)
+            except PolicyViolation as exc:
+                logger.warning(
+                    "tool.policy_blocked",
+                    skill=skill_id,
+                    violation=exc.violation_type,
+                    reason=exc.reason,
+                    tenant=self.ctx.tenant_id,
+                )
+                return {
+                    "result": None,
+                    "error": f"Policy blocked: {exc.reason}",
+                    "success": False,
+                    "policy_violation": exc.violation_type,
+                }
 
         try:
             result = await handler(arguments, self.ctx)

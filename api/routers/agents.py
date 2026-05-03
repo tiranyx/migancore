@@ -11,12 +11,14 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
-from models import Agent, User
+from models import Agent, User, Tenant
+
+MAX_GENERATION_DEPTH = 5
 
 router = APIRouter(prefix="/v1/agents", tags=["agents"])
 
@@ -97,7 +99,27 @@ async def create_agent(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new agent for the current tenant."""
-    await set_tenant_context(db, str(current_user.tenant_id))
+    tenant_id = current_user.tenant_id
+    await set_tenant_context(db, str(tenant_id))
+
+    # Day 11: Enforce max_agents per tenant
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = tenant_result.scalar_one()
+
+    agent_count_result = await db.execute(
+        select(func.count(Agent.id)).where(
+            Agent.tenant_id == tenant_id,
+            Agent.status != "archived",
+        )
+    )
+    current_agent_count = agent_count_result.scalar() or 0
+
+    if current_agent_count >= tenant.max_agents:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Agent limit reached: {current_agent_count}/{tenant.max_agents} agents. "
+                   f"Upgrade your plan to create more agents.",
+        )
 
     agent = Agent(
         tenant_id=current_user.tenant_id,
@@ -164,6 +186,8 @@ async def spawn_agent(
     Inherits model_version, visibility, and system_prompt from parent.
     Merges parent's persona_blob with optional persona_overrides.
     Copies parent's tool grants to child.
+
+    Day 11: Enforces max_agents, generation depth limit, and persona_lock.
     """
     tenant_id = current_user.tenant_id
     await set_tenant_context(db, str(tenant_id))
@@ -171,15 +195,49 @@ async def spawn_agent(
     # 1. Resolve parent
     parent = await _get_agent_or_404(db, agent_id, tenant_id)
 
-    # 2. Build persona blob: parent base + overrides
+    # 2. Check tenant limits
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = tenant_result.scalar_one()
+
+    agent_count_result = await db.execute(
+        select(func.count(Agent.id)).where(
+            Agent.tenant_id == tenant_id,
+            Agent.status != "archived",
+        )
+    )
+    current_agent_count = agent_count_result.scalar() or 0
+
+    if current_agent_count >= tenant.max_agents:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Agent limit reached: {current_agent_count}/{tenant.max_agents} agents. "
+                   f"Upgrade your plan to spawn more agents.",
+        )
+
+    # 3. Check generation depth
+    if parent.generation + 1 > MAX_GENERATION_DEPTH:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Maximum generation depth reached ({MAX_GENERATION_DEPTH}). "
+                   f"Cannot spawn beyond generation {MAX_GENERATION_DEPTH}.",
+        )
+
+    # 4. Check persona_lock
+    if parent.persona_locked and data.persona_overrides:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Parent agent's persona is locked. Cannot apply persona overrides.",
+        )
+
+    # 5. Build persona blob: parent base + overrides
     child_persona = dict(parent.persona_blob or {})
     if data.persona_overrides:
         child_persona.update(data.persona_overrides)
 
-    # 3. Determine template_id: explicit > parent's template > parent's id as fallback
+    # 6. Determine template_id: explicit > parent's template > parent's id as fallback
     child_template_id = data.template_id or parent.template_id or str(parent.id)
 
-    # 4. Create child agent
+    # 7. Create child agent
     child = Agent(
         tenant_id=tenant_id,
         owner_user_id=current_user.id,

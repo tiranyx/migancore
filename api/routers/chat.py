@@ -23,12 +23,37 @@ from config import settings
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
 from deps.rate_limit import limiter
-from models import User, Agent, Conversation, Message
+from models import User, Agent, Conversation, Message, Tenant
 from services.config_loader import get_agent_config, load_soul_md
 from services.memory import memory_summary
 from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
 from services.tool_executor import ToolContext, build_ollama_tools_spec
+from services.tool_policy import load_tool_policies
+
+
+async def _check_tenant_message_quota(db: AsyncSession, tenant: Tenant) -> None:
+    """Check and increment tenant daily message quota.
+
+    Day 11: Enforces tenant.max_messages_per_day.
+    Resets counter automatically at UTC midnight.
+    """
+    now = datetime.now(timezone.utc)
+    reset = tenant.messages_day_reset
+
+    # Auto-reset if new day
+    if reset is None or reset.date() < now.date():
+        tenant.messages_today = 0
+        tenant.messages_day_reset = now
+
+    if tenant.messages_today >= tenant.max_messages_per_day:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Daily message limit reached: {tenant.messages_today}/{tenant.max_messages_per_day}. "
+                   f"Resets at UTC midnight.",
+        )
+
+    tenant.messages_today += 1
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/agents", tags=["chat"])
@@ -102,7 +127,24 @@ async def chat(
 
     # Build tools spec from agent's declared tools in agents.json
     agent_tools = agent_cfg.get("default_tools", []) if agent_cfg else []
-    tool_ctx = ToolContext(tenant_id=tenant_id, agent_id=agent_id)
+
+    # Day 11: Load tenant plan + tool policies for safety gates
+    tenant_result = await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )
+    tenant = tenant_result.scalar_one()
+
+    # Day 11: Enforce tenant message quota
+    await _check_tenant_message_quota(db, tenant)
+
+    tool_policies = await load_tool_policies(db, tenant_id)
+
+    tool_ctx = ToolContext(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        tenant_plan=tenant.plan,
+        tool_policies=tool_policies,
+    )
     tools_spec = build_ollama_tools_spec(agent_tools)
 
     # Persist user message before calling Ollama

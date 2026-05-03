@@ -6,6 +6,48 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.2] — 2026-05-03
+
+### Added
+- **Tool Policy Taxonomy** (`services/tool_policy.py`)
+  - 6-class classification: `read_only`, `write`, `destructive`, `open_world`, `requires_approval`, `sandbox_required`
+  - Plan tier enforcement (free/pro/enterprise)
+  - Approval gate (hard block for MVP)
+  - Sandbox gate (logs warning for audit)
+  - Per-tenant, per-tool daily call counters (Redis)
+- **Max Agents Enforcement** (`routers/agents.py`)
+  - `tenant.max_agents` checked before `db.add(agent)`
+  - Applies to both `create_agent` and `spawn_agent`
+- **Spawn Depth Limit** (`routers/agents.py`)
+  - `MAX_GENERATION_DEPTH = 5`
+  - Blocks spawn when `parent.generation + 1 > 5`
+- **Persona Lock Enforcement** (`routers/agents.py`)
+  - `persona_locked=True` blocks `persona_overrides` during spawn
+- **Tenant Message Quota** (`routers/chat.py`)
+  - Checks `tenant.messages_today >= tenant.max_messages_per_day`
+  - Auto-resets counter at UTC midnight
+- **Python REPL Security** (`services/tool_policy.py`)
+  - Import blacklist: `os`, `sys`, `subprocess`, `socket`, `urllib`, `pickle`, etc.
+  - Pattern matching for `import X`, `from X import`, `__import__('X')`, `import_module('X')`
+- **Redis-backed Rate Limiting** (`deps/rate_limit.py`)
+  - Switched slowapi from in-memory to `RedisStorage`
+  - Hybrid key function: `X-Tenant-ID` header → tenant key, fallback to IP
+- **Tool ORM Model** (`models/tool.py`)
+  - Full SQLAlchemy 2.0 mapping for `tools` table
+  - Fields: `risk_level`, `policy`, `max_calls_per_day`, `scopes_required`
+- **Database Migration**: `migrations/011_day11_safety_gates.sql`
+  - Idempotent ALTER TABLE for `tools` and `tenants`
+  - Updated seed data with policy JSONB
+  - Added indexes: `idx_tools_risk_level`, `idx_tools_policy` (GIN)
+
+### Fixed
+- **H1** `agents.py`: `max_agents` now enforced (was unlimited)
+- **H3** `models/`: `tools` table now has ORM model
+- **H5** `deps/rate_limit.py`: In-memory storage replaced with Redis backend
+- **C3** `tool_executor.py`: `python_repl` now has import blacklist + policy gate
+
+---
+
 ## [0.3.1] — 2026-05-03
 
 ### Added
@@ -15,15 +57,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Migration script: `migrations/010_day10_schema_sync.sql`
 - Agent genealogy tracking: `parent_agent_id` + `generation` inheritance
 - Auto-copy of parent tool grants to spawned children
+- Comprehensive documentation suite: `MASTER_CONTEXT.md`, `SPRINT_LOG.md`, `CHANGELOG.md`, `FOUNDER_JOURNAL.md`, `QA_REPORT.md`
 
 ### Fixed
 - ORM ↔ SQL schema mismatch: `description`, `model_version`, `system_prompt` now in init.sql
 - Missing SQLAlchemy imports: `Boolean`, `Float` in `models/agent.py`
 - Tech debt T2: moved `import secrets` to top-level in `routers/agents.py`
-
-### Changed
-- `migrations/init.sql` synced with VPS reality (all columns match live DB)
-- `AgentResponse` schema extended with `parent_agent_id`, `generation`, `template_id`, `persona_locked`
+- **E2E Bug:** Stream chat 503 — `AsyncSessionLocal` import moved inside `chat_stream` function
+- **Security:** Path traversal in `load_soul_md` — added `resolve()` + base_dir restriction
+- **Tech Debt:** Removed 97 lines of dead code `_run_agentic_loop` from `chat.py`
 
 ---
 

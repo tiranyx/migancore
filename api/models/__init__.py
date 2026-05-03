@@ -9,6 +9,7 @@ from models.audit_event import AuditEvent
 from models.conversation import Conversation
 from models.message import Message
 from models.model_version import ModelVersion
+from models.tool import Tool
 
 __all__ = [
     "Base",
@@ -24,4 +25,5 @@ __all__ = [
     "Conversation",
     "Message",
     "ModelVersion",
+    "Tool",
 ]

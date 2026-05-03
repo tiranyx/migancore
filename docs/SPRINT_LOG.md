@@ -189,6 +189,56 @@
 
 ---
 
+---
+
+## Week 2: Safety + Intelligence (Days 11–17)
+
+### Day 11 — Safety Gates + Tool Policy
+**Agent:** Kimi Code CLI
+**Scope:** Security hardening ("Jangan tambah otak sebelum tambah sistem imun")
+
+**Tool Policy Taxonomy (6-class):**
+- `read_only` — web_search, memory_search
+- `write` — memory_write
+- `destructive` — spawn_agent
+- `open_world` — web_search, http_get
+- `requires_approval` — spawn_agent, python_repl
+- `sandbox_required` — python_repl
+
+**Database:**
+- Migration `011_day11_safety_gates.sql` applied to live DB
+- Added to `tools`: `risk_level`, `policy` (JSONB), `max_calls_per_day`
+- Added to `tenants`: `messages_today`, `messages_day_reset`
+- Updated seed data with policy assignments
+
+**ORM:**
+- Created `models/tool.py` — Tool ORM model
+- Updated `models/tenant.py` — added `messages_today`, `messages_day_reset`
+
+**Enforcement:**
+- `routers/agents.py`: `max_agents` enforced in `create_agent` and `spawn_agent`
+- `routers/agents.py`: `MAX_GENERATION_DEPTH = 5` enforced in spawn
+- `routers/agents.py`: `persona_locked` blocks `persona_overrides`
+- `services/tool_policy.py`: Policy checker with plan tier, approval, sandbox, and rate limit gates
+- `services/tool_executor.py`: Policy check before handler dispatch
+- `services/tool_executor.py`: Python REPL import blacklist (`os`, `sys`, `subprocess`, `socket`, etc.)
+- `routers/chat.py`: Tenant message quota check (`messages_today >= max_messages_per_day`)
+- `deps/rate_limit.py`: Redis-backed slowapi storage (multi-worker safe)
+
+**E2E Test Results:**
+- max_agents: blocks at 3/3 ✅
+- spawn depth: blocks at gen=6 (max=5) ✅
+- persona_lock: blocks overrides when locked ✅
+- tool policy: python_repl blocked for free plan (requires enterprise) ✅
+- python_repl blacklist: `import os`, `from subprocess`, `__import__` all blocked ✅
+- tenant quota: `messages_today` increments correctly ✅
+
+**Version:** 0.3.1 → 0.3.2
+
+**Deliverables:** 6-class tool policy, max_agents enforcement, spawn depth limit, persona lock, Redis rate limiter, Python REPL blacklist, tenant message quota
+
+---
+
 ## Sprint Metrics: Week 1
 
 | Metric | Value |
