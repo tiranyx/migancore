@@ -150,7 +150,9 @@ async def call_kimi(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.6}
+    # Kimi K2 series only accepts temperature=1; older moonshot-v1-* allow 0.6
+    temp = 1.0 if model.startswith("kimi-k2") else 0.6
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temp}
     headers = {
         "Authorization": f"Bearer {settings.KIMI_API_KEY}",
         "Content-Type": "application/json",
