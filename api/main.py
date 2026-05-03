@@ -93,7 +93,13 @@ async def _check_ollama() -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
+    """Application lifespan manager.
+
+    Day 26: Also runs the MCP session manager lifecycle. FastMCP needs its
+    StreamableHTTPSessionManager started via lifespan, otherwise mounted
+    requests fail with 'Task group is not initialized'. Starlette mounted
+    sub-apps don't get their lifespan called by the parent automatically.
+    """
     # 1. Init database engine (lazy, avoids module-level side effects)
     init_engine()
     # 2. Eager-load JWT keys — fail fast if keys are missing
@@ -104,9 +110,31 @@ async def lifespan(app: FastAPI):
     await get_model()
     # 4. Pre-warm BM42 sparse model — optional, degrades gracefully if unavailable
     await get_sparse_model()
+
+    # 5. Start MCP session manager (Day 26)
+    mcp_lifespan_cm = None
+    if _MCP_AVAILABLE:
+        try:
+            from mcp_server import get_mcp
+            mcp_instance = get_mcp()
+            # FastMCP exposes session_manager.run() as an async context manager
+            mcp_lifespan_cm = mcp_instance.session_manager.run()
+            await mcp_lifespan_cm.__aenter__()
+            logger.info("mcp.session_manager.started")
+        except Exception as exc:
+            logger.error("mcp.session_manager.start_failed", error=str(exc))
+
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
+
+    # Tear down MCP session manager
+    if mcp_lifespan_cm is not None:
+        try:
+            await mcp_lifespan_cm.__aexit__(None, None, None)
+            logger.info("mcp.session_manager.stopped")
+        except Exception as exc:
+            logger.error("mcp.session_manager.stop_failed", error=str(exc))
 
 
 app = FastAPI(
