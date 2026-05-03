@@ -56,10 +56,15 @@ class TeacherResponse:
 # Pricing table ($/1M tokens) — single source of truth
 PRICING = {
     "anthropic/claude-sonnet-4-5": {"in": 3.00, "out": 15.00},
-    "anthropic/claude-haiku-4-5":  {"in": 1.00, "out": 5.00},  # cheaper alt
+    "anthropic/claude-haiku-4-5":  {"in": 1.00, "out": 5.00},
     "openai/gpt-4o":               {"in": 2.50, "out": 10.00},
     "openai/gpt-4o-mini":          {"in": 0.15, "out": 0.60},
-    "moonshot/kimi-k2-0905-preview": {"in": 0.60, "out": 2.50},
+    # Moonshot Kimi pricing (May 2026, official): K2 series ~$0.60/$2.50 per M tokens
+    "moonshot/kimi-k2.6":          {"in": 0.60, "out": 2.50},
+    "moonshot/kimi-k2.5":          {"in": 0.60, "out": 2.50},
+    "moonshot/moonshot-v1-8k":     {"in": 0.30, "out": 1.20},
+    "moonshot/moonshot-v1-32k":    {"in": 0.40, "out": 1.60},
+    "moonshot/moonshot-v1-128k":   {"in": 0.60, "out": 2.50},
     "google/gemini-2.5-flash":     {"in": 0.075, "out": 0.30},
 }
 
@@ -135,7 +140,7 @@ async def call_kimi(
     prompt: str,
     system: str = "",
     max_tokens: int = 600,
-    model: str = "kimi-k2-0905-preview",
+    model: str = "kimi-k2.6",  # latest stable K2 series; alternatives: kimi-k2.5, moonshot-v1-32k
 ) -> TeacherResponse:
     if not settings.KIMI_API_KEY:
         raise TeacherError("KIMI_API_KEY not set")
@@ -251,7 +256,21 @@ async def call_gemini(
     contents = [{"role": "user", "parts": [{"text": prompt}]}]
     payload = {
         "contents": contents,
-        "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.6},
+        "generationConfig": {
+            "maxOutputTokens": max(256, max_tokens),  # Gemini 2.5 Flash truncates if too low
+            "temperature": 0.6,
+            "topP": 0.95,
+        },
+        # Disable safety filters that might block legit responses
+        "safetySettings": [
+            {"category": c, "threshold": "BLOCK_NONE"}
+            for c in [
+                "HARM_CATEGORY_HARASSMENT",
+                "HARM_CATEGORY_HATE_SPEECH",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "HARM_CATEGORY_DANGEROUS_CONTENT",
+            ]
+        ],
     }
     if system:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
@@ -271,8 +290,13 @@ async def call_gemini(
                 cands = data.get("candidates", [])
                 if not cands:
                     raise TeacherError(f"Gemini no candidates: {data}")
-                parts = cands[0].get("content", {}).get("parts", [])
+                cand0 = cands[0]
+                # Gemini 2.5 sometimes returns finishReason without content (safety / MAX_TOKENS)
+                finish = cand0.get("finishReason", "")
+                parts = cand0.get("content", {}).get("parts", [])
                 text = "".join(p.get("text", "") for p in parts)
+                if not text and finish:
+                    raise TeacherError(f"Gemini empty response, finishReason={finish}")
                 usage = data.get("usageMetadata", {})
                 in_tok = usage.get("promptTokenCount", 0)
                 out_tok = usage.get("candidatesTokenCount", 0)

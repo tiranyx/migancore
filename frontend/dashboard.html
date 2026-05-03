@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiganCore — Admin Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --bg-0: #07100e;
+      --bg-1: #0d1f1a;
+      --bg-2: #142920;
+      --bg-3: #1a3429;
+      --orange: #ff8a24;
+      --orange-dim: rgba(255, 138, 36, 0.12);
+      --orange-border: rgba(255, 138, 36, 0.4);
+      --green: #2fe39a;
+      --green-dim: rgba(47, 227, 154, 0.10);
+      --green-border: rgba(47, 227, 154, 0.25);
+      --red: #ff5577;
+      --yellow: #f5cc44;
+      --blue: #5fb8ff;
+      --purple: #b58aff;
+      --text: #e9f5ee;
+      --text-dim: #93b3a5;
+      --text-faint: #5a7a6e;
+      --border: rgba(47, 227, 154, 0.15);
+      --mono: 'JetBrains Mono', monospace;
+      --display: 'Orbitron', sans-serif;
+      --sans: 'Inter', sans-serif;
+      --radius: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-0); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+    body { overflow-x: hidden; padding: 0 0 4rem; }
+
+    /* ===========================
+       Header
+    =========================== */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-1);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--display);
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      font-size: 0.95rem;
+      color: var(--orange);
+    }
+
+    .brand-mark {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--orange), var(--green));
+    }
+
+    .top-actions { display: flex; align-items: center; gap: 1rem; }
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0.75rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--green);
+      background: var(--green-dim);
+      border: 1px solid var(--green-border);
+      border-radius: 99px;
+    }
+    .live-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+    /* ===========================
+       Layout
+    =========================== */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    h1 { font-family: var(--display); font-weight: 700; font-size: 1.5rem; margin-bottom: 0.25rem; color: var(--text); }
+    .subtitle { color: var(--text-dim); font-size: 0.875rem; margin-bottom: 2rem; }
+
+    /* ===========================
+       Cards
+    =========================== */
+    .grid { display: grid; gap: 1rem; }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 980px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+    }
+    .card.hot {
+      border-color: var(--orange-border);
+      background: linear-gradient(135deg, var(--bg-1), var(--orange-dim));
+    }
+    .card-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .card-value {
+      font-family: var(--display);
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .card-value.green { color: var(--green); }
+    .card-value.orange { color: var(--orange); }
+    .card-value.red { color: var(--red); }
+    .card-sub {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-faint);
+      margin-top: 0.5rem;
+    }
+
+    /* ===========================
+       Section
+    =========================== */
+    .section {
+      margin-top: 2rem;
+    }
+    .section-title {
+      font-family: var(--display);
+      font-size: 1rem;
+      letter-spacing: 0.1em;
+      color: var(--green);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-title::before {
+      content: '';
+      display: block;
+      width: 3px;
+      height: 18px;
+      background: var(--green);
+      border-radius: 2px;
+    }
+
+    /* ===========================
+       Bars / Progress
+    =========================== */
+    .progress-track {
+      height: 8px;
+      background: var(--bg-2);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--orange), var(--green));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 80px;
+      gap: 1rem;
+      align-items: center;
+      padding: 0.6rem 0;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      border-bottom: 1px dashed var(--border);
+    }
+    .bar-row:last-child { border-bottom: none; }
+    .bar-track { height: 14px; background: var(--bg-2); border-radius: 3px; position: relative; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.5s ease; }
+    .bar-fill.orange { background: var(--orange); }
+    .bar-fill.blue { background: var(--blue); }
+    .bar-fill.purple { background: var(--purple); }
+    .bar-fill.yellow { background: var(--yellow); }
+    .bar-count { font-family: var(--mono); color: var(--text-dim); text-align: right; font-size: 0.85rem; }
+
+    /* ===========================
+       Tables
+    =========================== */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      text-align: left;
+      padding: 0.75rem 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.7rem 0.5rem;
+      border-bottom: 1px dashed var(--border);
+      font-family: var(--mono);
+      color: var(--text);
+    }
+    tr:hover td { background: rgba(47, 227, 154, 0.04); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      border-radius: 4px;
+      background: var(--bg-2);
+      color: var(--text-dim);
+    }
+    .badge.green { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+    .badge.orange { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange-border); }
+    .badge.red { background: rgba(255,85,119,0.12); color: var(--red); border: 1px solid rgba(255,85,119,0.3); }
+
+    /* ===========================
+       Distill controls
+    =========================== */
+    .control-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    select, input[type="number"], input[type="text"] {
+      background: var(--bg-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.75rem;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+    button {
+      background: var(--orange);
+      color: #1a0f00;
+      border: none;
+      border-radius: var(--radius);
+      padding: 0.55rem 1.2rem;
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+    }
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    button.danger { background: var(--red); color: white; }
+
+    .empty {
+      padding: 3rem 1rem;
+      text-align: center;
+      color: var(--text-faint);
+      font-family: var(--mono);
+      font-size: 0.85rem;
+    }
+
+    /* ===========================
+       Auth
+    =========================== */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+    .auth-card {
+      width: min(420px, 100%);
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .auth-title {
+      font-family: var(--display);
+      font-weight: 700;
+      color: var(--orange);
+      letter-spacing: 0.15em;
+      font-size: 1.1rem;
+      margin-bottom: 0.25rem;
+    }
+    .auth-sub { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
+    .auth-input { width: 100%; padding: 0.7rem 1rem; margin-bottom: 0.75rem; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--mono); }
+    .auth-button { width: 100%; padding: 0.8rem; }
+
+    .err { color: var(--red); font-size: 0.8rem; margin-top: 0.5rem; font-family: var(--mono); }
+
+    /* Refresh hint */
+    .refresh-hint {
+      font-family: var(--mono);
+      color: var(--text-faint);
+      font-size: 0.7rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    const API_BASE = window.location.hostname === 'localhost'
+      ? 'http://localhost:18000'
+      : 'https://api.migancore.com';
+
+    const LS = {
+      get: k => localStorage.getItem(k) || '',
+      set: (k, v) => localStorage.setItem(k, v),
+      del: k => localStorage.removeItem(k),
+    };
+
+    // ===========================
+    // Auth gate (admin key)
+    // ===========================
+    function AuthGate({ onUnlock }) {
+      const [key, setKey] = useState('');
+      const [err, setErr] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      async function tryUnlock() {
+        if (!key) return;
+        setLoading(true);
+        setErr('');
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/stats`, {
+            headers: { 'X-Admin-Key': key },
+          });
+          if (r.status === 401) { setErr('Invalid admin key'); return; }
+          if (r.status === 503) { setErr('Admin endpoints not configured on server'); return; }
+          if (!r.ok) { setErr(`HTTP ${r.status}`); return; }
+          LS.set('admin_key', key);
+          onUnlock(key);
+        } catch (e) {
+          setErr(`Network error: ${e.message}`);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      return (
+        <div className="auth-overlay">
+          <div className="auth-card">
+            <div className="auth-title">MIGANCORE :: ADMIN</div>
+            <div className="auth-sub">Enter X-Admin-Key to access dashboard</div>
+            <input
+              type="password"
+              className="auth-input"
+              placeholder="ado-admin-..."
+              value={key}
+              onChange={e => setKey(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && tryUnlock()}
+              autoFocus
+            />
+            <button className="auth-button" onClick={tryUnlock} disabled={loading || !key}>
+              {loading ? 'verifying...' : 'unlock dashboard'}
+            </button>
+            {err && <div className="err">⚠ {err}</div>}
+          </div>
+        </div>
+      );
+    }
+
+    // ===========================
+    // Stats card
+    // ===========================
+    function Stat({ label, value, sub, color }) {
+      return (
+        <div className="card">
+          <div className="card-label">{label}</div>
+          <div className={`card-value ${color || ''}`}>{value}</div>
+          {sub && <div className="card-sub">{sub}</div>}
+        </div>
+      );
+    }
+
+    // ===========================
+    // Bar row
+    // ===========================
+    function BarRow({ label, count, max, color }) {
+      const pct = max > 0 ? Math.min(100, (count / max) * 100) : 0;
+      return (
+        <div className="bar-row">
+          <div>{label}</div>
+          <div className="bar-track">
+            <div className={`bar-fill ${color || ''}`} style={{ width: `${pct}%` }} />
+          </div>
+          <div className="bar-count">{count}</div>
+        </div>
+      );
+    }
+
+    // ===========================
+    // Distillation panel
+    // ===========================
+    function DistillPanel({ adminKey, onRefresh }) {
+      const [available, setAvailable] = useState([]);
+      const [teacher, setTeacher] = useState('kimi');
+      const [judge, setJudge] = useState('claude');
+      const [target, setTarget] = useState(30);
+      const [budget, setBudget] = useState(2.0);
+      const [running, setRunning] = useState(null);
+      const [summary, setSummary] = useState({ by_teacher: [], current_run: null });
+      const [err, setErr] = useState('');
+
+      async function loadSummary() {
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/distill/summary`, {
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          if (r.ok) {
+            const d = await r.json();
+            setSummary(d);
+            setRunning(d.current_run);
+            if (d.available_teachers) setAvailable(d.available_teachers);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      useEffect(() => {
+        loadSummary();
+        const t = setInterval(loadSummary, 4000);
+        return () => clearInterval(t);
+      }, [adminKey]);
+
+      async function startRun() {
+        setErr('');
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/distill/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+            body: JSON.stringify({
+              teacher,
+              judge_teacher: judge,
+              target_pairs: parseInt(target),
+              budget_cap_usd: parseFloat(budget),
+            }),
+          });
+          const d = await r.json();
+          if (!r.ok) {
+            setErr(d.detail?.reason || JSON.stringify(d.detail || d));
+          } else {
+            await loadSummary();
+            onRefresh?.();
+          }
+        } catch (e) { setErr(e.message); }
+      }
+
+      async function stopRun() {
+        try {
+          await fetch(`${API_BASE}/v1/admin/distill/stop`, {
+            method: 'POST',
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          await loadSummary();
+        } catch (e) { /* ignore */ }
+      }
+
+      const isRunning = running?.is_running;
+
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>Distillation Pipeline</div>
+            <div className="refresh-hint">auto-refresh 4s</div>
+          </div>
+
+          {available.length === 0 && (
+            <div className="empty">No teacher API keys configured. Set ANTHROPIC_API_KEY, KIMI_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY.</div>
+          )}
+
+          {available.length > 0 && (
+            <>
+              <div className="control-row">
+                <select value={teacher} onChange={e => setTeacher(e.target.value)} disabled={isRunning}>
+                  {available.map(t => <option key={t} value={t}>{t} (teacher)</option>)}
+                </select>
+                <select value={judge} onChange={e => setJudge(e.target.value)} disabled={isRunning}>
+                  {available.map(t => <option key={t} value={t}>{t} (judge)</option>)}
+                </select>
+                <input
+                  type="number"
+                  value={target}
+                  onChange={e => setTarget(e.target.value)}
+                  min="1" max="2000"
+                  style={{ width: '90px' }}
+                  disabled={isRunning}
+                  placeholder="pairs"
+                />
+                <input
+                  type="number"
+                  value={budget}
+                  onChange={e => setBudget(e.target.value)}
+                  step="0.5" min="0.1" max="100"
+                  style={{ width: '110px' }}
+                  disabled={isRunning}
+                  placeholder="$ cap"
+                />
+                {!isRunning && (
+                  <button onClick={startRun}>▶ start</button>
+                )}
+                {isRunning && (
+                  <button className="danger" onClick={stopRun}>■ stop</button>
+                )}
+              </div>
+
+              {err && <div className="err">⚠ {err}</div>}
+
+              {running && (
+                <div style={{ background: 'var(--bg-2)', padding: '0.75rem', borderRadius: '6px', fontFamily: 'var(--mono)', fontSize: '0.8rem', marginBottom: '1rem' }}>
+                  <div>
+                    <span className="badge green">{running.status}</span>{' '}
+                    <span style={{ color: 'var(--text-dim)' }}>teacher</span> {running.teacher}{' '}
+                    <span style={{ color: 'var(--text-dim)' }}>· judge</span> {running.judge_teacher}{' '}
+                    <span style={{ color: 'var(--text-dim)' }}>· cost</span>{' '}
+                    <span style={{ color: 'var(--orange)' }}>${(running.cost_usd || 0).toFixed(3)}</span>{' '}
+                    <span style={{ color: 'var(--text-dim)' }}>/ ${(running.budget_cap_usd || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ marginTop: '0.5rem', color: 'var(--text)' }}>
+                    stored {running.stored} / {running.target_pairs} ·{' '}
+                    skipped {running.skipped_below_margin} ·{' '}
+                    errors {running.errors} ·{' '}
+                    processed {running.processed}
+                  </div>
+                  {running.last_seed_preview && (
+                    <div style={{ marginTop: '0.5rem', color: 'var(--text-faint)', fontSize: '0.75rem' }}>
+                      ▸ {running.last_seed_preview}...
+                    </div>
+                  )}
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${Math.min(100, (running.stored / running.target_pairs) * 100)}%` }} />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: '1rem' }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
+                  HISTORICAL — Pairs by teacher
+                </div>
+                {summary.by_teacher.length === 0 ? (
+                  <div className="empty">No distillation pairs yet. Run your first batch above.</div>
+                ) : (
+                  <table>
+                    <thead><tr><th>source</th><th>count</th><th>avg score diff</th><th>last activity</th></tr></thead>
+                    <tbody>
+                      {summary.by_teacher.map(r => (
+                        <tr key={r.source_method}>
+                          <td>{r.source_method}</td>
+                          <td>{r.count}</td>
+                          <td>{r.avg_judge_score?.toFixed(2)}</td>
+                          <td>{r.last_at ? new Date(r.last_at).toLocaleString() : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    // ===========================
+    // Synthetic panel
+    // ===========================
+    function SyntheticPanel({ adminKey }) {
+      const [status, setStatus] = useState(null);
+      const [target, setTarget] = useState(1000);
+      const [err, setErr] = useState('');
+
+      async function load() {
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/synthetic/status`, {
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          if (r.ok) setStatus(await r.json());
+        } catch (e) { /* ignore */ }
+      }
+
+      useEffect(() => {
+        load();
+        const t = setInterval(load, 4000);
+        return () => clearInterval(t);
+      }, [adminKey]);
+
+      async function start() {
+        setErr('');
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/synthetic/start?target_pairs=${target}`, {
+            method: 'POST',
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          const d = await r.json();
+          if (!r.ok) setErr(d.detail || JSON.stringify(d));
+          else load();
+        } catch (e) { setErr(e.message); }
+      }
+
+      async function stop() {
+        try {
+          await fetch(`${API_BASE}/v1/admin/synthetic/stop`, {
+            method: 'POST',
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          load();
+        } catch (e) { /* ignore */ }
+      }
+
+      const isRunning = status?.is_running;
+
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>Synthetic Pipeline</div>
+            <div className="refresh-hint">auto-refresh 4s</div>
+          </div>
+
+          <div className="control-row">
+            <input type="number" value={target} onChange={e => setTarget(e.target.value)} min="100" max="10000" style={{ width: '120px' }} disabled={isRunning} />
+            {!isRunning && <button onClick={start}>▶ start</button>}
+            {isRunning && <button className="danger" onClick={stop}>■ stop</button>}
+          </div>
+
+          {err && <div className="err">⚠ {err}</div>}
+
+          {status && (
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '0.85rem' }}>
+              <div>
+                <span className="badge green">{status.status}</span>{' '}
+                <span style={{ color: 'var(--text-dim)' }}>round</span> {status.round || 1} ·{' '}
+                <span style={{ color: 'var(--text-dim)' }}>cumulative</span>{' '}
+                <span style={{ color: 'var(--orange)' }}>{status.cumulative_stored || 0}</span>{' '}
+                <span style={{ color: 'var(--text-dim)' }}>/ {status.target_pairs || 1000}</span>
+              </div>
+              <div style={{ marginTop: '0.5rem' }}>
+                processed {status.processed || 0} / {status.total || 120} ({status.progress_pct?.toFixed(1) || 0}%)
+              </div>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${Math.min(100, ((status.cumulative_stored || 0) / (status.target_pairs || 1)) * 100)}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ===========================
+    // Main
+    // ===========================
+    function Dashboard({ adminKey, onLogout }) {
+      const [stats, setStats] = useState(null);
+
+      async function loadStats() {
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/stats`, {
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          if (r.ok) setStats(await r.json());
+        } catch (e) { /* ignore */ }
+      }
+
+      useEffect(() => {
+        loadStats();
+        const t = setInterval(loadStats, 5000);
+        return () => clearInterval(t);
+      }, [adminKey]);
+
+      const totalPairs = stats?.total_pairs || 0;
+      const unused = stats?.unused_pairs || 0;
+      const last24 = stats?.collection_rate?.last_24h || 0;
+      const dailyAvg = stats?.collection_rate?.daily_avg_7d || 0;
+      const ready = stats?.training_readiness;
+      const sources = stats?.by_source_method || {};
+
+      const sourceMax = Math.max(1, ...Object.values(sources));
+
+      return (
+        <>
+          <div className="top-bar">
+            <div className="brand">
+              <div className="brand-mark"></div>
+              MIGANCORE :: ADMIN
+            </div>
+            <div className="top-actions">
+              <span className="live-pill">
+                <span className="live-dot"></span>
+                {ready?.status?.toUpperCase() || 'LOADING'}
+              </span>
+              <button className="ghost" onClick={onLogout}>logout</button>
+            </div>
+          </div>
+
+          <div className="container">
+            <h1>DPO Flywheel Dashboard</h1>
+            <div className="subtitle">Real-time monitoring — preference pairs, pipelines, training readiness</div>
+
+            {/* Top stats row */}
+            <div className="grid grid-4">
+              <Stat label="Total Pairs" value={totalPairs} color="green"
+                sub={ready?.message?.slice(0, 60) + '...'} />
+              <Stat label="Unused (Available)" value={unused} color="orange"
+                sub={`${ready?.progress_pct?.toFixed(1) || 0}% to ready threshold`} />
+              <Stat label="Last 24h Collected" value={last24} color="green"
+                sub={`avg ${dailyAvg?.toFixed(1) || 0}/day (7d)`} />
+              <Stat label="Status"
+                value={ready?.status?.toUpperCase() || '—'}
+                color={ready?.status === 'ready' ? 'green' : ready?.status === 'approaching' ? 'orange' : 'red'}
+                sub={ready?.next_threshold ? `next: ${ready.next_threshold}` : ''} />
+            </div>
+
+            {/* Source breakdown */}
+            <div className="section">
+              <div className="section-title">Pairs by Source Method</div>
+              <div className="card">
+                {Object.keys(sources).length === 0 ? (
+                  <div className="empty">No pairs yet. Start synthetic or distillation pipeline.</div>
+                ) : (
+                  <>
+                    {Object.entries(sources)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([k, v]) => {
+                        let color = 'green';
+                        if (k.startsWith('synthetic_')) color = 'blue';
+                        else if (k.startsWith('distill_')) color = 'orange';
+                        else if (k.startsWith('cai_')) color = 'purple';
+                        else if (k.startsWith('manual_')) color = 'yellow';
+                        return <BarRow key={k} label={k} count={v} max={sourceMax} color={color} />;
+                      })}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Pipelines side-by-side */}
+            <div className="section">
+              <div className="grid grid-2">
+                <DistillPanel adminKey={adminKey} onRefresh={loadStats} />
+                <SyntheticPanel adminKey={adminKey} />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ marginTop: '3rem', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--text-faint)' }}>
+              MiganCore Admin v0.4.6 · Endpoint {API_BASE}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    function App() {
+      const [adminKey, setAdminKey] = useState(LS.get('admin_key'));
+
+      function logout() {
+        LS.del('admin_key');
+        setAdminKey('');
+      }
+
+      if (!adminKey) {
+        return <AuthGate onUnlock={k => setAdminKey(k)} />;
+      }
+      return <Dashboard adminKey={adminKey} onLogout={logout} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
