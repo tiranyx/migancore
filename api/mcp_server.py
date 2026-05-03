@@ -69,6 +69,9 @@ def _build_mcp():
             "required. Get token: POST https://api.migancore.com/v1/auth/login."
         ),
         stateless_http=True,
+        # Endpoint at the mount root — when mounted at /mcp, the JSON-RPC endpoint
+        # is /mcp itself (NOT /mcp/mcp). Default is /mcp which would double-up.
+        streamable_http_path="/",
     )
 
     # ---------- TOOL CONTEXT EXTRACTION ----------
