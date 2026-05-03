@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Ollama
     OLLAMA_URL: str = "http://ollama:11434"
-    DEFAULT_MODEL: str = "qwen2.5:7b"
+    DEFAULT_MODEL: str = "qwen2.5:7b-instruct-q4_K_M"
 
     # Letta
     LETTA_URL: str = "http://letta:8283"

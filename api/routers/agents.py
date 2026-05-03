@@ -23,7 +23,7 @@ class CreateAgentRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1024)
-    model_version: str = Field(default="qwen2.5:7b")
+    model_version: str = Field(default="qwen2.5:7b-instruct-q4_K_M")
     system_prompt: str | None = Field(None, max_length=8192)
 
 
