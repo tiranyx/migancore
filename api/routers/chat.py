@@ -30,6 +30,7 @@ from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
 from services.tool_executor import ToolContext, build_ollama_tools_spec
 from services.tool_policy import load_tool_policies
+from services.vector_memory import index_turn_pair
 
 
 async def _check_tenant_message_quota(db: AsyncSession, tenant: Tenant) -> None:
@@ -181,6 +182,18 @@ async def chat(
     conversation.last_message_at = datetime.now(timezone.utc)
 
     await db.commit()
+
+    # Day 12: Background semantic embed — fire-and-forget, never blocks response
+    asyncio.create_task(
+        index_turn_pair(
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            user_message=data.message,
+            assistant_message=assistant_content,
+            session_id=str(conversation.id),
+            turn_index=conversation.message_count,
+        )
+    )
 
     logger.info(
         "chat.response",

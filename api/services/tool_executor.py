@@ -155,27 +155,54 @@ async def _memory_write(args: dict, ctx: ToolContext) -> dict:
 
 
 async def _memory_search(args: dict, ctx: ToolContext) -> dict:
-    """Search agent memory by key/value substring matching."""
+    """Search agent memory — Qdrant semantic (Tier 2) with Redis K-V fallback (Tier 1).
+
+    Day 12: Tries Qdrant semantic search first. If Qdrant is unavailable or
+    returns no results above threshold, falls back to Redis substring search.
+    """
     query = args.get("query", "").strip()
     limit = min(int(args.get("limit", 5)), 20)
 
     if not query:
         raise ToolExecutionError("'query' is required")
 
+    # Tier 2: Qdrant semantic search
+    try:
+        from services.vector_memory import search_semantic
+        semantic_hits = await search_semantic(ctx.agent_id, query, top_k=limit)
+        if semantic_hits:
+            logger.info("tool.memory_search.qdrant", query=query, matches=len(semantic_hits))
+            return {
+                "results": [
+                    {
+                        "user_message": r.get("user_message", ""),
+                        "assistant_message": r.get("assistant_message", ""),
+                        "session_id": r.get("session_id"),
+                        "turn_index": r.get("turn_index"),
+                        "timestamp": r.get("timestamp"),
+                    }
+                    for r in semantic_hits
+                ],
+                "query": query,
+                "source": "qdrant_semantic",
+            }
+    except Exception as exc:
+        logger.warning("tool.memory_search.qdrant_error", error=str(exc))
+
+    # Tier 1 fallback: Redis K-V substring search
     all_memories = await memory_list(ctx.tenant_id, ctx.agent_id, limit=100)
     query_lower = query.lower()
-
     matches = [
         {"key": k, "value": v}
         for k, v in all_memories.items()
         if query_lower in k.lower() or query_lower in v.lower()
     ]
-
-    logger.info("tool.memory_search", query=query, matches=len(matches))
+    logger.info("tool.memory_search.redis", query=query, matches=len(matches))
     return {
         "results": matches[:limit],
         "query": query,
         "total_in_memory": len(all_memories),
+        "source": "redis_kv",
     }
 
 

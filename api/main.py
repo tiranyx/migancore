@@ -90,6 +90,9 @@ async def lifespan(app: FastAPI):
     # 2. Eager-load JWT keys — fail fast if keys are missing
     from services.jwt import _get_keys
     _get_keys()
+    # 3. Pre-warm fastembed model — avoids 10-30s cold start on first chat
+    from services.embedding import get_model
+    await get_model()
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
