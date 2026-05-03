@@ -159,7 +159,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "migancore-api",
-        "version": "0.4.1",
+        "version": app.version,
     }
 
 
@@ -192,7 +192,7 @@ async def root():
     """API root — returns service metadata."""
     return {
         "name": "MiganCore",
-        "version": "0.4.1",
+        "version": app.version,
         "tagline": "Every vision deserves a digital organism.",
         "endpoints": {
             "health": "/health",
