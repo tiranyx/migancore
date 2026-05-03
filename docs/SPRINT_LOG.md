@@ -239,6 +239,51 @@
 
 ---
 
+### Day 15 — Constitutional AI Pipeline
+**Agent:** Claude Sonnet 4.6
+**Scope:** Self-evolving optimizer — preference data flywheel for DPO training
+
+**Pre-Implementation Research (documented in DAY15_CAI_RESEARCH.md):**
+- Gap identified: self-evolving loop missing the "Optimizer" component (4th of 4 in arxiv 2508.07407)
+- Constitutional AI validated: same-model self-critique generates quality preference pairs (arxiv 2212.08073)
+- DPO 2025 best practices: 1.9k high-quality pairs × 3 epochs = 5% improvement on 7B models
+- Judge model selection: 0.5B fails Chat Hard tasks (<50% accuracy), 7B achieves ~75% (arxiv 2509.13332)
+- Quality over quantity: CRITIQUE_THRESHOLD filter + structured JSON output → better DPO data
+- Memory state: MiganCore ahead on memory (Tier 1-3 all live); CAI = missing Optimizer
+
+**New Files:**
+- `docs/CONSTITUTION.md` — 10 measurable, specific, tension-creating principles (P1–P10)
+  - P1 Kejelasan, P2 Relevansi, P3 Akurasi, P4 Proporsi, P5 Kejujuran
+  - P6 Manfaat, P7 Keamanan, P8 Persona Konsisten, P9 Bahasa Adaptif, P10 Anti-Verbosity
+  - Each principle has measurable proxies per C3AI (ACM Web 2025) specificity requirement
+- `api/services/cai_pipeline.py`
+  - `run_cai_pipeline()` — entry point: 50% sampling gate → critique → revise → store
+  - `_critique()` — 7B judge, structured JSON `{score, violations, suggestions}`, temp=0
+  - `_revise()` — 7B generator, improved response, temp=0.3
+  - `_store_preference_pair()` — AsyncSessionLocal INSERT into `preference_pairs` (no RLS)
+  - `JUDGE_MODEL = qwen2.5:7b-instruct-q4_K_M` | `CAI_SAMPLE_RATE = 0.5` | `CRITIQUE_THRESHOLD = 3`
+
+**Modified Files:**
+- `api/routers/chat.py`
+  - Import: `from services.cai_pipeline import run_cai_pipeline`
+  - 3rd `asyncio.create_task(run_cai_pipeline(user_message, assistant_content, assistant_msg.id))`
+- `api/main.py` — version `0.3.4` → `0.3.5`
+
+**Architecture locked:**
+- 7B for judge (NOT 0.5B) — research-validated minimum for Chat Hard quality assessment
+- Sampling at 50% — critique + revise = 2 sequential 7B calls, significant CPU cost
+- Fire-and-forget only — never blocks HTTP response
+- Sync chat endpoint ONLY — stream endpoint deferred
+- chosen=revised, rejected=original — standard DPO pair format
+
+**No DB migration required** — `preference_pairs` table already exists from Day 0 schema
+
+**Version:** 0.3.4 → 0.3.5
+
+**Deliverables:** DPO data flywheel live — every conversation (50% sampling) now generates preference pairs for Week 4 training
+
+---
+
 ### Day 14 — Knowledge Block Auto-Extraction
 **Agent:** Claude Sonnet 4.6
 **Scope:** Self-evolving memory — knowledge block grows from real conversations

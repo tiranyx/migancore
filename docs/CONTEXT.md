@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 14 — Knowledge Auto-Extraction)
-**API Version:** 0.3.4
-**Git Commit:** `26c399f`
+**Last Updated:** 2026-05-03 | **Last Agent:** Claude Sonnet 4.6 (Day 15 — Constitutional AI Pipeline)
+**API Version:** 0.3.5
+**Git Commit:** `TBD`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -16,8 +16,8 @@
 | Field | Value |
 |-------|-------|
 | Phase | Week 2 — Safety + Intelligence |
-| Sprint Day | Day 14 (COMPLETE) → Day 15 (NEXT) |
-| API Version | 0.3.4 |
+| Sprint Day | Day 15 (COMPLETE) → Day 16 (NEXT) |
+| API Version | 0.3.5 |
 | Git Commit | `TBD — see SPRINT_LOG.md` |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (Let's Encrypt SSL ✅) |
@@ -93,6 +93,19 @@
 - ✅ Letta container: `ado-letta-1`, port 8283 internal, `letta_db` fully migrated
 - ✅ E2E verified: 3 blocks created, `letta_agent_id` persisted, logs confirmed
 
+### Constitutional AI Pipeline — Preference Data (Day 15, Claude)
+- ✅ `services/cai_pipeline.py` — Constitutional AI critique-revise, fire-and-forget
+  - `run_cai_pipeline()` — entry point, 50% sampling gate (`CAI_SAMPLE_RATE=0.5`)
+  - `_critique()` — 7B judge evaluates response vs. 10 Constitution principles, structured JSON `{score, violations, suggestions}`
+  - `_revise()` — 7B generates improved response (temp=0.3) when score ≤ 3
+  - `_store_preference_pair()` — INSERT into `preference_pairs` (no RLS, global training table)
+  - `JUDGE_MODEL = qwen2.5:7b-instruct-q4_K_M` — research: 0.5B fails Chat Hard tasks
+  - `CRITIQUE_THRESHOLD = 3` — score ≤ 3 triggers revision + pair storage
+- ✅ `docs/CONSTITUTION.md` — 10 specific, measurable principles (P1–P10)
+- ✅ `routers/chat.py` — CAI wired as 3rd `asyncio.create_task` after chat commit
+  - Passes `assistant_msg.id` as `source_message_id` (FK to messages table — training lineage)
+  - Zero latency impact — fully fire-and-forget
+
 ### Knowledge Block Auto-Extraction (Day 14, Claude)
 - ✅ `services/fact_extractor.py` — Ollama 0.5B fact extraction, fire-and-forget
   - `extract_facts()` — structured extraction prompt, output validation (bullet lines only)
@@ -154,8 +167,25 @@
 
 ## IN PROGRESS / NEXT SPRINT
 
+### ✅ Day 15 — Constitutional AI Pipeline (COMPLETE)
+**Git Commit:** `TBD` | **Deployed:** 2026-05-03 | **Version:** 0.3.5
+
+**Delivered:**
+- ✅ `docs/CONSTITUTION.md` — 10 specific, measurable principles (P1 Kejelasan → P10 Anti-Verbosity)
+- ✅ `services/cai_pipeline.py` — critique + revise + store preference pair, fire-and-forget
+- ✅ `routers/chat.py` — 3rd asyncio.create_task wired: `run_cai_pipeline()`
+
+**Architecture decisions locked:**
+- JUDGE_MODEL = `qwen2.5:7b` (NOT 0.5B) — 0.5B fails on Chat Hard quality assessment
+- CAI_SAMPLE_RATE = 0.5 — CPU resource management on CPU-only VPS
+- CRITIQUE_THRESHOLD = 3 — only revise clearly suboptimal (score ≤ 3/5)
+- Preference pairs: chosen=revised, rejected=original — DPO training signal
+- No RLS on preference_pairs — global training table, not tenant-scoped
+
+---
+
 ### ✅ Day 14 — Knowledge Block Auto-Extraction (COMPLETE)
-**Git Commit:** `TBD` | **Deployed:** 2026-05-03 | **Version:** 0.3.4
+**Git Commit:** `26c399f` | **Deployed:** 2026-05-03 | **Version:** 0.3.4
 
 **Delivered:**
 - ✅ `services/fact_extractor.py` — Qwen2.5-0.5B extraction, date-sectioned format, FIFO trim
@@ -242,6 +272,9 @@ Tidak ada blocker saat ini.
 | Celery | DISABLED | RAM terlalu mahal untuk seed stage. asyncio.create_task cukup. |
 | Letta | PASSIVE STORAGE ONLY | Qwen2.5-7B Q4 tidak support Letta tool calls. Use blocks API only. |
 | Knowledge extraction | Qwen2.5-0.5B | Fast, low RAM, structured output task — no need for 7B |
+| CAI judge model | Qwen2.5-7B | Research (arxiv 2509.13332): 0.5B fails Chat Hard (<50% accuracy), 7B achieves ~75% |
+| CAI sampling | 50% of turns | CPU resource management — critique + revise = 2 sequential 7B calls |
+| DPO pipeline | Accumulate pairs now, train Week 4 | RunPod RTX 4090 $0.34/hr, 500+ pairs target |
 | Knowledge scope | Sync chat only | Stream endpoint: async persist pattern makes nested task complex. Defer. |
 | Langfuse | DEFERRED (Week 3) | Belum ada yang perlu diobservasi. structlog sudah cukup. |
 | Memory Tier 1 | Redis K-V | Fast, simple, TTL built-in |
@@ -268,6 +301,9 @@ Tidak ada blocker saat ini.
 - ❌ Jangan skip `set_tenant_context` sebelum query tenant-scoped tables
 - ❌ Jangan pakai BGE-small-en untuk embeddings — English only, salah pilihan
 - ❌ Jangan gunakan HTTP+SSE untuk MCP transport — gunakan Streamable HTTP
+- ❌ Jangan pakai 0.5B sebagai CAI judge — fails on Chat Hard tasks (research: <50% accuracy)
+- ❌ Jangan block HTTP response untuk critique/revise — adds 30-60s latency; always fire-and-forget
+- ❌ Jangan store ALL preference pairs tanpa quality filter — DPO degrades dengan noisy data
 
 ---
 
@@ -304,6 +340,8 @@ Tidak ada blocker saat ini.
 | RunPod budget | $0 spent of $50 allocated |
 | Git | VPS ↔ GitHub ↔ Local = SYNCED @ TBD |
 | Knowledge extraction | Qwen2.5-0.5B, fire-and-forget, Day 14 ✅ |
+| CAI pipeline | Qwen2.5-7B judge, 50% sample rate, preference pairs, Day 15 ✅ |
+| DPO pairs accumulated | 0 (flywheel starts Day 15 — target: 500+ by Week 4) |
 
 ---
 
@@ -326,3 +364,4 @@ Tidak ada blocker saat ini.
 | 2026-05-03 (Day 12) | Claude Sonnet 4.6 | Full audit + handoff: sync all repos, fix version, setup HTTPS. Ready for Qdrant RAG. |
 | 2026-05-03 (Day 13) | Claude Sonnet 4.6 | Letta Tier 3: fact_extractor.py, persona blocks, 3-block architecture, E2E verified. v0.3.3. |
 | 2026-05-03 (Day 14) | Claude Sonnet 4.6 | Knowledge auto-extraction: fact_extractor.py (0.5B model), wired in chat.py. v0.3.4. No DB migration. |
+| 2026-05-03 (Day 15) | Claude Sonnet 4.6 | Constitutional AI pipeline: cai_pipeline.py (7B judge, critique+revise), CONSTITUTION.md (10 principles), 3rd create_task in chat.py. DPO flywheel started. v0.3.5. No DB migration. |

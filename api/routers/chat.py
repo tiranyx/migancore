@@ -31,6 +31,7 @@ from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
 from services.tool_executor import ToolContext, build_ollama_tools_spec
 from services.tool_policy import load_tool_policies
+from services.cai_pipeline import run_cai_pipeline
 from services.fact_extractor import maybe_update_knowledge_block
 from services.vector_memory import index_turn_pair
 
@@ -211,6 +212,15 @@ async def chat(
                 letta_blocks=letta_blocks,
             )
         )
+
+    # Day 15: Background CAI critique-revise — generates preference pairs for DPO training
+    asyncio.create_task(
+        run_cai_pipeline(
+            user_message=data.message,
+            assistant_response=assistant_content,
+            source_message_id=assistant_msg.id,
+        )
+    )
 
     logger.info(
         "chat.response",

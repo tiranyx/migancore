@@ -6,6 +6,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.5] — 2026-05-03 (Day 15)
+
+### Added
+- **Constitutional AI Pipeline** (`services/cai_pipeline.py`) — NEW FILE
+  - `run_cai_pipeline()` — fire-and-forget entry point, 50% sampling gate
+  - `_critique()` — 7B judge evaluates response vs. 10 Constitution principles, structured JSON output
+  - `_revise()` — 7B model generates improved response based on critique (temp=0.3)
+  - `_store_preference_pair()` — AsyncSessionLocal INSERT into `preference_pairs` table
+  - `JUDGE_MODEL = qwen2.5:7b-instruct-q4_K_M` — research-validated: 0.5B fails on Chat Hard tasks
+  - `CAI_SAMPLE_RATE = 0.5` — CPU resource management on CPU-only VPS
+  - `CRITIQUE_THRESHOLD = 3` — score ≤ 3 triggers revision + DPO pair storage
+- **Constitution** (`docs/CONSTITUTION.md`) — NEW FILE
+  - 10 specific, measurable principles (P1–P10): Kejelasan, Relevansi, Akurasi, Proporsi, Kejujuran, Manfaat, Keamanan, Persona Konsisten, Bahasa Adaptif, Anti-Verbosity
+  - Each principle has measurable proxies (sentence length, language match, actionable content presence)
+  - Scoring scale: 1-5, threshold ≤ 3 → revision required
+  - Designed per C3AI (ACM Web 2025) insight: specific + measurable + in-tension principles generate 5x better pairs
+- **CAI wired in Chat** (`routers/chat.py`)
+  - 3rd `asyncio.create_task` after Qdrant index + Letta knowledge extraction
+  - Passes `assistant_msg.id` as `source_message_id` for training data lineage
+
+### Changed
+- Version bumped: `0.3.4` → `0.3.5`
+
+### Research Notes (docs/DAY15_CAI_RESEARCH.md)
+- Self-Evolving Agents survey: Optimizer was the missing 4th component (arxiv 2508.07407)
+- Constitutional AI: self-critique generates preference pairs without human labels (arxiv 2212.08073)
+- DPO 2025: 1.9k high-quality pairs × 3 epochs = 5% improvement on 7B models
+- LLM-as-Judge: 0.6B fails Chat Hard (<50%), 7B achieves ~75% — 7B required
+- Fire-and-forget aligned with production memory systems (Mem0, Letta) → industry standard
+
+---
+
 ## [0.3.4] — 2026-05-03 (Day 14)
 
 ### Added
