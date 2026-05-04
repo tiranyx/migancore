@@ -1595,7 +1595,7 @@
   });
 
   function Msg({ msg, onRetry }) {
-    const { role, content, streaming, toolCount, error, tools } = msg;
+    const { role, content, streaming, toolCount, error, tools, attachments } = msg;
     const label = role === 'user' ? 'YOU' : 'MC';
     const isError = !!error || (content || '').startsWith('⚠');
     const errClass = isError ? ' error-bubble' : '';
@@ -1642,6 +1642,34 @@
                 <div style={{ marginBottom: content ? 8 : 0 }}>
                   {tools.map((t, i) => (
                     <ToolChip key={`${t.name}-${i}`} tool={t} />
+                  ))}
+                </div>
+              )}
+              {/* Day 40 — image thumbnails in USER bubble (attachments shown as user-uploaded) */}
+              {role === 'user' && Array.isArray(attachments) && attachments.length > 0 && (
+                <div style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 6,
+                  marginBottom: content ? 8 : 0,
+                }}>
+                  {attachments.map((a, i) => (
+                    <a
+                      key={a.id || i}
+                      href={a.dataUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={a.name || `image ${i+1}`}
+                      style={{ display: 'inline-block', lineHeight: 0 }}
+                    >
+                      <img
+                        src={a.dataUrl}
+                        alt={a.name || `image ${i+1}`}
+                        style={{
+                          width: 96, height: 96, objectFit: 'cover',
+                          borderRadius: 6, border: '1px solid var(--border)',
+                          display: 'block',
+                        }}
+                      />
+                    </a>
                   ))}
                 </div>
               )}
@@ -1855,10 +1883,14 @@
       let firstChunkAt = null;
 
       if (!opts.retryOf) {
-        // Normal send — add user + assistant placeholder
+        // Normal send — add user + assistant placeholder.
+        // Day 40 fix: when augmented (image attach), display ORIGINAL text + thumbnails
+        // in the user bubble; the augmented prompt is sent to the LLM but never shown.
+        const displayText = opts.displayText !== undefined ? opts.displayText : text;
+        const userAttachments = opts.attachments || null;
         setMsgs(p => [
           ...p,
-          { id: uid, role: 'user', content: text },
+          { id: uid, role: 'user', content: displayText, attachments: userAttachments },
           { id: aid, role: 'assistant', content: '', streaming: true, toolCount: 0, lastUserText: text, lastUserMsgId: uid },
         ]);
       } else {
@@ -1965,11 +1997,21 @@
       if (busy || !agentId) return;
 
       let augmentedText = text || 'Tolong bahas gambar yang saya lampirkan.';
+      let displayText = text || '';
+      let userAttachments = null;
 
       // Day 40: pre-process images via /v1/vision/describe so the brain (Qwen2.5-7B)
       // gets a text caption injected — no base64 in chat history (saves DB + tokens).
       // ADO alignment: modality-as-tool routing (Anthropic Claude Skills Mar 2026).
       if (hasImages) {
+        // Snapshot thumbnails for the user bubble BEFORE we clear attachments[]
+        userAttachments = ready.map(a => ({
+          id: a.id,
+          name: a.name,
+          dataUrl: a.dataUrl,
+          mime: a.mime,
+        }));
+
         setVisioning(true);
         const captions = [];
         for (let i = 0; i < ready.length; i++) {
@@ -1995,21 +2037,21 @@
         const captionBlock = captions
           .map((c, i) => `Gambar ${i+1}: ${c}`)
           .join('\n\n');
-        // Day 40 PM fix: brain salah interpretasi message ini sebagai "user minta
-        // generate gambar baru" → call generate_image tool. Tighten instruction:
-        // (1) deskripsi sudah final, (2) JANGAN call tool apa pun, (3) jawab
-        // dalam bahasa user, (4) tidak perlu re-describe.
         const userQuestion = text || 'Tolong rangkum isi gambarnya.';
+        // Sent to LLM (verbose, with anti-tool-call instruction)
         augmentedText =
           `[KONTEKS — Berikut deskripsi ${captions.length === 1 ? 'gambar' : `${captions.length} gambar`} yang dilampirkan user (sudah dianalisis backend Vision, ini final, JANGAN panggil tool apapun, JANGAN generate gambar baru):]\n\n` +
           `${captionBlock}\n\n` +
           `[PERTANYAAN USER]: ${userQuestion}\n\n` +
           `[INSTRUKSI]: Jawab pertanyaan di atas berdasarkan deskripsi gambar. Gunakan bahasa yang sama dengan pertanyaan user. JANGAN panggil tool generate_image / analyze_image / web_search — semua konteks sudah ada di atas.`;
+        // Shown in user bubble (clean — original text or fallback hint)
+        displayText = text || `(${captions.length === 1 ? 'gambar terlampir' : `${captions.length} gambar terlampir`})`;
       }
 
       setInput('');
       if (taRef.current) { taRef.current.style.height = 'auto'; }
-      dispatchMessage(augmentedText);
+      // Pass augmented text to LLM, displayText + attachments to UI bubble
+      dispatchMessage(augmentedText, { displayText, attachments: userAttachments });
     }, [input, busy, agentId, dispatchMessage, attachments]);
 
     // Day 36: Retry — re-send the last user prompt for a failed assistant message
