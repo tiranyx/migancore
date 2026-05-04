@@ -389,20 +389,33 @@ def get_mcp_app():
             await asgi_app(scope, receive, send)
             return
 
-        # Extract Authorization header from raw ASGI headers
+        # Extract auth from raw ASGI headers
+        # Day 40: accept BOTH "Authorization: Bearer <key>" AND "X-API-Key: <key>"
+        # The X-API-Key path is for gateways (e.g. Smithery.ai) that reserve the
+        # standard Authorization header for their own OAuth flow and require the
+        # upstream to use a custom header instead. Both paths feed the same
+        # API-key-or-JWT verifier below.
         auth_header = ""
+        x_api_key_header = ""
         for k, v in scope.get("headers", []):
-            if k.lower() == b"authorization":
+            kl = k.lower()
+            if kl == b"authorization":
                 auth_header = v.decode("latin-1", errors="ignore")
-                break
+            elif kl == b"x-api-key":
+                x_api_key_header = v.decode("latin-1", errors="ignore")
 
-        if not auth_header.lower().startswith("bearer "):
-            logger.warning("mcp.auth.missing_bearer", path=path)
-            for msg in _send_401("Authorization: Bearer <jwt> required"):
+        token = ""
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+        elif x_api_key_header.strip():
+            token = x_api_key_header.strip()
+        else:
+            logger.warning("mcp.auth.missing_credentials", path=path)
+            for msg in _send_401(
+                "Provide credentials via 'Authorization: Bearer <key>' or 'X-API-Key: <key>'"
+            ):
                 await send(msg)
             return
-
-        token = auth_header[7:].strip()
 
         # Day 27: try API key first (mgn_live_*) then JWT fallback
         from services.api_keys import is_api_key_format, verify_key
