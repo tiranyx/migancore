@@ -15,6 +15,10 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- Day 40: CompressorJS for client-side image downscale (12KB gzipped, no build) -->
+  <!-- Used to keep base64 attachments under 1MB so React state doesn't freeze on big images -->
+  <script src="https://cdn.jsdelivr.net/npm/compressorjs@1.2.1/dist/compressor.min.js"></script>
+
   <style>
     /* ===========================
        DESIGN SYSTEM TOKENS
@@ -644,6 +648,12 @@
     .chat-input::placeholder { color: var(--text-dim); }
     .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* Day 40 — pulsing red dot for mic recording indicator */
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.3); opacity: 0.5; }
+    }
+
     .btn-action {
       width: 44px;
       height: 44px;
@@ -946,6 +956,12 @@
     // Day 37 — onboarding starter prompts (open endpoint, no auth required)
     onboardingStarters: (usecase, lang) =>
       apiFetch(`/v1/onboarding/starters?usecase=${encodeURIComponent(usecase || 'general')}&lang=${encodeURIComponent(lang || 'id')}`),
+
+    // Day 40 — vision describe (Bearer auth, image_base64 + question -> caption)
+    visionDescribe: (body) => apiFetch('/v1/vision/describe', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   };
 
   // ===========================
@@ -1695,10 +1711,26 @@
     // Day 37 — onboarding modal (two-question, dynamic starters)
     const [showOnboarding, setShowOnboarding] = useState(() => !LS.get('mc_onboarded'));
 
+    // Day 40 — multimodal sense inputs (vision + audio).
+    // attachments: list of {id, name, dataUrl, size, mime, status: 'compressing'|'ready'|'error'}
+    // Max 4 images per send (Anthropic Claude.ai limit).
+    const [attachments, setAttachments] = useState([]);
+    const [attachError, setAttachError] = useState('');
+    // Mic recording state
+    const [recording, setRecording] = useState(false);
+    const [recordSecs, setRecordSecs] = useState(0);
+    const [recordError, setRecordError] = useState('');
+
     const endRef     = useRef(null);
     const taRef      = useRef(null);
     const stopRef    = useRef(null);
     const streamMsgId = useRef(null);
+    // Mic refs (kept outside state to avoid re-renders during recording)
+    const recRef     = useRef(null);   // MediaRecorder instance
+    const recChunks  = useRef([]);     // collected blobs
+    const recStream  = useRef(null);   // raw MediaStream (closed on stop)
+    const recTimer   = useRef(null);   // setInterval handle for elapsed counter
+    const recCapTo   = useRef(null);   // setTimeout handle for 90s hard cap
 
     // ─── Init: ensure agent + load agent list (Day 29) ─────
     const refreshAgents = useCallback(async () => {
@@ -1921,13 +1953,57 @@
     }, [busy, agentId, convId]);
 
     // Public send — clears input + dispatches
-    const send = useCallback((txt) => {
+    // Day 40 — visioning state (separate from chat busy so user sees explicit progress)
+    const [visioning, setVisioning] = useState(false);
+
+    const send = useCallback(async (txt) => {
       const text = (typeof txt === 'string' ? txt : input).trim();
-      if (!text || busy || !agentId) return;
+      const ready = attachments.filter(a => a.status === 'ready' && a.dataUrl);
+      const hasImages = ready.length > 0;
+      // Block: nothing to send, currently busy, or agent missing
+      if (!text && !hasImages) return;
+      if (busy || !agentId) return;
+
+      let augmentedText = text || 'Tolong bahas gambar yang saya lampirkan.';
+
+      // Day 40: pre-process images via /v1/vision/describe so the brain (Qwen2.5-7B)
+      // gets a text caption injected — no base64 in chat history (saves DB + tokens).
+      // ADO alignment: modality-as-tool routing (Anthropic Claude Skills Mar 2026).
+      if (hasImages) {
+        setVisioning(true);
+        const captions = [];
+        for (let i = 0; i < ready.length; i++) {
+          const att = ready[i];
+          try {
+            const b64 = att.dataUrl.split(',')[1] || '';
+            const resp = await api.visionDescribe({
+              image_base64: b64,
+              mime_type: att.mime || 'image/jpeg',
+              question: text || 'Describe this image in detail. List notable elements and any visible text.',
+              lang: (LS.get('mc_onboard_lang') === 'en') ? 'en' : 'id',
+            });
+            captions.push(resp?.answer || '(tanpa keterangan)');
+          } catch (e) {
+            captions.push(`[Gagal proses gambar ${i+1}: ${e.message || e}]`);
+          }
+        }
+        // Reset attachments + clear pending error
+        setAttachments([]);
+        setAttachError('');
+        setVisioning(false);
+
+        const captionBlock = captions
+          .map((c, i) => `Gambar ${i+1}: ${c}`)
+          .join('\n');
+        augmentedText =
+          `[User melampirkan ${captions.length} gambar (sudah dianalisis oleh Vision):]\n${captionBlock}\n\n` +
+          `Pesan user: ${text || '(kosong, tolong jelaskan gambarnya)'}`;
+      }
+
       setInput('');
       if (taRef.current) { taRef.current.style.height = 'auto'; }
-      dispatchMessage(text);
-    }, [input, busy, agentId, dispatchMessage]);
+      dispatchMessage(augmentedText);
+    }, [input, busy, agentId, dispatchMessage, attachments]);
 
     // Day 36: Retry — re-send the last user prompt for a failed assistant message
     const retry = useCallback((failedMsg) => {
@@ -1937,6 +2013,206 @@
         userMsgId: failedMsg.lastUserMsgId,
       });
     }, [dispatchMessage]);
+
+    // ─── Day 40: Image attach (paste + drop + picker) ──────────
+    // CompressorJS (CDN) downscales to 1568px (Anthropic Vision optimal) before
+    // base64 encoding, keeping React state under ~200KB per image.
+    const MAX_IMAGES = 4;          // Anthropic Claude.ai limit
+    const MAX_IMAGE_BYTES = 8 * 1024 * 1024;  // pre-compress cap
+
+    const compressImage = useCallback((file) => new Promise((resolve, reject) => {
+      if (typeof Compressor === 'undefined') {
+        // CompressorJS CDN failed to load — pass through original (still works for small imgs)
+        const reader = new FileReader();
+        reader.onload = () => resolve({ dataUrl: reader.result, size: file.size, mime: file.type });
+        reader.onerror = () => reject(new Error('FileReader failed'));
+        reader.readAsDataURL(file);
+        return;
+      }
+      // eslint-disable-next-line no-undef
+      new Compressor(file, {
+        quality: 0.75,
+        maxWidth: 1568,
+        maxHeight: 1568,
+        convertSize: 500_000,        // re-encode PNG > 500KB to JPEG
+        success(blob) {
+          const reader = new FileReader();
+          reader.onload = () => resolve({ dataUrl: reader.result, size: blob.size, mime: blob.type });
+          reader.onerror = () => reject(new Error('FileReader failed'));
+          reader.readAsDataURL(blob);
+        },
+        error(err) { reject(err); },
+      });
+    }), []);
+
+    const attachImage = useCallback(async (file) => {
+      setAttachError('');
+      if (!file || !file.type?.startsWith('image/')) {
+        setAttachError('Bukan file gambar');
+        return;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        setAttachError(`Gambar terlalu besar (>${Math.round(MAX_IMAGE_BYTES/1024/1024)}MB)`);
+        return;
+      }
+      const tempId = Date.now() + Math.random();
+      // Optimistic: show as "compressing" immediately
+      setAttachments(p => {
+        if (p.length >= MAX_IMAGES) {
+          setAttachError(`Maksimal ${MAX_IMAGES} gambar per pesan`);
+          return p;
+        }
+        return [...p, { id: tempId, name: file.name || 'image', dataUrl: null, size: file.size, mime: file.type, status: 'compressing' }];
+      });
+      try {
+        const { dataUrl, size, mime } = await compressImage(file);
+        setAttachments(p => p.map(a => a.id === tempId ? { ...a, dataUrl, size, mime, status: 'ready' } : a));
+      } catch (e) {
+        setAttachments(p => p.filter(a => a.id !== tempId));
+        setAttachError(`Gagal proses gambar: ${e.message || e}`);
+      }
+    }, [compressImage]);
+
+    const removeAttachment = useCallback((id) => {
+      setAttachments(p => p.filter(a => a.id !== id));
+    }, []);
+
+    // Paste handler — detects images in clipboard
+    useEffect(() => {
+      const handler = (e) => {
+        if (!e.clipboardData) return;
+        const items = [...e.clipboardData.items].filter(i => i.type.startsWith('image/'));
+        if (items.length === 0) return;
+        e.preventDefault();
+        items.forEach(i => {
+          const f = i.getAsFile();
+          if (f) attachImage(f);
+        });
+      };
+      window.addEventListener('paste', handler);
+      return () => window.removeEventListener('paste', handler);
+    }, [attachImage]);
+
+    // Drag-drop handler scoped to chat area (set up via JSX onDragOver/onDrop)
+    const onDragOver = useCallback((e) => {
+      if (e.dataTransfer?.types?.includes('Files')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    }, []);
+    const onDrop = useCallback((e) => {
+      const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
+      if (files.length === 0) return;
+      e.preventDefault();
+      files.forEach(f => attachImage(f));
+    }, [attachImage]);
+
+    // Picker (hidden input + button)
+    const fileInputRef = useRef(null);
+    const openFilePicker = useCallback(() => fileInputRef.current?.click(), []);
+    const onPickerChange = useCallback((e) => {
+      const files = [...(e.target.files || [])];
+      files.forEach(f => attachImage(f));
+      // Reset value so picking same file twice still triggers change
+      e.target.value = '';
+    }, [attachImage]);
+
+    // ─── Day 40: Mic toggle (MediaRecorder → /v1/speech/to-text) ──
+    const stopMic = useCallback(() => {
+      try { recRef.current?.stop(); } catch {}
+      try { recStream.current?.getTracks().forEach(t => t.stop()); } catch {}
+      if (recTimer.current) { clearInterval(recTimer.current); recTimer.current = null; }
+      if (recCapTo.current) { clearTimeout(recCapTo.current); recCapTo.current = null; }
+      setRecording(false);
+      setRecordSecs(0);
+    }, []);
+
+    const startMic = useCallback(async () => {
+      setRecordError('');
+      // Ask permission (must be on user gesture — Safari iOS quirk)
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        if (e.name === 'NotAllowedError') {
+          setRecordError('Akses mic ditolak. Aktifkan di setting browser.');
+        } else {
+          setRecordError('Tidak bisa akses mic: ' + (e.message || e.name));
+        }
+        return;
+      }
+      recStream.current = stream;
+      recChunks.current = [];
+      // Try opus (smallest); fall back to default
+      let mimeType = 'audio/webm;codecs=opus';
+      if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = '';
+      }
+      const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recRef.current = rec;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) recChunks.current.push(e.data); };
+      rec.onstop = async () => {
+        const blob = new Blob(recChunks.current, { type: rec.mimeType || 'audio/webm' });
+        recChunks.current = [];
+        // Reset stream + timers (already cleaned by stopMic, defensive)
+        try { stream.getTracks().forEach(t => t.stop()); } catch {}
+        if (blob.size < 800) {
+          setRecordError('Rekaman terlalu pendek (<1 detik)');
+          return;
+        }
+        // Upload to STT
+        try {
+          const fd = new FormData();
+          // Pick filename based on mime
+          const ext = (rec.mimeType || '').includes('webm') ? 'webm' : 'mp4';
+          fd.append('file', blob, `mic_${Date.now()}.${ext}`);
+          fd.append('lang_code', 'id');
+          const resp = await fetch(`${API_BASE}/v1/speech/to-text`, {
+            method: 'POST',
+            body: fd,
+            // Note: STT endpoint is currently open (rate-limited); no Bearer needed
+          });
+          const json = await resp.json();
+          if (!resp.ok) {
+            const detail = (json && json.detail) ? (typeof json.detail === 'string' ? json.detail : JSON.stringify(json.detail)) : `HTTP ${resp.status}`;
+            setRecordError(`STT gagal: ${detail.slice(0, 120)}`);
+            return;
+          }
+          const text = (json.text || '').trim();
+          if (text) {
+            setInput(prev => (prev ? prev + ' ' : '') + text);
+            // Auto-grow textarea after insertion
+            requestAnimationFrame(() => {
+              if (taRef.current) {
+                taRef.current.style.height = 'auto';
+                taRef.current.style.height = Math.min(taRef.current.scrollHeight, 160) + 'px';
+                taRef.current.focus();
+              }
+            });
+          } else {
+            setRecordError('Suara tidak terdengar — coba lagi.');
+          }
+        } catch (e) {
+          setRecordError('Upload gagal: ' + (e.message || e));
+        }
+      };
+      rec.start();
+      setRecording(true);
+      setRecordSecs(0);
+      const startTs = Date.now();
+      recTimer.current = setInterval(() => {
+        setRecordSecs(Math.floor((Date.now() - startTs) / 1000));
+      }, 250);
+      // Hard cap 90s (research recommendation: ChatGPT 120s, Claude 60s; sweet spot)
+      recCapTo.current = setTimeout(() => {
+        if (recRef.current?.state === 'recording') stopMic();
+      }, 90_000);
+    }, [stopMic]);
+
+    const toggleMic = useCallback(() => {
+      if (recording) stopMic(); else startMic();
+    }, [recording, startMic, stopMic]);
+
 
     const stop = () => {
       stopRef.current?.();
@@ -2079,17 +2355,130 @@
             <div ref={endRef}/>
           </div>
 
-          {/* Input */}
-          <div className="input-area">
+          {/* Input — Day 40: with image attach + mic toggle, drag-drop zone covers whole area */}
+          <div className="input-area" onDragOver={onDragOver} onDrop={onDrop}>
+            {/* Hidden file picker */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              capture="environment"
+              onChange={onPickerChange}
+              style={{ display: 'none' }}
+            />
+
+            {/* Day 40 — thumbnail strip above input (visible when ada attachment atau visioning) */}
+            {(attachments.length > 0 || visioning || attachError) && (
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0',
+                borderBottom: '1px solid var(--border)', marginBottom: 8,
+              }}>
+                {attachments.map(a => (
+                  <div key={a.id} style={{
+                    position: 'relative',
+                    width: 64, height: 64, borderRadius: 6, overflow: 'hidden',
+                    background: 'var(--bg-2)',
+                    border: a.status === 'ready' ? '1px solid var(--green-border)' : '1px solid var(--orange-border)',
+                  }}>
+                    {a.status === 'ready' && a.dataUrl ? (
+                      <img src={a.dataUrl} alt={a.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 18, color: 'var(--orange)',
+                      }}>⏳</div>
+                    )}
+                    <button
+                      onClick={() => removeAttachment(a.id)}
+                      style={{
+                        position: 'absolute', top: 2, right: 2,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.7)', color: 'white',
+                        border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0,
+                      }}
+                      title="Remove"
+                    >×</button>
+                  </div>
+                ))}
+                {visioning && (
+                  <div style={{
+                    fontSize: 11, color: 'var(--orange)', display: 'flex', alignItems: 'center', gap: 6,
+                    fontFamily: 'var(--mono)', padding: '0 8px',
+                  }}>
+                    👁 Vision menganalisis…
+                  </div>
+                )}
+                {attachError && (
+                  <div style={{
+                    fontSize: 11, color: '#ff6b6b', alignSelf: 'center',
+                    fontFamily: 'var(--mono)', padding: '0 8px',
+                  }}>{attachError}</div>
+                )}
+              </div>
+            )}
+
+            {/* Day 40 — recording state strip */}
+            {(recording || recordError) && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 8px', marginBottom: 8,
+                background: recording ? 'rgba(255, 107, 107, 0.10)' : 'transparent',
+                border: recording ? '1px solid rgba(255, 107, 107, 0.4)' : 'none',
+                borderRadius: 6, fontFamily: 'var(--mono)', fontSize: 12,
+              }}>
+                {recording && (
+                  <>
+                    <span style={{
+                      display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+                      background: '#ff6b6b', animation: 'pulse 1.2s ease-in-out infinite',
+                    }}></span>
+                    <span style={{ color: '#ff6b6b' }}>Recording {Math.floor(recordSecs/60)}:{String(recordSecs%60).padStart(2,'0')} · klik mic untuk stop</span>
+                  </>
+                )}
+                {!recording && recordError && (
+                  <span style={{ color: '#ff6b6b' }}>{recordError}</span>
+                )}
+              </div>
+            )}
+
             <div className="input-row">
+              {/* Day 40 — image attach button */}
+              <button
+                className="btn-action"
+                onClick={openFilePicker}
+                disabled={busy || visioning || attachments.length >= 4}
+                title="Lampirkan gambar (atau drag & drop / paste)"
+                style={{
+                  background: 'var(--bg-2)', color: 'var(--text-dim)',
+                  border: '1px solid var(--border)', width: 38, height: 38,
+                }}
+              >📎</button>
+
+              {/* Day 40 — mic toggle button */}
+              <button
+                className="btn-action"
+                onClick={toggleMic}
+                disabled={busy || visioning}
+                title={recording ? 'Stop rekaman' : 'Bicara (mic toggle)'}
+                style={{
+                  background: recording ? 'rgba(255, 107, 107, 0.15)' : 'var(--bg-2)',
+                  color: recording ? '#ff6b6b' : 'var(--text-dim)',
+                  border: recording ? '1px solid rgba(255, 107, 107, 0.5)' : '1px solid var(--border)',
+                  width: 38, height: 38,
+                }}
+              >{recording ? '■' : '🎤'}</button>
+
               <textarea
                 ref={taRef}
                 className="chat-input"
-                placeholder="Ketik pesan... (Enter kirim · Shift+Enter baris baru)"
+                placeholder={attachments.length > 0
+                  ? 'Tanya tentang gambarnya... (atau biarkan kosong)'
+                  : 'Ketik pesan... (Enter kirim · Shift+Enter baris baru · paste/drop gambar)'}
                 value={input}
                 onChange={onInput}
                 onKeyDown={onKey}
-                disabled={busy}
+                disabled={busy || visioning}
                 rows={1}
               />
               {busy ? (
@@ -2097,12 +2486,20 @@
                   <StopIcon/>
                 </button>
               ) : (
-                <button className="btn-action send" onClick={() => send(input)} disabled={!input.trim()}>
+                <button
+                  className="btn-action send"
+                  onClick={() => send(input)}
+                  disabled={(!input.trim() && attachments.length === 0) || visioning}
+                >
                   <SendIcon/>
                 </button>
               )}
             </div>
-            <div className="input-hint">ENTER kirim · SHIFT+ENTER baris baru · respon streaming real-time</div>
+            <div className="input-hint">
+              {visioning
+                ? '👁 Vision processing… brain akan terima caption.'
+                : 'ENTER kirim · SHIFT+ENTER baris baru · 📎 / paste / drop gambar · 🎤 mic'}
+            </div>
           </div>
         </main>
 
