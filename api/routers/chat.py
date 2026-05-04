@@ -345,6 +345,7 @@ async def chat_stream(
             options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
         ).__aiter__()
 
+        chunk_count = 0
         try:
             while True:
                 try:
@@ -361,12 +362,14 @@ async def chat_stream(
 
                 if chunk:
                     full_response.append(chunk)
+                    chunk_count += 1
                     yield _sse({"type": "chunk", "content": chunk})
                 if done:
                     break
 
             full_text = "".join(full_response)
             yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+            logger.info("chat.stream.done", chunks=chunk_count, len=len(full_text))
 
             # Persist assistant message in background — store ref to prevent GC
             _t = asyncio.create_task(
@@ -380,6 +383,25 @@ async def chat_stream(
             _background_tasks.add(_t)
             _t.add_done_callback(_background_tasks.discard)
 
+        except asyncio.CancelledError:
+            # Day 36: client disconnected (Stop button or browser close)
+            # The httpx context manager in OllamaClient.chat_stream will close
+            # the underlying connection to Ollama, which signals it to abort generation.
+            logger.info("chat.stream.cancelled_by_client", chunks_so_far=chunk_count)
+            # Persist what we have so user doesn't lose work
+            if full_response:
+                full_text = "".join(full_response)
+                _t = asyncio.create_task(
+                    _persist_assistant_message(
+                        conversation_id=conversation_id,
+                        tenant_id=tenant_id,
+                        content=full_text + "\n\n[stopped by user]",
+                        message_count=len(history) + 2,
+                    )
+                )
+                _background_tasks.add(_t)
+                _t.add_done_callback(_background_tasks.discard)
+            raise  # propagate so framework handles cleanup
         except OllamaError as exc:
             logger.error("chat.stream.ollama_error", error=str(exc))
             yield _sse({"type": "error", "message": str(exc)})

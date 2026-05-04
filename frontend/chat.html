@@ -1376,15 +1376,16 @@
   // ===========================
   // MESSAGE COMPONENT
   // ===========================
-  function Msg({ role, content, streaming, toolCount }) {
+  function Msg({ msg, onRetry }) {
+    const { role, content, streaming, toolCount, error } = msg;
     const label = role === 'user' ? 'YOU' : 'MC';
-    const errClass = content.startsWith('⚠') ? ' error-bubble' : '';
+    const isError = !!error || (content || '').startsWith('⚠');
+    const errClass = isError ? ' error-bubble' : '';
 
-    // Day 36: Show thinking indicator when streaming with NO content yet
-    // (Ollama 7B on CPU takes 30-90s for first chunk — user needs visible feedback)
+    // Day 36: Status hierarchy when streaming with NO content yet
     const isThinking = streaming && !content;
 
-    // Track elapsed seconds while thinking (resets when content arrives)
+    // Track elapsed seconds while thinking
     const [elapsed, setElapsed] = React.useState(0);
     React.useEffect(() => {
       if (!isThinking) { setElapsed(0); return; }
@@ -1393,6 +1394,12 @@
       return () => clearInterval(t);
     }, [isThinking]);
 
+    // 3-state status (Day 36): Connecting → Thinking → Generating
+    const statusText =
+      elapsed < 3  ? 'Menghubungkan...' :
+      elapsed < 15 ? 'MiganCore sedang berpikir...' :
+                     'Generating response...';
+
     return (
       <div className={`msg-row ${role}`}>
         <div className="msg-avatar">{label}</div>
@@ -1400,13 +1407,13 @@
           {isThinking ? (
             <div className="thinking-indicator">
               <span className="dots"><span></span><span></span><span></span></span>
-              <span>MiganCore sedang berpikir...</span>
+              <span>{statusText}</span>
               {elapsed > 5 && (
                 <span className="thinking-elapsed">· {elapsed}s</span>
               )}
               {elapsed > 30 && (
                 <span className="thinking-elapsed" style={{ color: 'var(--orange)' }}>
-                  · CPU 7B (lambat normal)
+                  · CPU 7B (lambat normal, jangan refresh)
                 </span>
               )}
             </div>
@@ -1415,6 +1422,32 @@
               {content}
             </div>
           )}
+
+          {/* Day 36: Retry button on error */}
+          {isError && onRetry && msg.lastUserText && (
+            <button
+              onClick={() => onRetry(msg)}
+              style={{
+                marginTop: '0.5rem',
+                padding: '0.4rem 0.85rem',
+                background: 'var(--orange-dim)',
+                color: 'var(--orange)',
+                border: '1px solid var(--orange-border)',
+                borderRadius: '6px',
+                fontFamily: 'var(--mono)',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--orange)'; e.currentTarget.style.color = '#1a0f00'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--orange-dim)'; e.currentTarget.style.color = 'var(--orange)'; }}
+            >
+              ↻ RETRY
+            </button>
+          )}
+
           {toolCount > 0 && (
             <div className="tool-badge">⚙ {toolCount} tool call{toolCount > 1 ? 's' : ''}</div>
           )}
@@ -1564,26 +1597,37 @@
       LS.del('mc_conv');
     }, [msgs, convId, convList]);
 
-    // ─── Send message ─────────────────────────────────────
-    const send = useCallback((txt) => {
-      const text = (typeof txt === 'string' ? txt : input).trim();
+    // ─── Send message (Day 36: with retry support) ───────
+    // Internal helper — does NOT touch input field, can be reused for retry
+    const dispatchMessage = useCallback((text, opts = {}) => {
       if (!text || busy || !agentId) return;
 
-      setInput('');
-      if (taRef.current) { taRef.current.style.height = 'auto'; }
-
-      const uid = Date.now();
+      const uid = opts.userMsgId || Date.now();
       const aid = uid + 1;
       streamMsgId.current = aid;
 
-      setMsgs(p => [
-        ...p,
-        { id: uid, role: 'user', content: text },
-        { id: aid, role: 'assistant', content: '', streaming: true, toolCount: 0 },
-      ]);
+      // Day 36: track first chunk arrival for state hierarchy
+      let firstChunkAt = null;
+
+      if (!opts.retryOf) {
+        // Normal send — add user + assistant placeholder
+        setMsgs(p => [
+          ...p,
+          { id: uid, role: 'user', content: text },
+          { id: aid, role: 'assistant', content: '', streaming: true, toolCount: 0, lastUserText: text, lastUserMsgId: uid },
+        ]);
+      } else {
+        // Retry — replace the failed assistant message
+        setMsgs(p => p.map(m =>
+          m.id === opts.retryOf
+            ? { ...m, content: '', streaming: true, error: false, lastUserText: text, lastUserMsgId: opts.userMsgId }
+            : m
+        ));
+      }
       setBusy(true);
 
       let localConvId = convId;
+      const targetMsgId = opts.retryOf || aid;
 
       const stop = startStream(agentId, text, localConvId, {
         onStart: (cid) => {
@@ -1592,20 +1636,33 @@
           LS.set('mc_conv', cid);
         },
         onChunk: (chunk) => {
+          if (!firstChunkAt) firstChunkAt = Date.now();
           setMsgs(p => p.map(m =>
-            m.id === aid ? { ...m, content: m.content + chunk } : m
+            m.id === targetMsgId ? { ...m, content: m.content + chunk } : m
           ));
         },
         onDone: () => {
           setMsgs(p => p.map(m =>
-            m.id === aid ? { ...m, streaming: false } : m
+            m.id === targetMsgId ? { ...m, streaming: false, error: false } : m
           ));
           setBusy(false);
           stopRef.current = null;
         },
         onError: (msg) => {
+          // Day 36: friendly error mapping
+          let friendly = msg;
+          const lower = (msg || '').toLowerCase();
+          if (lower.includes('typeerror') || lower.includes('network') || lower.includes('fetch') || lower.includes('koneksi')) {
+            friendly = 'Koneksi terputus. Pesan kamu aman — coba klik Retry di bawah.';
+          } else if (lower.includes('timeout') || lower.includes('timed out')) {
+            friendly = 'MiganCore butuh waktu lebih lama dari biasanya. Klik Retry untuk mencoba lagi.';
+          } else if (lower.includes('unauthorized') || lower.includes('401')) {
+            friendly = 'Sesi habis. Silakan logout + login lagi.';
+          } else if (lower.includes('rate limit') || lower.includes('429')) {
+            friendly = 'Terlalu banyak request. Tunggu sebentar lalu coba lagi.';
+          }
           setMsgs(p => p.map(m =>
-            m.id === aid ? { ...m, content: `⚠ ${msg}`, streaming: false } : m
+            m.id === targetMsgId ? { ...m, content: friendly, streaming: false, error: true } : m
           ));
           setBusy(false);
           stopRef.current = null;
@@ -1613,7 +1670,25 @@
       });
 
       stopRef.current = stop;
-    }, [input, busy, agentId, convId]);
+    }, [busy, agentId, convId]);
+
+    // Public send — clears input + dispatches
+    const send = useCallback((txt) => {
+      const text = (typeof txt === 'string' ? txt : input).trim();
+      if (!text || busy || !agentId) return;
+      setInput('');
+      if (taRef.current) { taRef.current.style.height = 'auto'; }
+      dispatchMessage(text);
+    }, [input, busy, agentId, dispatchMessage]);
+
+    // Day 36: Retry — re-send the last user prompt for a failed assistant message
+    const retry = useCallback((failedMsg) => {
+      if (!failedMsg?.lastUserText) return;
+      dispatchMessage(failedMsg.lastUserText, {
+        retryOf: failedMsg.id,
+        userMsgId: failedMsg.lastUserMsgId,
+      });
+    }, [dispatchMessage]);
 
     const stop = () => {
       stopRef.current?.();
@@ -1748,10 +1823,8 @@
               msgs.map(m => (
                 <Msg
                   key={m.id}
-                  role={m.role}
-                  content={m.content}
-                  streaming={m.streaming}
-                  toolCount={m.toolCount || 0}
+                  msg={m}
+                  onRetry={retry}
                 />
               ))
             )}
