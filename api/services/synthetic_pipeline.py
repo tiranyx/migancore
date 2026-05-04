@@ -186,6 +186,7 @@ async def _process_seed(
     run_id: str,
     processed: int,
     stored: int,
+    source_method: str = "synthetic_seed_v1",
 ) -> tuple[int, int]:
     """Process one seed message through the full CAI pipeline.
 
@@ -236,7 +237,7 @@ async def _process_seed(
         rejected=initial_response,
         score=float(score),
         source_message_id=None,
-        source_method="synthetic_seed_v1",
+        source_method=source_method,
     )
     stored += 1
     processed += 1
@@ -284,7 +285,14 @@ async def run_synthetic_generation(
       synthetic:target_pairs     — target set by caller (empty string = single run)
     """
     r = await _redis()
-    seeds = list(SEEDS)  # snapshot — never mutate module constant
+
+    # Day 38 — pluggable seed source via SEED_SOURCE env (hardcoded|magpie_300k)
+    from services.seed_bank import get_seeds
+    seeds, source_method = await get_seeds(per_round=120)
+    if not seeds:
+        # get_seeds always returns SEEDS as last resort, but defend anyway
+        seeds = list(SEEDS)
+        source_method = "synthetic_seed_v1"
 
     round_num = 1
     cumulative_stored = 0
@@ -303,6 +311,7 @@ async def run_synthetic_generation(
         run_id=run_id,
         auto_target=auto_target,
         total_seeds=len(seeds),
+        source_method=source_method,
     )
 
     try:
@@ -330,7 +339,8 @@ async def run_synthetic_generation(
             for seed_msg in seeds:
                 try:
                     processed, stored = await _process_seed(
-                        r, seed_msg, run_id, processed, stored
+                        r, seed_msg, run_id, processed, stored,
+                        source_method=source_method,
                     )
                     # Keep cumulative up to date in Redis after every successful store
                     await r.set(_KEY_CUMULATIVE_STORED, cumulative_stored + stored)

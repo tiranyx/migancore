@@ -55,8 +55,23 @@ def main():
     parser.add_argument("--max-seq-length", type=int, default=2048)
     parser.add_argument("--simpo-beta", type=float, default=2.0)  # SimPO paper default
     parser.add_argument("--simpo-gamma", type=float, default=1.4)  # length normalization
+    # Day 38 — APO identity loss term (research arxiv 2408.06266 + r/LocalLLaMA Aug 2025)
+    # Adds an "anchor" loss that penalises drift on identity-anchor prompts during DPO/SimPO.
+    # When enabled, requires --anchor-dataset (separate JSONL of {prompt, chosen} pairs that
+    # represent the identity we want to preserve — typically baseline Qwen2.5-7B "siapa kamu"
+    # responses + 49 other identity probes from eval/persona_consistency_v1.jsonl).
+    parser.add_argument("--use-apo", action="store_true",
+                        help="Enable APO identity-preservation loss (recommended for Cycle 1+)")
+    parser.add_argument("--apo-lambda", type=float, default=0.1,
+                        help="APO loss weight — 0.1 default per research; raise to 0.2 if drift severe")
+    parser.add_argument("--anchor-dataset", default="",
+                        help="JSONL of identity-anchor prompts (required if --use-apo)")
     parser.add_argument("--dry-run", action="store_true", help="Validate config without training")
     args = parser.parse_args()
+
+    if args.use_apo and not args.anchor_dataset:
+        print("ERROR: --use-apo requires --anchor-dataset path.", file=sys.stderr)
+        sys.exit(1)
 
     print("=" * 60)
     print("MIGANCORE SimPO TRAINING — Cycle 1 (Day 32)")
@@ -68,6 +83,7 @@ def main():
     print(f"LoRA rank:         {args.lora_r}")
     print(f"SimPO beta:        {args.simpo_beta}")
     print(f"SimPO gamma:       {args.simpo_gamma}")
+    print(f"APO enabled:       {args.use_apo} (lambda={args.apo_lambda}, anchor={args.anchor_dataset or '-'})")
     print(f"Learning rate:     {args.learning_rate}")
     print(f"Effective batch:   {args.batch_size} × {args.grad_accum} = {args.batch_size * args.grad_accum}")
     print("=" * 60)
@@ -136,6 +152,43 @@ def main():
         args=config,
     )
 
+    # Day 38 — APO identity-preservation loss (anchored preference optimization)
+    # arxiv 2408.06266: adds an auxiliary anchor loss = lambda * NLL(anchor_chosen)
+    # that pulls the model back toward known-good identity responses while SimPO
+    # pulls it toward the chosen-vs-rejected preference signal.
+    if args.use_apo:
+        print(f"Loading anchor dataset from {args.anchor_dataset}...")
+        anchor_ds = load_dataset("json", data_files=args.anchor_dataset, split="train")
+        print(f"Anchor size: {len(anchor_ds)} (typically 50 identity probes)")
+
+        # Wrap original compute_loss to add APO term
+        original_compute_loss = trainer.compute_loss
+
+        def compute_loss_with_apo(model_, inputs, return_outputs=False, num_items_in_batch=None):
+            simpo_out = original_compute_loss(model_, inputs, return_outputs=True, num_items_in_batch=num_items_in_batch)
+            simpo_loss = simpo_out[0] if isinstance(simpo_out, tuple) else simpo_out
+
+            # Sample one anchor per step (cheap, randomized — full batch unnecessary)
+            import random as _r
+            anchor_idx = _r.randrange(len(anchor_ds))
+            anchor_item = anchor_ds[anchor_idx]
+            anchor_text = anchor_item.get("prompt", "") + "\n" + anchor_item.get("chosen", "")
+            anchor_tok = tokenizer(anchor_text, return_tensors="pt", truncation=True,
+                                   max_length=args.max_seq_length).to(model_.device)
+            anchor_out = model_(**anchor_tok, labels=anchor_tok["input_ids"])
+            apo_loss = args.apo_lambda * anchor_out.loss
+
+            total = simpo_loss + apo_loss
+            if hasattr(trainer, "log") and trainer.state.global_step % 10 == 0:
+                trainer.log({"apo_loss": float(apo_loss.detach().item()),
+                             "simpo_loss": float(simpo_loss.detach().item())})
+            if return_outputs:
+                return (total,) + simpo_out[1:] if isinstance(simpo_out, tuple) and len(simpo_out) > 1 else (total, None)
+            return total
+
+        trainer.compute_loss = compute_loss_with_apo
+        print(f"APO wrapper installed (lambda={args.apo_lambda})")
+
     print("Starting training...")
     trainer.train()
 
@@ -149,9 +202,12 @@ def main():
         "dataset": args.dataset,
         "dataset_size": len(ds),
         "epochs": args.epochs,
-        "method": "simpo",
+        "method": "simpo+apo" if args.use_apo else "simpo",
         "lora_r": args.lora_r,
         "version": "v0.1-soul",
+        "apo_enabled": bool(args.use_apo),
+        "apo_lambda": args.apo_lambda if args.use_apo else None,
+        "anchor_dataset": args.anchor_dataset if args.use_apo else None,
     }
     with (Path(args.output_dir) / "training_metadata.json").open("w") as f:
         json.dump(meta, f, indent=2)

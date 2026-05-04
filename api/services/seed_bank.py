@@ -203,3 +203,36 @@ SEEDS: list[str] = (
 )  # Total: 120
 
 assert len(SEEDS) == 120, f"Expected 120 seeds, got {len(SEEDS)}"
+
+
+# ---------------------------------------------------------------------------
+# Day 38 — Pluggable seed source (hardcoded vs Magpie 300K)
+# ---------------------------------------------------------------------------
+async def get_seeds(per_round: int = 120) -> tuple[list[str], str]:
+    """Return (seeds, source_label).
+
+    Source selection via env SEED_SOURCE:
+      - 'hardcoded' (default): legacy 120 hand-curated seeds (always available)
+      - 'magpie_300k': pull Magpie-Qwen2.5-Pro-300K-Filtered from HuggingFace,
+                       sample `per_round` per call. Falls back to hardcoded on any error.
+
+    Source label is logged into preference_pair source_method:
+      - hardcoded -> "synthetic_seed_v1"
+      - magpie_300k -> "synthetic_magpie_v1"
+    """
+    import os
+    source = (os.environ.get("SEED_SOURCE") or "hardcoded").lower().strip()
+
+    if source == "magpie_300k":
+        try:
+            from services.magpie_seeds import get_magpie_seeds, sample_seeds
+            pool = await get_magpie_seeds()
+            if pool and len(pool) >= 100:
+                sampled = sample_seeds(pool, n=per_round)
+                return sampled, "synthetic_magpie_v1"
+            # Fall through to hardcoded if Magpie pool too small
+        except Exception as exc:
+            import structlog
+            structlog.get_logger().warning("seed_bank.magpie_fallback", error=str(exc))
+
+    return list(SEEDS), "synthetic_seed_v1"

@@ -263,6 +263,45 @@
       "permissions": ["fs.write"],
       "npc_assignable": true,
       "cost_estimate": "free"
+    },
+    {
+      "id": "analyze_image",
+      "name": "Analyze Image",
+      "description": "MANDATORY when the user attaches, references, or asks about an image: invoke this function to describe the image content, transcribe text in it, or answer specific questions about what is shown. Bilingual ID/EN. Backed by Gemini 2.5 Flash Vision (cheap, fast) with Claude Sonnet 4.5 fallback.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "image_url": {
+            "type": "string",
+            "description": "HTTPS URL to the image (jpg/png/webp). Provide either this or image_base64."
+          },
+          "image_base64": {
+            "type": "string",
+            "description": "Base64-encoded image bytes. Use only when no URL is available."
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "Image mime type (e.g. 'image/jpeg', 'image/png'). Required if using image_base64.",
+            "default": "image/jpeg"
+          },
+          "question": {
+            "type": "string",
+            "description": "What to ask about the image. Default: 'Describe this image in detail.'",
+            "default": "Describe this image in detail. List notable elements and any visible text."
+          },
+          "lang": {
+            "type": "string",
+            "enum": ["id", "en"],
+            "default": "id",
+            "description": "Response language: 'id' for Indonesian, 'en' for English."
+          }
+        }
+      },
+      "permissions": ["external.api"],
+      "npc_assignable": true,
+      "cost_estimate": "~$0.0001 per image (Gemini Vision); fallback Claude ~$0.005"
     }
   ]
 }

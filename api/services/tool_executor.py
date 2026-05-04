@@ -483,6 +483,199 @@ async def _generate_image(args: dict, ctx: ToolContext) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Day 38 — Vision: analyze_image via Gemini 2.5 Flash (cheap multimodal)
+#
+# Pricing (May 2026, official): $0.30/M input · $0.075/M output
+# 1024x1024 image ≈ 258 tokens → ~$0.00008/image input. Very cheap.
+# Bilingual ID+EN supported natively. Latency 1.5-2.5s typical.
+#
+# Fallback chain on Gemini 5xx/timeout: try Claude Sonnet 4.5 vision (60x cost
+# but reliable). If both fail, return clean error.
+# ---------------------------------------------------------------------------
+
+import base64
+
+GEMINI_VISION_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+)
+ANTHROPIC_MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"
+ANALYZE_MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8MB cap (Gemini accepts up to 20MB but we cap for safety)
+
+
+async def _fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
+    """Download an image URL and return (bytes, mime_type). Raises on too-large or non-image."""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
+        try:
+            resp = await client.get(image_url, follow_redirects=True)
+            resp.raise_for_status()
+        except httpx.TimeoutException:
+            raise ToolExecutionError(f"Timeout fetching image from {image_url[:80]}")
+        except httpx.HTTPStatusError as exc:
+            raise ToolExecutionError(
+                f"Cannot fetch image (HTTP {exc.response.status_code}): {image_url[:80]}"
+            ) from exc
+    content = resp.content
+    if len(content) > ANALYZE_MAX_IMAGE_BYTES:
+        raise ToolExecutionError(
+            f"Image too large: {len(content)} bytes > {ANALYZE_MAX_IMAGE_BYTES} cap"
+        )
+    mime = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+    if not mime.startswith("image/"):
+        raise ToolExecutionError(f"URL does not return an image (got {mime})")
+    return content, mime
+
+
+async def _analyze_via_gemini(image_b64: str, mime: str, question: str, lang: str) -> str:
+    """Call Gemini 2.5 Flash with inline image. Returns text answer or raises."""
+    key = settings.GEMINI_API_KEY
+    if not key:
+        raise ToolExecutionError("GEMINI_API_KEY not set")
+    lang_label = "Bahasa Indonesia natural" if lang == "id" else "English"
+    sys = (
+        f"You are a vision assistant. Answer the user's question about the image "
+        f"in {lang_label}. Be specific, factual, concise. If text appears in the image, "
+        f"transcribe it. If you can't see something asked, say so."
+    )
+    payload = {
+        "systemInstruction": {"parts": [{"text": sys}]},
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"inline_data": {"mime_type": mime, "data": image_b64}},
+                {"text": question},
+            ],
+        }],
+        "generationConfig": {"maxOutputTokens": 600, "temperature": 0.3, "topP": 0.95},
+        "safetySettings": [
+            {"category": c, "threshold": "BLOCK_NONE"}
+            for c in [
+                "HARM_CATEGORY_HARASSMENT",
+                "HARM_CATEGORY_HATE_SPEECH",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "HARM_CATEGORY_DANGEROUS_CONTENT",
+            ]
+        ],
+    }
+    url = GEMINI_VISION_ENDPOINT.format(model="gemini-2.5-flash", key=key)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        resp = await client.post(url, json=payload)
+        if resp.status_code != 200:
+            raise ToolExecutionError(f"Gemini Vision HTTP {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+    cands = data.get("candidates", [])
+    if not cands:
+        raise ToolExecutionError(f"Gemini returned no candidates: {data}")
+    parts = cands[0].get("content", {}).get("parts", [])
+    text = "".join(p.get("text", "") for p in parts).strip()
+    if not text:
+        finish = cands[0].get("finishReason", "")
+        raise ToolExecutionError(f"Gemini empty response, finishReason={finish}")
+    return text
+
+
+async def _analyze_via_claude(image_b64: str, mime: str, question: str, lang: str) -> str:
+    """Fallback: Claude Sonnet 4.5 vision. Cost ~$0.005/image. Use only if Gemini fails."""
+    key = settings.ANTHROPIC_API_KEY
+    if not key:
+        raise ToolExecutionError("ANTHROPIC_API_KEY not set (Claude vision fallback unavailable)")
+    lang_label = "Bahasa Indonesia natural" if lang == "id" else "English"
+    payload = {
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 600,
+        "system": (
+            f"You are a vision assistant. Answer in {lang_label}. "
+            f"Be specific, factual, concise. Transcribe any visible text."
+        ),
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": mime, "data": image_b64}},
+                {"type": "text", "text": question},
+            ],
+        }],
+    }
+    headers = {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+        resp = await client.post(ANTHROPIC_MESSAGES_ENDPOINT, json=payload, headers=headers)
+        if resp.status_code != 200:
+            raise ToolExecutionError(f"Claude Vision HTTP {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+    blocks = data.get("content", [])
+    text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+    if not text:
+        raise ToolExecutionError("Claude vision returned empty content")
+    return text
+
+
+async def _analyze_image(args: dict, ctx: ToolContext) -> dict:
+    """Analyze an image via Gemini 2.5 Flash (primary) -> Claude Sonnet 4.5 (fallback).
+
+    Args:
+      image_url: HTTPS URL to image (jpg/png/webp). Required if image_base64 absent.
+      image_base64: base64-encoded image bytes. Either this OR image_url required.
+      question: What to ask about the image. Default: "Describe this image in detail."
+      lang: 'id' (default) or 'en' for response language.
+
+    Returns:
+      {"answer": "...", "model": "gemini-2.5-flash"|"claude-sonnet-4-5", "lang": "id"|"en"}
+    """
+    image_url = (args.get("image_url") or "").strip()
+    image_b64_in = (args.get("image_base64") or "").strip()
+    question = (args.get("question") or "Describe this image in detail. List notable elements and any visible text.").strip()
+    lang = (args.get("lang") or "id").lower().strip()
+    if lang not in ("id", "en"):
+        lang = "id"
+
+    if not image_url and not image_b64_in:
+        raise ToolExecutionError("Provide either 'image_url' or 'image_base64'")
+
+    # Resolve image to (bytes, mime)
+    if image_url:
+        if not image_url.startswith(("http://", "https://")):
+            raise ToolExecutionError("image_url must be http(s)://")
+        content, mime = await _fetch_image_bytes(image_url)
+        image_b64 = base64.b64encode(content).decode("ascii")
+    else:
+        # User-supplied base64; cap size
+        if len(image_b64_in) > ANALYZE_MAX_IMAGE_BYTES * 2:  # base64 = ~33% larger than raw
+            raise ToolExecutionError("image_base64 too large (>16MB encoded)")
+        image_b64 = image_b64_in
+        mime = (args.get("mime_type") or "image/jpeg").strip()
+        if not mime.startswith("image/"):
+            mime = "image/jpeg"
+
+    logger.info("tool.analyze_image.start", lang=lang, q_preview=question[:80], src="url" if image_url else "b64")
+
+    # Try Gemini first (cheap), fallback Claude (reliable)
+    try:
+        answer = await _analyze_via_gemini(image_b64, mime, question, lang)
+        model_used = "gemini-2.5-flash"
+    except ToolExecutionError as gem_err:
+        logger.warning("tool.analyze_image.gemini_failed", error=str(gem_err)[:200])
+        try:
+            answer = await _analyze_via_claude(image_b64, mime, question, lang)
+            model_used = "claude-sonnet-4-5"
+        except ToolExecutionError as claude_err:
+            logger.warning("tool.analyze_image.both_failed", claude_err=str(claude_err)[:200])
+            raise ToolExecutionError(
+                f"Image analysis failed on both backends. Gemini: {str(gem_err)[:150]}. "
+                f"Claude: {str(claude_err)[:150]}"
+            )
+
+    logger.info("tool.analyze_image.done", model=model_used, answer_len=len(answer), lang=lang)
+    return {
+        "answer": answer,
+        "model": model_used,
+        "lang": lang,
+        "question": question,
+    }
+
+
 def _resolve_workspace_path(user_path: str) -> Path:
     """Resolve a user-supplied path relative to WORKSPACE_DIR.
 
@@ -619,6 +812,8 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "write_file": _write_file,
     # Day 27 — TTS
     "text_to_speech": _text_to_speech,
+    # Day 38 — Vision (multimodal)
+    "analyze_image": _analyze_image,
 }
 
 
