@@ -1994,10 +1994,17 @@
 
         const captionBlock = captions
           .map((c, i) => `Gambar ${i+1}: ${c}`)
-          .join('\n');
+          .join('\n\n');
+        // Day 40 PM fix: brain salah interpretasi message ini sebagai "user minta
+        // generate gambar baru" → call generate_image tool. Tighten instruction:
+        // (1) deskripsi sudah final, (2) JANGAN call tool apa pun, (3) jawab
+        // dalam bahasa user, (4) tidak perlu re-describe.
+        const userQuestion = text || 'Tolong rangkum isi gambarnya.';
         augmentedText =
-          `[User melampirkan ${captions.length} gambar (sudah dianalisis oleh Vision):]\n${captionBlock}\n\n` +
-          `Pesan user: ${text || '(kosong, tolong jelaskan gambarnya)'}`;
+          `[KONTEKS — Berikut deskripsi ${captions.length === 1 ? 'gambar' : `${captions.length} gambar`} yang dilampirkan user (sudah dianalisis backend Vision, ini final, JANGAN panggil tool apapun, JANGAN generate gambar baru):]\n\n` +
+          `${captionBlock}\n\n` +
+          `[PERTANYAAN USER]: ${userQuestion}\n\n` +
+          `[INSTRUKSI]: Jawab pertanyaan di atas berdasarkan deskripsi gambar. Gunakan bahasa yang sama dengan pertanyaan user. JANGAN panggil tool generate_image / analyze_image / web_search — semua konteks sudah ada di atas.`;
       }
 
       setInput('');
