@@ -302,6 +302,63 @@
       "permissions": ["external.api"],
       "npc_assignable": true,
       "cost_estimate": "~$0.0001 per image (Gemini Vision); fallback Claude ~$0.005"
+    },
+    {
+      "id": "web_read",
+      "name": "Web Read",
+      "description": "MANDATORY when user shares a URL or asks to read/summarize web content. Fetches the URL via Jina Reader and returns clean LLM-friendly markdown — no scripts, ads, or navigation noise. Use this INSTEAD of http_get when the goal is reading/understanding a web page.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "HTTPS URL to read." },
+          "no_cache": { "type": "boolean", "default": false, "description": "Bypass Jina CDN cache for fresh content." },
+          "max_chars": { "type": "integer", "default": 30000, "description": "Cap returned markdown length (1000-30000)." }
+        },
+        "required": ["url"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free tier 1M token/month (Jina Reader)"
+    },
+    {
+      "id": "export_pdf",
+      "name": "Export PDF",
+      "description": "MANDATORY when user asks to download/export/save content as PDF. Renders markdown to a styled PDF document via WeasyPrint. Returns base64 PDF + data URL ready for download anchor.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "markdown": { "type": "string", "description": "The markdown source to render." },
+          "title": { "type": "string", "default": "MiganCore Document", "description": "Document title (HTML <title>)." },
+          "page_size": { "type": "string", "enum": ["A4", "Letter"], "default": "A4" }
+        },
+        "required": ["markdown"]
+      },
+      "permissions": ["external.api"],
+      "npc_assignable": true,
+      "cost_estimate": "free (local CPU render)"
+    },
+    {
+      "id": "export_slides",
+      "name": "Export Slides",
+      "description": "MANDATORY when user asks for a slide deck / presentation / PPTX / slides. Renders markdown (Marp syntax with --- between slides) to PPTX/PDF/HTML. Returns base64 file + data URL ready for download.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "markdown": { "type": "string", "description": "Marp markdown — slides separated by --- lines." },
+          "format": { "type": "string", "enum": ["pptx", "pdf", "html"], "default": "pptx" },
+          "theme": { "type": "string", "enum": ["default", "gaia", "uncover"], "default": "default" }
+        },
+        "required": ["markdown"]
+      },
+      "permissions": ["external.api"],
+      "npc_assignable": true,
+      "cost_estimate": "free (local CPU render)"
     }
   ]
 }

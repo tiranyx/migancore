@@ -688,6 +688,297 @@ async def _analyze_image(args: dict, ctx: ToolContext) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Day 41 — Web Read via Jina Reader (URL → clean markdown for LLM consumption)
+#
+# Why: existing http_get returns raw HTML (kotor: scripts, ads, nav noise).
+# Jina Reader (https://jina.ai/reader, free tier 1M token/bln) returns
+# LLM-friendly markdown — no auth needed for public URLs.
+#
+# Endpoint: https://r.jina.ai/<URL>
+# Headers: "Accept: text/markdown" (default). Optional "X-No-Cache: true".
+# ---------------------------------------------------------------------------
+JINA_READER_BASE = "https://r.jina.ai/"
+WEB_READ_MAX_CHARS = 30_000  # cap response — LLM context safety
+
+
+async def _web_read(args: dict, ctx: ToolContext) -> dict:
+    """Fetch a URL and return clean markdown via Jina Reader.
+
+    Args:
+      url: HTTPS URL to read.
+      no_cache: bool (default False) — bypass Jina's CDN cache.
+      max_chars: int (default 30000) — cap returned markdown length.
+
+    Returns:
+      {markdown, url, title?, source: "jina_reader", chars}
+    """
+    url = (args.get("url") or "").strip()
+    if not url:
+        raise ToolExecutionError("'url' is required")
+    if not url.startswith(("http://", "https://")):
+        raise ToolExecutionError("URL must start with http:// or https://")
+
+    no_cache = bool(args.get("no_cache", False))
+    max_chars = int(args.get("max_chars", WEB_READ_MAX_CHARS))
+    max_chars = max(1000, min(max_chars, WEB_READ_MAX_CHARS))
+
+    jina_url = JINA_READER_BASE + url
+    headers = {
+        "Accept": "text/markdown",
+        "User-Agent": "MiganCore-WebRead/1.0 (https://migancore.com)",
+    }
+    if no_cache:
+        headers["X-No-Cache"] = "true"
+
+    logger.info("tool.web_read.start", url=url[:120], no_cache=no_cache)
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            resp = await client.get(jina_url, headers=headers, follow_redirects=True)
+    except httpx.TimeoutException:
+        raise ToolExecutionError(f"web_read timed out (30s) for {url[:80]}")
+    except httpx.HTTPError as exc:
+        raise ToolExecutionError(f"web_read transport error: {exc}")
+
+    if resp.status_code != 200:
+        raise ToolExecutionError(
+            f"Jina Reader HTTP {resp.status_code} for {url[:80]}: {resp.text[:200]}"
+        )
+
+    md = resp.text or ""
+    truncated = False
+    if len(md) > max_chars:
+        md = md[:max_chars] + f"\n\n…[TRUNCATED at {max_chars} chars]"
+        truncated = True
+
+    # Try to pluck title from leading "Title:" line (Jina convention)
+    title = None
+    for line in md.splitlines()[:5]:
+        if line.lower().startswith("title:"):
+            title = line[6:].strip()
+            break
+
+    logger.info(
+        "tool.web_read.done",
+        url=url[:120],
+        chars=len(md),
+        truncated=truncated,
+        title=title[:80] if title else None,
+    )
+
+    return {
+        "markdown": md,
+        "url": url,
+        "title": title,
+        "source": "jina_reader",
+        "chars": len(md),
+        "truncated": truncated,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Day 41 — Markdown → PDF via WeasyPrint (pure-Python, no Chromium)
+#
+# Why: user wants downloadable PDF output (research, reports). WeasyPrint
+# v62 (Jan 2026) is mature pure-Python; no Puppeteer dependency.
+# Returns base64 PDF inline (cap 5MB) so frontend can offer Download button.
+# ---------------------------------------------------------------------------
+EXPORT_PDF_MAX_BYTES = 5 * 1024 * 1024  # 5 MB cap
+
+
+async def _export_pdf(args: dict, ctx: ToolContext) -> dict:
+    """Render markdown to PDF (WeasyPrint).
+
+    Args:
+      markdown: required, the source markdown
+      title: optional document title (set as <title> in HTML)
+      page_size: "A4" (default) | "Letter"
+
+    Returns:
+      {pdf_base64, mime: "application/pdf", bytes, title}
+    """
+    markdown = (args.get("markdown") or "").strip()
+    if not markdown:
+        raise ToolExecutionError("'markdown' is required")
+    title = (args.get("title") or "MiganCore Document").strip()[:200]
+    page_size = (args.get("page_size") or "A4").upper()
+    if page_size not in ("A4", "LETTER"):
+        page_size = "A4"
+
+    try:
+        # Lazy import — WeasyPrint pulls heavy deps (cairo, pango, gdk-pixbuf)
+        from weasyprint import HTML, CSS  # type: ignore
+    except ImportError as exc:
+        raise ToolExecutionError(
+            "WeasyPrint not installed. Add 'weasyprint>=62' to requirements.txt and rebuild API container."
+        ) from exc
+
+    # Lightweight markdown → HTML conversion (use stdlib markdown if present)
+    try:
+        import markdown as md_lib  # type: ignore
+        body_html = md_lib.markdown(
+            markdown,
+            extensions=["fenced_code", "tables", "toc", "nl2br"],
+        )
+    except ImportError:
+        # Minimal fallback — wrap in <pre>
+        body_html = f"<pre>{markdown}</pre>"
+
+    # Use a sane default stylesheet
+    css = CSS(string=f"""
+      @page {{ size: {page_size}; margin: 2cm; }}
+      body {{ font-family: -apple-system, "Segoe UI", Roboto, Inter, Arial, sans-serif; font-size: 11pt; line-height: 1.55; color: #1a1a1a; }}
+      h1, h2, h3, h4 {{ color: #0d4c2e; margin-top: 1.2em; }}
+      h1 {{ font-size: 22pt; border-bottom: 2px solid #2fe39a; padding-bottom: 4px; }}
+      h2 {{ font-size: 17pt; }}
+      h3 {{ font-size: 14pt; }}
+      code, pre {{ font-family: "JetBrains Mono", Consolas, monospace; background: #f5f7f6; }}
+      pre {{ padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 9.5pt; }}
+      code {{ padding: 1px 4px; border-radius: 3px; font-size: 10pt; }}
+      table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}
+      th, td {{ border: 1px solid #d4d4d4; padding: 6px 10px; text-align: left; }}
+      th {{ background: #f0f4f1; }}
+      blockquote {{ border-left: 3px solid #ff8a24; padding-left: 12px; color: #555; margin: 12px 0; }}
+      a {{ color: #0066cc; text-decoration: none; }}
+    """)
+
+    full_html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{title}</title></head>
+<body>{body_html}</body></html>"""
+
+    logger.info("tool.export_pdf.start", title=title, md_chars=len(markdown), page=page_size)
+
+    try:
+        pdf_bytes = HTML(string=full_html).write_pdf(stylesheets=[css])
+    except Exception as exc:
+        raise ToolExecutionError(f"WeasyPrint render failed: {exc}") from exc
+
+    if len(pdf_bytes) > EXPORT_PDF_MAX_BYTES:
+        raise ToolExecutionError(
+            f"PDF too large ({len(pdf_bytes)} bytes > {EXPORT_PDF_MAX_BYTES} cap). "
+            "Trim the markdown or split into multiple documents."
+        )
+
+    pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
+
+    logger.info("tool.export_pdf.done", title=title, bytes=len(pdf_bytes))
+
+    return {
+        "pdf_base64": pdf_b64,
+        "mime": "application/pdf",
+        "bytes": len(pdf_bytes),
+        "title": title,
+        "page_size": page_size,
+        # Convenience for frontend download anchor
+        "data_url": f"data:application/pdf;base64,{pdf_b64}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Day 41 — Markdown → Slides via Marp CLI (PPTX/PDF/HTML)
+#
+# Why: user wants slide-deck output. Marp CLI v4.x (Feb 2026) accepts
+# Markdown with `---` separator → renders to PPTX/PDF/HTML.
+# Requires `marp-cli` installed in container; falls back to error if not.
+# ---------------------------------------------------------------------------
+EXPORT_SLIDES_MAX_BYTES = 8 * 1024 * 1024  # 8 MB cap (PPTX heavier than PDF)
+
+
+async def _export_slides(args: dict, ctx: ToolContext) -> dict:
+    """Render Marp-style markdown to PPTX or PDF slides.
+
+    Args:
+      markdown: required, slides separated by `---` lines (Marp syntax)
+      format: "pptx" (default) | "pdf" | "html"
+      theme: "default" (default) | "gaia" | "uncover"
+
+    Returns:
+      {file_base64, mime, bytes, format, slide_count, data_url}
+    """
+    import shutil
+    import tempfile
+    import subprocess
+
+    markdown = (args.get("markdown") or "").strip()
+    if not markdown:
+        raise ToolExecutionError("'markdown' is required")
+    fmt = (args.get("format") or "pptx").lower()
+    if fmt not in ("pptx", "pdf", "html"):
+        fmt = "pptx"
+    theme = (args.get("theme") or "default").lower()
+    if theme not in ("default", "gaia", "uncover"):
+        theme = "default"
+
+    marp_bin = shutil.which("marp") or shutil.which("marp-cli")
+    if not marp_bin:
+        raise ToolExecutionError(
+            "marp-cli not installed in API container. Install via "
+            "'npm install -g @marp-team/marp-cli' in the Dockerfile."
+        )
+
+    # Marp expects --- frontmatter for theme; prepend if absent
+    if not markdown.startswith("---"):
+        front = f"---\nmarp: true\ntheme: {theme}\n---\n\n"
+        markdown = front + markdown
+
+    # Count slide separators (simple heuristic)
+    slide_count = max(1, markdown.count("\n---\n") + (1 if markdown.startswith("---") else 0))
+
+    mime_map = {
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "pdf":  "application/pdf",
+        "html": "text/html",
+    }
+
+    logger.info("tool.export_slides.start", format=fmt, theme=theme, slides=slide_count, md_chars=len(markdown))
+
+    with tempfile.TemporaryDirectory(prefix="marp_") as tmpdir:
+        in_path = Path(tmpdir) / "deck.md"
+        out_path = Path(tmpdir) / f"deck.{fmt}"
+        in_path.write_text(markdown, encoding="utf-8")
+        cmd = [marp_bin, str(in_path), "--allow-local-files", f"--{fmt}"]
+        if fmt == "pptx":
+            cmd.append("--pptx")
+        try:
+            proc = await asyncio.to_thread(
+                subprocess.run, cmd,
+                capture_output=True, text=True, timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            raise ToolExecutionError("Marp render timed out (60s)")
+        except Exception as exc:
+            raise ToolExecutionError(f"Marp subprocess error: {exc}") from exc
+
+        if proc.returncode != 0:
+            raise ToolExecutionError(
+                f"Marp render failed (rc={proc.returncode}): {proc.stderr[:300]}"
+            )
+        if not out_path.exists():
+            raise ToolExecutionError(f"Marp produced no output file at {out_path}")
+        file_bytes = out_path.read_bytes()
+
+    if len(file_bytes) > EXPORT_SLIDES_MAX_BYTES:
+        raise ToolExecutionError(
+            f"Slides file too large ({len(file_bytes)} bytes > {EXPORT_SLIDES_MAX_BYTES} cap)"
+        )
+
+    file_b64 = base64.b64encode(file_bytes).decode("ascii")
+    mime = mime_map[fmt]
+
+    logger.info("tool.export_slides.done", format=fmt, bytes=len(file_bytes), slides=slide_count)
+
+    return {
+        "file_base64": file_b64,
+        "mime": mime,
+        "bytes": len(file_bytes),
+        "format": fmt,
+        "theme": theme,
+        "slide_count": slide_count,
+        "data_url": f"data:{mime};base64,{file_b64}",
+    }
+
+
 def _resolve_workspace_path(user_path: str) -> Path:
     """Resolve a user-supplied path relative to WORKSPACE_DIR.
 
@@ -826,6 +1117,10 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "text_to_speech": _text_to_speech,
     # Day 38 — Vision (multimodal)
     "analyze_image": _analyze_image,
+    # Day 41 — Web read (Jina) + output (PDF, Slides)
+    "web_read": _web_read,
+    "export_pdf": _export_pdf,
+    "export_slides": _export_slides,
 }
 
 
