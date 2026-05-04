@@ -46,15 +46,24 @@ def main():
     parser.add_argument("--dataset", required=True, help="JSONL dataset path")
     parser.add_argument("--base-model", default="Qwen/Qwen2.5-7B-Instruct")
     parser.add_argument("--output-dir", default="/workspace/migancore-7b-soul-v0.1")
-    parser.add_argument("--epochs", type=int, default=2)
+    # Day 39: defaults UPDATED based on community research Q2 2026
+    # (princeton-nlp/SimPO #47 #62, arxiv 2502.01112, r/LocalLLaMA Apr 2026)
+    # Paper defaults over-fit on small datasets; the values below are the empirically
+    # robust values for Qwen2.5-7B + 500-700 DPO pairs on RTX 4090.
+    parser.add_argument("--epochs", type=int, default=1,                 # was 2 — NEVER 2 di <700 pairs (overfit)
+                        help="Training epochs. Stay at 1 for <700 pairs to avoid overfit.")
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--grad-accum", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=5e-6)  # SimPO recommendation
+    parser.add_argument("--learning-rate", type=float, default=8e-7,     # was 5e-6 — paper too aggressive for small data
+                        help="LR. 8e-7 is the safe Qwen2.5-7B+SimPO value Q2 2026.")
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=16)
     parser.add_argument("--max-seq-length", type=int, default=2048)
-    parser.add_argument("--simpo-beta", type=float, default=2.0)  # SimPO paper default
-    parser.add_argument("--simpo-gamma", type=float, default=1.4)  # length normalization
+    parser.add_argument("--simpo-beta", type=float, default=2.0)         # paper default still optimal
+    parser.add_argument("--simpo-gamma", type=float, default=1.0,        # was 1.4 — community shifted Mar 2026
+                        help="SimPO length normalization. 1.0 = gamma_beta_ratio 0.5 (community Q2 2026).")
+    parser.add_argument("--length-normalize", action="store_true", default=True,
+                        help="Apply length normalization to logprobs (community fix Mar 2026 for Qwen2.5-7B over-length reward).")
     # Day 38 — APO identity loss term (research arxiv 2408.06266 + r/LocalLLaMA Aug 2025)
     # Adds an "anchor" loss that penalises drift on identity-anchor prompts during DPO/SimPO.
     # When enabled, requires --anchor-dataset (separate JSONL of {prompt, chosen} pairs that
@@ -62,8 +71,8 @@ def main():
     # responses + 49 other identity probes from eval/persona_consistency_v1.jsonl).
     parser.add_argument("--use-apo", action="store_true",
                         help="Enable APO identity-preservation loss (recommended for Cycle 1+)")
-    parser.add_argument("--apo-lambda", type=float, default=0.1,
-                        help="APO loss weight — 0.1 default per research; raise to 0.2 if drift severe")
+    parser.add_argument("--apo-lambda", type=float, default=0.05,         # was 0.1 — over-penalize chosen at low data
+                        help="APO loss weight. 0.05 is community Q2 2026 sweet spot for <1k pairs (paper 0.1 over-penalizes).")
     parser.add_argument("--anchor-dataset", default="",
                         help="JSONL of identity-anchor prompts (required if --use-apo)")
     parser.add_argument("--dry-run", action="store_true", help="Validate config without training")

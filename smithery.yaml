@@ -1,0 +1,80 @@
+# Smithery.ai listing for MiganCore MCP server (Day 39)
+# Submission: PR to github.com/smithery-ai/registry per smithery.ai/docs (Mar 2026)
+# Server is hosted at api.migancore.com/mcp/ (HTTPS, Streamable HTTP transport,
+# JWT auth via Bearer header).
+
+startCommand:
+  type: http
+  configSchema:
+    # JSON Schema describing what users must provide to invoke the server.
+    type: object
+    required:
+      - apiKey
+    properties:
+      apiKey:
+        type: string
+        title: MiganCore API Key
+        description: >
+          API key issued from app.migancore.com/admin (format: mgn_live_*).
+          Sent as Authorization: Bearer <apiKey>.
+  exampleConfig:
+    apiKey: mgn_live_REPLACE_ME
+
+runtime: remote
+endpoint: https://api.migancore.com/mcp/
+
+# Optional metadata (rendered on smithery.ai listing page)
+displayName: MiganCore
+description: >
+  Autonomous Digital Organism Core. Persistent agent memory (30-day rolling
+  window backed by Postgres + Qdrant hybrid search), bilingual ID/EN
+  responses, native tool calling (web search, image gen, image analysis,
+  TTS, file I/O, Python REPL), and Level-5 agent breeding (spawn child
+  agents with custom personas via persona_overrides). Built for makers
+  who want their AI to grow with them.
+repository: https://github.com/tiranyx/migancore
+homepage: https://migancore.com
+license: Apache-2.0
+
+categories:
+  - ai-assistant
+  - memory
+  - agents
+  - bilingual
+  - indonesian
+
+# Tools the server exposes (matches /v1/agents/{id}/skills + MCP tools/list)
+tools:
+  - name: web_search
+    description: Search the web (DuckDuckGo Instant Answers)
+  - name: python_repl
+    description: Execute Python in a sandboxed subprocess
+  - name: memory_search
+    description: Query the agent's persistent semantic memory
+  - name: memory_write
+    description: Store a fact in the agent's persistent memory
+  - name: spawn_agent
+    description: Breed a new child agent with custom persona overrides
+  - name: http_get
+    description: Fetch an HTTPS URL (read-only)
+  - name: generate_image
+    description: Generate an image via fal.ai FLUX schnell
+  - name: read_file
+    description: Read a file from the agent's sandboxed workspace
+  - name: write_file
+    description: Write a file to the agent's sandboxed workspace
+  - name: text_to_speech
+    description: Synthesize speech via ElevenLabs
+  - name: analyze_image
+    description: Describe / OCR / answer questions about an image (Gemini Vision)
+
+# Resources the server exposes
+resources:
+  - uri: agent://current
+    description: Live state of the calling agent
+  - uri: agent://current/genealogy
+    description: Parent + ancestor chain (verifiable lineage)
+  - uri: memory://recent
+    description: Last 50 episodic memory entries
+  - uri: tools://catalog
+    description: All tools available to this agent

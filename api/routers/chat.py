@@ -311,6 +311,16 @@ async def chat_stream(
         )
         conversation_id = conversation.id
 
+        # Day 39 — load tool spec + policy so streaming can execute tool calls
+        # (Day 38 bug: stream endpoint was emitting raw `memory_write({...})` text
+        # because it had no awareness of tools. Now we run a non-streamed tool loop
+        # FIRST, then stream the final tool-free answer.)
+        agent_tools_for_stream = agent_cfg.get("default_tools", []) if agent_cfg else []
+        tenant_for_stream = (await db.execute(
+            select(Tenant).where(Tenant.id == current_user.tenant_id)
+        )).scalar_one()
+        tool_policies_for_stream = await load_tool_policies(db, tenant_id)
+
         # Persist user message immediately (before streaming)
         user_msg = Message(
             conversation_id=conversation_id,
@@ -328,6 +338,15 @@ async def chat_stream(
         data.message,
     )
 
+    # Day 39 — tool spec + executor for the streaming generator
+    tools_spec_stream = build_ollama_tools_spec(agent_tools_for_stream)
+    tool_ctx_stream = ToolContext(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        tenant_plan=tenant_for_stream.plan,
+        tool_policies=tool_policies_for_stream,
+    )
+
     # Phase 2: SSE generator with heartbeat (Day 25)
     # Heartbeat prevents nginx/Cloudflare from closing connection during long
     # Ollama processing periods (CPU-only inference can take 30-60s on 7B model).
@@ -339,14 +358,111 @@ async def chat_stream(
         yield _sse({"type": "start", "conversation_id": str(conversation_id)})
 
         full_response: list[str] = []
-        stream_iter = OllamaClient().chat_stream(
-            model=model,
-            messages=messages,
-            options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
-        ).__aiter__()
-
         chunk_count = 0
+        # Day 39 — work on a mutable copy of messages so tool turns get appended
+        run_messages = list(messages)
+        tool_iter = 0
+        # Cap of 4 tool round-trips before we force a final stream (matches sync director)
+        STREAM_TOOL_MAX = 4
+
         try:
+            # Day 39 — Phase A: tool execution loop (non-streamed). Continues only as
+            # long as the model keeps requesting tool calls. Falls through to the
+            # streaming branch below as soon as the model returns a plain answer
+            # OR we hit STREAM_TOOL_MAX. If the agent has no tools at all we skip
+            # straight to the stream branch.
+            if tools_spec_stream:
+                from services.tool_executor import ToolExecutor
+                executor = ToolExecutor(tool_ctx_stream)
+                while tool_iter < STREAM_TOOL_MAX:
+                    async with OllamaClient() as oc:
+                        tool_resp = await oc.chat_with_tools(
+                            model=model,
+                            messages=run_messages,
+                            tools=tools_spec_stream,
+                            options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX, "temperature": 0},
+                        )
+                    msg = tool_resp.get("message", {}) or {}
+                    tcs = msg.get("tool_calls") or []
+                    content_now = (msg.get("content") or "").strip()
+
+                    if not tcs:
+                        # Model returned plain text — emit as one chunk if we already
+                        # spent the budget on tool calls, otherwise let the stream
+                        # branch below redo the call to get token-by-token deltas.
+                        if tool_iter == 0:
+                            break  # never used tools — go to streaming branch
+                        full_response.append(content_now)
+                        if content_now:
+                            yield _sse({"type": "chunk", "content": content_now})
+                            chunk_count += 1
+                        full_text = "".join(full_response)
+                        yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+                        logger.info("chat.stream.done", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
+                        # Background persist
+                        _t_done = asyncio.create_task(_persist_assistant_message(
+                            conversation_id=conversation_id,
+                            tenant_id=tenant_id,
+                            content=full_text,
+                            message_count=len(history) + 2,
+                        ))
+                        _background_tasks.add(_t_done)
+                        _t_done.add_done_callback(_background_tasks.discard)
+                        return
+
+                    # Append assistant message with tool_calls + execute each
+                    run_messages.append({
+                        "role": "assistant",
+                        "content": content_now,
+                        "tool_calls": tcs,
+                    })
+                    yield _sse({
+                        "type": "tool_start",
+                        "tools": [{"name": tc.get("function", {}).get("name", "?")} for tc in tcs],
+                    })
+                    for tc in tcs:
+                        tname = tc.get("function", {}).get("name", "")
+                        targs = tc.get("function", {}).get("arguments", {}) or {}
+                        if isinstance(targs, str):
+                            try:
+                                targs = json.loads(targs)
+                            except Exception:
+                                targs = {}
+                        try:
+                            res = await executor.execute(tname, targs)
+                            ok = bool(res.get("success", True))
+                            payload = res.get("result") if ok else res.get("error")
+                            yield _sse({
+                                "type": "tool_result",
+                                "tool": tname,
+                                "ok": ok,
+                                "result": payload,
+                            })
+                            run_messages.append({
+                                "role": "tool",
+                                "name": tname,
+                                "content": json.dumps(payload, ensure_ascii=False)[:4000],
+                            })
+                        except Exception as exc:
+                            logger.warning("chat.stream.tool_error", tool=tname, error=str(exc))
+                            yield _sse({"type": "tool_result", "tool": tname, "ok": False, "error": str(exc)})
+                            run_messages.append({
+                                "role": "tool",
+                                "name": tname,
+                                "content": f"Error: {exc}",
+                            })
+                    tool_iter += 1
+                    # Loop back — model may decide to use another tool or now answer
+
+            # Day 39 — Phase B: stream the final answer token-by-token.
+            # Reached when (1) no tools configured for this agent, OR
+            # (2) tool loop exhausted/finished and model is ready to answer.
+            stream_iter = OllamaClient().chat_stream(
+                model=model,
+                messages=run_messages,
+                options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
+            ).__aiter__()
+
             while True:
                 try:
                     chunk, done = await asyncio.wait_for(
@@ -354,7 +470,6 @@ async def chat_stream(
                         timeout=HEARTBEAT_INTERVAL,
                     )
                 except asyncio.TimeoutError:
-                    # 15s of Ollama silence — keep connection alive
                     yield _sse({"type": "ping"})
                     continue
                 except StopAsyncIteration:
@@ -369,7 +484,12 @@ async def chat_stream(
 
             full_text = "".join(full_response)
             yield _sse({"type": "done", "conversation_id": str(conversation_id)})
-            logger.info("chat.stream.done", chunks=chunk_count, len=len(full_text))
+            logger.info(
+                "chat.stream.done",
+                chunks=chunk_count,
+                len=len(full_text),
+                tool_iters=tool_iter,
+            )
 
             # Persist assistant message in background — store ref to prevent GC
             _t = asyncio.create_task(
