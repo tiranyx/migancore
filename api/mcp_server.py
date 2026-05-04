@@ -356,10 +356,19 @@ def get_mcp_app():
     asgi_app = mcp.streamable_http_app()
 
     def _send_401(detail: str):
-        """Build a minimal ASGI 401 response."""
+        """Build a minimal ASGI 401 response.
+
+        Day 40 fix: removed the legacy 'WWW-Authenticate: Bearer realm=...'
+        header. MCP gateways (e.g. Smithery.ai per spec 2026-03) treat that
+        header as a signal to begin an OAuth 2.1 flow against the resource,
+        which conflicts with our simple API-key model. Without the header,
+        gateways see a plain 401 and fall back to whatever auth they were
+        configured with (X-API-Key in our case), which is what we want.
+        """
         body = json.dumps({
             "error": "unauthorized",
             "detail": detail,
+            "auth_methods": ["X-API-Key", "Authorization: Bearer <key>"],
         }).encode()
         return [
             {
@@ -367,7 +376,6 @@ def get_mcp_app():
                 "status": 401,
                 "headers": [
                     (b"content-type", b"application/json"),
-                    (b"www-authenticate", b'Bearer realm="migancore-mcp"'),
                     (b"content-length", str(len(body)).encode()),
                 ],
             },
