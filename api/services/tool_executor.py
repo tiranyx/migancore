@@ -800,10 +800,10 @@ def _parse_onamix_search_text(stdout: str) -> tuple[list[dict], int | None]:
             elapsed = int(m.group(1))
             break
 
-    # Find numbered entries
+    # Find numbered entries — ONAMIX uses " [N] Title" format (bracketed)
     results = []
     current = None
-    entry_re = re.compile(r"^\s*(\d+)\.\s+(.+)$")
+    entry_re = re.compile(r"^\s*\[?(\d+)\]?\.?\s+(.+)$")
     url_re = re.compile(r"^\s+(https?://\S+)\s*$")
     for line in lines:
         m = entry_re.match(line)
