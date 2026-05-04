@@ -726,11 +726,21 @@ async def _persist_assistant_message(
     """Persist assistant message after SSE streaming completes.
 
     Runs as asyncio.create_task — failures are logged but not raised.
+
+    Day 38 bug fix: AsyncSessionLocal was previously only imported inside
+    the stream handler (line 293 local scope), causing NameError here when
+    the background task tried to reference it. Side-effect: ALL assistant
+    messages from streaming chats since Day 36 silently failed to persist,
+    breaking conversation continuity (every "follow-up" chat started cold
+    because history loader saw user messages but no AI replies).
+    Fix: import inside this function so it's resolved at call time.
     """
-    if AsyncSessionLocal is None:
+    from models.base import AsyncSessionLocal as _ASL
+    if _ASL is None:
+        logger.warning("chat.persist_assistant.no_session_factory", conversation_id=str(conversation_id))
         return
     try:
-        async with AsyncSessionLocal() as db:
+        async with _ASL() as db:
             await set_tenant_context(db, tenant_id)
 
             assistant_msg = Message(
@@ -749,8 +759,18 @@ async def _persist_assistant_message(
                 {"mc": message_count, "conv_id": conversation_id},
             )
             await db.commit()
+            logger.info(
+                "chat.persist_assistant.ok",
+                conversation_id=str(conversation_id),
+                content_len=len(content),
+                message_count=message_count,
+            )
     except Exception as exc:
-        logger.error("chat.persist_assistant.failed", error=str(exc), conversation_id=str(conversation_id))
+        logger.error(
+            "chat.persist_assistant.failed",
+            error=str(exc),
+            conversation_id=str(conversation_id),
+        )
 
 
 def _sse(data: dict) -> str:
