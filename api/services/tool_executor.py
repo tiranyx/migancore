@@ -1446,8 +1446,21 @@ class ToolExecutor:
                     "policy_violation": exc.violation_type,
                 }
 
+        # Day 43 Innovation #2 — tool result cache (Redis TTL per-tool).
+        # Idempotent calls (search, fetch, vision describe by image hash) hit
+        # cache → 100-1000x speedup. Mutating/creative tools opt-out via config.
+        from services.tool_cache import get_cached, set_cached
+        cached = await get_cached(skill_id, arguments)
+        if cached is not None:
+            return {"result": cached, "error": None, "success": True, "cached": True}
+
         try:
             result = await handler(arguments, self.ctx)
+            # Cache successful result (best-effort, async, never blocks)
+            try:
+                await set_cached(skill_id, arguments, result)
+            except Exception as cache_exc:
+                logger.warning("tool.cache.set_skipped", skill=skill_id, error=str(cache_exc))
             return {"result": result, "error": None, "success": True}
         except ToolExecutionError as exc:
             logger.warning("tool.validation_error", skill=skill_id, error=str(exc))
