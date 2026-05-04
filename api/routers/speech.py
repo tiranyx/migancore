@@ -13,9 +13,11 @@ Endpoint:
 Realtime WebSocket mode is DEFERRED to Day 40 (needs frontend mic streaming).
 
 Auth: open with rate limit (called pre-chat from public app); production may restrict.
-"""
-from __future__ import annotations
 
+Note: do NOT add `from __future__ import annotations` here — it turns FastAPI
+parameter type hints (e.g. UploadFile) into forward-ref strings, which
+FastAPI's dependency introspector cannot resolve and crashes at startup.
+"""
 import asyncio
 import os
 
