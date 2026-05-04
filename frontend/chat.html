@@ -1184,7 +1184,7 @@
                   ))}
                 </div>
                 <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
-                  {source === 'gemini' && '✨ Saran dipersonalisasi'}
+                  {source && !source.startsWith('fallback') && '✨ Saran dipersonalisasi'}
                   {source && source.startsWith('fallback') && '📋 Saran umum'}
                   {' · '}MiganCore mengingat 30 hari obrolan
                 </div>

@@ -107,11 +107,30 @@ def _hardcoded_starters(usecase: str, lang: str) -> list[str]:
     return pool.get(usecase, pool["general"])
 
 
-async def _generate_dynamic_starters(usecase: str, lang: str) -> list[str] | None:
-    """Try Gemini Flash for personalized starters. Returns None on any failure."""
+def _parse_starter_lines(text: str) -> list[str]:
+    """Parse N lines from teacher output, strip bullets/numbering/quotes, length-filter."""
+    lines = []
+    for raw_l in (text or "").splitlines():
+        l = raw_l.strip()
+        if not l:
+            continue
+        # Strip leading bullets / numbering
+        l = l.lstrip("0123456789.)-•*–— ").strip()
+        # Strip surrounding quotes
+        if (l.startswith('"') and l.endswith('"')) or (l.startswith("'") and l.endswith("'")):
+            l = l[1:-1].strip()
+        if 8 <= len(l) <= 200:
+            lines.append(l)
+    return lines
+
+
+async def _generate_dynamic_starters(usecase: str, lang: str) -> tuple[list[str] | None, str | None]:
+    """Try teachers in priority order: Kimi (bilingual specialist) -> Gemini (cheap fallback).
+    Returns (starters, source_name) or (None, None) on full failure.
+    Live VPS test Day 37 showed Gemini 2.5 Flash refuses to produce 3 lines for our prompt;
+    Kimi K2.6 produces clean 3-line output reliably (matches its bilingual ID training).
+    """
     from services.teacher_api import call_teacher, is_teacher_available, TeacherError
-    if not is_teacher_available("gemini"):
-        return None
 
     lang_label = "Bahasa Indonesia natural" if lang == "id" else "English"
     sys = (
@@ -128,32 +147,27 @@ async def _generate_dynamic_starters(usecase: str, lang: str) -> list[str] | Non
         f"Each prompt should be 8-25 words. Concrete, specific, useful.\n\n"
         f"Output now (3 lines):"
     )
-    try:
-        # max_tokens=400 — 3 ID prompts ~80-120 tokens each + safety margin
-        resp = await call_teacher("gemini", user, system=sys, max_tokens=400)
-        # Strip bullets/numbering at line start, then filter by length
-        lines = []
-        for raw_l in resp.text.splitlines():
-            l = raw_l.strip()
-            if not l:
-                continue
-            # Strip leading bullets / numbering
-            l = l.lstrip("0123456789.)-•*–— ").strip()
-            # Strip surrounding quotes
-            if (l.startswith('"') and l.endswith('"')) or (l.startswith("'") and l.endswith("'")):
-                l = l[1:-1].strip()
-            if 8 <= len(l) <= 200:
-                lines.append(l)
-        if len(lines) >= 3:
-            return lines[:3]
-        logger.warning("onboarding.starters_too_few_lines", got=len(lines), raw_preview=resp.text[:200])
-        return None
-    except TeacherError as exc:
-        logger.warning("onboarding.starters_gemini_error", error=str(exc))
-        return None
-    except Exception as exc:
-        logger.warning("onboarding.starters_unknown_error", error=str(exc))
-        return None
+
+    # Priority order: Kimi K2.6 (bilingual ID specialist, 3-line compliance verified) -> Gemini fallback
+    for teacher in ("kimi", "gemini"):
+        if not is_teacher_available(teacher):
+            continue
+        try:
+            resp = await call_teacher(teacher, user, system=sys, max_tokens=400)
+            lines = _parse_starter_lines(resp.text)
+            if len(lines) >= 3:
+                return lines[:3], teacher
+            logger.warning(
+                "onboarding.starters_too_few_lines",
+                teacher=teacher,
+                got=len(lines),
+                raw_preview=(resp.text or "")[:200],
+            )
+        except TeacherError as exc:
+            logger.warning("onboarding.starters_teacher_error", teacher=teacher, error=str(exc))
+        except Exception as exc:
+            logger.warning("onboarding.starters_unknown_error", teacher=teacher, error=str(exc))
+    return None, None
 
 
 @router.get("/starters", response_model=StartersResponse)
@@ -172,11 +186,11 @@ async def get_starters(
     usecase_n = _normalize_usecase(usecase)
     lang_n = _normalize_lang(lang)
 
-    dynamic = await _generate_dynamic_starters(usecase_n, lang_n)
+    dynamic, source_name = await _generate_dynamic_starters(usecase_n, lang_n)
     if dynamic:
         return StartersResponse(
             starters=dynamic,
-            source="gemini",
+            source=source_name or "dynamic",
             lang=lang_n,
             usecase=usecase_n,
         )
