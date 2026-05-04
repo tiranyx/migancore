@@ -1,7 +1,7 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 28 — Distillation Pipeline + Admin Dashboard A+B+C combined)
-**API Version:** 0.4.6
-**Git Commit:** `a7ce9c4`
+**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 35 — Week 4 COMPLETE: Level 5 visible + Cycle 1 ready + migancore.com landing live)
+**API Version:** 0.5.0 ⭐ MILESTONE
+**Git Commit:** `572a2a1`
 
 > Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
 > **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
@@ -15,20 +15,26 @@
 
 | Field | Value |
 |-------|-------|
-| Phase | Week 3 — Distribution Layer + Training Pipeline |
-| Sprint Day | Day 28 (COMPLETE) → Week 4 (SimPO Training NEXT) |
-| API Version | 0.4.6 |
-| Git Commit | `a7ce9c4` |
-| Tool Catalog | 10 tools: web_search, python_repl, memory_*, spawn_agent, http_get, generate_image, read_file, write_file, text_to_speech |
-| **MCP Server** | ✅ LIVE at `https://api.migancore.com/mcp/` — 8 tools + 4 resources |
-| **Admin Dashboard** | ✅ **LIVE** at `https://app.migancore.com/admin/` (Day 28) |
-| **Distillation Pipeline** | ✅ **LIVE** — 4 teachers (Anthropic Claude, Moonshot Kimi K2.6, OpenAI GPT-4o, Google Gemini 2.5 Flash) with judge + margin filter (Day 28) |
-| API Keys | ✅ `mgn_live_*` long-lived |
-| `migan` CLI | ✅ one-line installer |
-| Episodic Filter | ✅ tool-error responses skip Qdrant indexing |
+| Phase | Week 4 COMPLETE — Level 5 visible + Cycle 1 ready → Bulan 2 (5 beta dogfooding) |
+| Sprint Day | **Day 35 (COMPLETE)** → Bulan 2 Week 5 (SimPO trigger when 500+ pairs) |
+| API Version | **0.5.0 ⭐** |
+| Git Commit | `572a2a1` |
+| Tool Catalog | 10 tools (web_search, python_repl, memory_*, spawn_agent, http_get, generate_image, read_file, write_file, text_to_speech) |
+| **3 Live Domains** | **`migancore.com` (NEW landing)** · `app.migancore.com` (chat) · `app.migancore.com/admin/` (dashboard) · `api.migancore.com` |
+| **Spawn UI** | ✅ Day 29 — chat.html sidebar, modal, agent switcher (Level 5 visible!) |
+| **Genealogy Tree** | ✅ Day 30 — D3.js force-directed in `/admin/` Lineage tab |
+| **3 Mode Templates** | ✅ Day 31 — customer_success / research_companion / code_pair |
+| **SimPO Pipeline** | ✅ Day 32 — scripts ready (export, train, convert) — trigger when DPO ≥ 500 |
+| **Identity Eval** | ✅ Day 33 — 20-prompt set + cosine sim gate ≥0.85 (eval/persona_consistency_v1.jsonl) |
+| **migancore.com Landing** | ✅ **LIVE** Day 33 — hero, 5 levels, live stats widget, 6 differentiators |
+| **Hot-Swap Guide** | ✅ Day 34 — convert_gguf.py + HOT_SWAP_GUIDE.md ready |
+| MCP Server | ✅ 8 tools + 4 resources at `api.migancore.com/mcp/` |
+| Distillation | 4 teachers verified (Kimi/Claude/GPT/Gemini) — Ollama CPU bottleneck = secondary path |
 | Memory Pruner | ✅ daily daemon |
-| External APIs | fal.ai $9.99 · ElevenLabs $5 (voice `pIdeS8l1cmJzzqqt7NRc`) · Anthropic $4.55 · Kimi $2 · OpenAI $5 · Gemini free tier |
-| **DPO Flywheel** | Synthetic 228+→1000 + CAI 3 + Distill 30+→500 = ~1500 pairs target (training UNLOCKED) |
+| **DPO Flywheel** | 277 pairs (synthetic 262 + CAI 15) — synthetic resumed, growing to 1000 |
+| **Agents Spawned** | **4** (3 G0 + 1 G1 — DemoChildAgent first ever bred!) |
+| External APIs | fal.ai $9.99 · ElevenLabs $5 · Anthropic $4.55 · Kimi $2 · OpenAI $5 · Gemini free |
+| Week 4 Cost | **<$0.05** (under-budget 99.7% — RunPod budget intact for Cycle 1) |
 | VPS | Ubuntu 22.04, 32GB RAM, 8 core, 400GB |
 | External URL | **https://api.migancore.com** (API) · **https://app.migancore.com** (Chat UI) |
 | Stack Status | Postgres ✅ Redis ✅ **Qdrant v1.12.0** ✅ Ollama ✅ API ✅ Letta ✅ (running, not yet wired) |

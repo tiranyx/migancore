@@ -470,6 +470,103 @@
 
 ## Week 3: Chat UI + Tools + MCP (Days 22–28)
 
+### Day 29-35 — Week 4 Sprint COMPLETE: Level 5 Visible + Cycle 1 Ready + migancore.com Live
+**Agent:** Claude Opus 4.7 (compressed single-day execution)
+**Scope:** Original blueprint Week 4 — close Level 5 (The Breeder) visibility gap + ship public-facing landing
+**Theme:** "Win 1 thing completely" — Level 5 + Cycle 1 trigger ready
+
+**Approach (full mandatory protocol):**
+1. ✅ Read original blueprint PDF + kickoff HTML + compass MD (anti scope-creep)
+2. ✅ Documented `WEEK4_DECISIONS_LOG.md` as COMPASS (lock plan, prevent direction loss)
+3. ✅ Recognized 3 prior errors: 10-domain ADO scope creep, domain mapping confusion, browser-use distraction
+4. ✅ Re-aligned to original 5-Level Evolution model
+5. ✅ Executed 6 PRIMARY items + 1 deferred (SimPO trigger waiting for 500+ pairs)
+
+**Solution:**
+
+**Day 29 — Spawn UI** (Level 5 from backend → frontend)
+- chat.html: AGENTS sidebar + spawn modal + agent switcher
+- /v1/agents (list), /v1/agents/genealogy (D3 data)
+- Bug+fix: FastAPI route order — concrete BEFORE parameterized
+- E2E: spawned `DemoChildAgent` G1 — first child ever bred
+
+**Day 30 — Genealogy Tree D3.js**
+- Lineage tab in dashboard.html
+- D3 v7 force-directed graph, color-coded by generation
+- /v1/admin/genealogy system-wide view
+- Bug+fix: PostgreSQL RLS — admin must iterate per-tenant
+
+**Day 31 — 3 Mode Templates**
+- config/personalities.yaml (customer_success / research_companion / code_pair per kickoff)
+- /v1/agents/templates endpoint
+- Spawn applies template_id to persona_blob
+- Frontend: dropdown selector with auto-fill
+
+**Day 32 — SimPO Training Scripts** (deferred run)
+- training/export_dataset.py, train_simpo.py, README.md
+- Trigger condition: DPO ≥ 500 pairs (current 277, growing)
+
+**Day 33 — Identity Eval + migancore.com Landing**
+- eval/persona_consistency_v1.jsonl (20 prompts, 8 categories)
+- eval/run_identity_eval.py (cosine sim gate ≥0.85)
+- frontend/landing.html (621 lines): hero, 5 levels, live stats widget, 6 differentiators
+- /v1/public/stats endpoint
+- nginx vhost + Let's Encrypt cert for migancore.com + www
+- **LIVE: https://migancore.com**
+
+**Day 34 — Hot-Swap Framework**
+- training/convert_gguf.py (adapter → GGUF Q4_K_M)
+- docs/HOT_SWAP_GUIDE.md (workflow, A/B routing, promote/rollback)
+
+**Day 35 — Documentation + Bulan 2 Plan**
+- WEEK4_RETRO.md (10 wins, 5 misses, lessons captured)
+- BULAN2_PLAN.md (Week 5 Cycle 1 → Week 6 beta → Week 7 Cycle 2 → Week 8 public)
+- CONTEXT.md updated v0.5.0
+- This SPRINT_LOG entry
+
+**Files Modified Week 4:**
+- NEW: WEEK4_DECISIONS_LOG, WEEK4_RETRO, BULAN2_PLAN, HOT_SWAP_GUIDE, MODE templates yaml
+- NEW: 4 training scripts (export, train, convert, README)
+- NEW: 2 eval files (jsonl set, runner script)
+- NEW: landing.html, dashboard genealogy tab
+- MODIFIED: chat.html (spawn UI), agents router (3 new endpoints), admin router (genealogy + stats)
+- MODIFIED: main.py (version 0.4.6→0.5.0, CORS migancore.com, /v1/public/stats), config_loader (templates), requirements (pyyaml)
+- INFRASTRUCTURE: nginx vhost migancore.com + Let's Encrypt cert
+
+**Git Commits (Week 4 — 13 commits, atomic per Day):**
+- `af8ae49` — WEEK4_DECISIONS_LOG (the COMPASS)
+- `cafd33d` — Day 29 Spawn UI v0.4.7
+- `cf3665e` — Day 29 route order fix
+- `dfdb6cf` — Day 29 daily log
+- `61b3356` — Day 30 Genealogy v0.4.8
+- `c59f98f` — Day 30 RLS fix
+- `8217045` — Day 31 templates v0.4.9
+- `b698400` — Day 32 training scripts
+- `87f49d7` — Day 33 identity eval
+- `0179cf3` — Day 33 landing v0.5.0
+- `572a2a1` — Day 34 hot-swap
+- (Day 35 docs commit forthcoming)
+
+**Version:** 0.4.6 → **0.5.0** ⭐ MILESTONE
+
+**Cost Week 4:** **<$0.05** (under-budget 99.7%, RunPod intact for Cycle 1)
+
+**Deliverables:** Level 5 (The Breeder) UI live. migancore.com public face shipped. Training pipeline ready. Identity eval gate built. Bulan 2 plan locked. v0.5.0 milestone — Migancore is now visibly different from "another LLM wrapper."
+
+**Lessons (10 critical, full list in WEEK4_RETRO.md):**
+1. FastAPI route order matters — concrete before parameterized
+2. PostgreSQL RLS requires per-tenant context for admin queries
+3. Container --build flag mandatory for code changes
+4. Embedding model load slow when synthetic gen running
+5. Ollama CPU saturated — serialize pipelines, distillation = secondary
+6. WEEK4_DECISIONS_LOG saved us from scope creep
+7. Original blueprint > current trends (Level 5 visibility > Creative Agent)
+8. Domain mapping clarity early prevents weeks of misdirection
+9. PowerShell quote escape hell — write scripts as files
+10. Cost discipline preserves runway (Week 4 spent 0.3% of budget)
+
+---
+
 ### Day 28 — Distillation Pipeline (4 teachers) + Admin Dashboard
 **Agent:** Claude Opus 4.7 (1m context)
 **Scope:** External AI as teacher pipeline + visual monitoring

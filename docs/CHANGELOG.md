@@ -6,6 +6,82 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.0] — 2026-05-04 (Day 35) — Week 4 Complete: Level 5 Visible + Cycle 1 Ready + migancore.com Live ⭐
+
+### Added (Day 29-34, all in single sprint)
+
+**Day 29 — Spawn UI + Endpoints (Level 5 visible)**
+- `frontend/chat.html`: AGENTS sidebar section + Spawn Modal + agent switcher
+- `GET /v1/agents` — list all tenant agents
+- `GET /v1/agents/genealogy` — flat tree for D3 visualization
+- Bug + Fix: FastAPI route order — `/{agent_id}` was catching `/genealogy` → moved before
+- E2E verified: spawn worked, 4 agents in tree (3 G0 + 1 G1)
+
+**Day 30 — Genealogy Tree D3.js**
+- `frontend/dashboard.html`: D3.js v7 CDN, Lineage tab, force-directed graph
+- Color-coded by generation (orange=G0, green=G1, blue=G2, purple=G3+)
+- Drag, click for detail panel, auto-refresh 8s
+- `GET /v1/admin/genealogy` — system-wide cross-tenant view
+- Bug + Fix: PostgreSQL RLS — admin must iterate per-tenant with set_tenant_context
+
+**Day 31 — 3 Mode Templates (per kickoff)**
+- `config/personalities.yaml` — customer_success, research_companion, code_pair
+- `services/config_loader.py::load_personality_templates()`
+- `requirements.txt`: pyyaml>=6.0
+- `GET /v1/agents/templates` — list available templates
+- Spawn handler applies template to persona_blob (overridable)
+- Frontend: dropdown selector in spawn modal, auto-fill voice/tone/values
+
+**Day 32 — SimPO Training Pipeline (scripts ready)**
+- `training/export_dataset.py` — pull pairs to JSONL with 50/30/20 mix + identity anchors
+- `training/train_simpo.py` — Unsloth + QLoRA + SimPO on RunPod RTX 4090
+- `training/README.md` — full workflow + cost breakdown
+- DEFERRED execution: pool 277 vs 500 threshold
+
+**Day 33 — Identity Eval + migancore.com Landing**
+- `eval/persona_consistency_v1.jsonl` — 20 prompts across 8 categories
+- `eval/run_identity_eval.py` — 2 modes (reference, eval) + cosine gate ≥0.85
+- `frontend/landing.html` (621 lines) — hero, 5 levels timeline, live stats widget, 6 differentiators
+- `GET /v1/public/stats` — sanitized aggregate (no PII)
+- nginx vhost `/www/server/panel/vhost/nginx/migancore.com.conf`
+- Let's Encrypt cert via certbot webroot for migancore.com + www
+- HTTP→HTTPS redirect
+
+**Day 34 — Hot-Swap Framework**
+- `training/convert_gguf.py` — adapter → GGUF Q4_K_M for Ollama
+- `docs/HOT_SWAP_GUIDE.md` — full workflow (HF push, ollama pull, A/B header routing, promote/rollback)
+
+**Day 35 — Documentation + Bulan 2 Plan**
+- `docs/WEEK4_RETRO.md` — full retrospective (10 wins, 5 misses, lessons)
+- `docs/BULAN2_PLAN.md` — 30-day plan: Week 5 Cycle 1, Week 6 beta, Week 7 Cycle 2, Week 8 public
+- `docs/WEEK4_DECISIONS_LOG.md` (Day 28) — anti scope-creep COMPASS
+
+### Changed
+- `api/main.py`: version 0.4.6 → **0.5.0** (milestone bump)
+- CORS: added `migancore.com` to allowlist
+- Spawn handler: applies template_id during spawn
+
+### Verified Live
+- `https://migancore.com/` — HTTP 200, 18.8KB, SSL valid (Let's Encrypt, expires 2026-08-02)
+- `https://app.migancore.com/` — HTTP 200, chat with spawn UI
+- `https://app.migancore.com/admin/` — HTTP 200, dashboard with Lineage tab
+- `https://api.migancore.com/health` — HTTP 200, v0.5.0
+- `https://api.migancore.com/v1/public/stats` — HTTP 200, sanitized aggregate
+
+### Lessons (10 documented in WEEK4_RETRO.md)
+1. FastAPI route order: concrete BEFORE parameterized
+2. PostgreSQL RLS requires per-tenant context for admin queries
+3. Container `--build` mandatory for code changes
+4. Embedding model load slow when synthetic gen running (60-90s startup)
+5. Ollama CPU 100% saturated by 7B inference — serialize pipelines
+6. PyYAML safe_load for config (no eval risk)
+7. D3.js v7 force-directed: forceLink + forceManyBody + forceCenter + forceCollide
+8. PowerShell quote escape hell — write multi-line scripts as files
+9. WEEK4_DECISIONS_LOG saved us from scope creep
+10. Original blueprint > current trends (researcher proposed Creative Director, blueprint said Level 5 visibility — blueprint won)
+
+---
+
 ## [0.4.6] — 2026-05-04 (Day 28) — Distillation Pipeline + Admin Dashboard
 
 ### Added
