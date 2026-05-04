@@ -36,6 +36,7 @@ Day 24 notes (2026-05-04):
 
 import asyncio
 import json
+import os
 import subprocess
 import urllib.parse
 from dataclasses import dataclass
@@ -689,6 +690,190 @@ async def _analyze_image(args: dict, ctx: ToolContext) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Day 42 — HYPERX Browser integration (user-built Node.js anonymous browser)
+#
+# Mounted RO at /app/hyperx from /opt/sidix/tools/hyperx-browser via docker-compose.
+# 3 capabilities exposed: hyperx_get (fetch+parse), hyperx_search (7 engines),
+# hyperx_scrape (regex extract).
+#
+# Strategy Day 42: subprocess.run per call (~80-200ms node startup overhead OK
+# for occasional use). Day 43+ refactor to persistent stdio MCP client (mcp SDK)
+# for sub-100ms latency at scale.
+#
+# ADO alignment: user-owned tool = first-class citizen, modular brain principle.
+# ---------------------------------------------------------------------------
+HYPERX_DIR = "/app/hyperx"
+HYPERX_BIN = f"{HYPERX_DIR}/bin/hyperx.js"
+HYPERX_TIMEOUT_S = 30
+
+
+def _hyperx_available() -> bool:
+    """Check if HYPERX is mounted + node binary available."""
+    return os.path.isfile(HYPERX_BIN) and Path("/usr/bin/node").exists()
+
+
+async def _hyperx_run(args: list[str], timeout: int = HYPERX_TIMEOUT_S) -> dict:
+    """Run hyperx.js with --json flag, return parsed JSON. Raises on failure."""
+    import subprocess
+    if not _hyperx_available():
+        raise ToolExecutionError(
+            f"HYPERX not available — expected mount at {HYPERX_DIR}. "
+            "Check docker-compose volumes."
+        )
+    cmd = ["node", HYPERX_BIN, "--json", *args]
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run, cmd,
+            capture_output=True, text=True, timeout=timeout, cwd=HYPERX_DIR,
+        )
+    except subprocess.TimeoutExpired:
+        raise ToolExecutionError(f"HYPERX timed out ({timeout}s) for args {args[:3]}")
+    if proc.returncode != 0:
+        raise ToolExecutionError(
+            f"HYPERX failed (rc={proc.returncode}): {proc.stderr[:300]}"
+        )
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise ToolExecutionError(
+            f"HYPERX JSON parse error: {exc}. Raw: {proc.stdout[:200]}"
+        )
+
+
+async def _hyperx_get(args: dict, ctx: ToolContext) -> dict:
+    """Fetch a URL anonymously via HYPERX browser.
+
+    Returns parsed text + links + images + meta + status.
+    Use this for richer extraction than web_read (which only returns markdown).
+    """
+    url = (args.get("url") or "").strip()
+    if not url:
+        raise ToolExecutionError("'url' is required")
+    if not url.startswith(("http://", "https://")):
+        raise ToolExecutionError("URL must start with http(s)://")
+    raw = bool(args.get("raw", False))
+
+    cli_args = [url]
+    if raw:
+        cli_args.append("--raw")
+
+    logger.info("tool.hyperx_get.start", url=url[:120], raw=raw)
+    data = await _hyperx_run(cli_args)
+    logger.info(
+        "tool.hyperx_get.done",
+        url=url[:120],
+        status=data.get("status"),
+        text_len=len(data.get("text") or ""),
+        links=len(data.get("links") or []),
+        elapsed=data.get("elapsed"),
+    )
+    # Trim text/html for LLM consumption (cap 30K chars)
+    text = (data.get("text") or "")[:30_000]
+    return {
+        "url": data.get("url"),
+        "final_url": data.get("finalUrl"),
+        "status": data.get("status"),
+        "title": data.get("meta", {}).get("title"),
+        "text": text,
+        "links": (data.get("links") or [])[:50],
+        "images": (data.get("images") or [])[:30],
+        "elapsed_ms": data.get("elapsed"),
+        "source": "hyperx",
+    }
+
+
+async def _hyperx_search(args: dict, ctx: ToolContext) -> dict:
+    """Web search via HYPERX (7 engines: google, ddg, brave, bing, startpage, yandex, ecosia).
+
+    Returns structured results with title, URL, snippet.
+    """
+    query = (args.get("query") or "").strip()
+    if not query:
+        raise ToolExecutionError("'query' is required")
+    engine = (args.get("engine") or "ddg").lower()
+    valid_engines = {"google", "ddg", "brave", "bing", "startpage", "yandex", "ecosia"}
+    if engine not in valid_engines:
+        engine = "ddg"
+    limit = max(1, min(int(args.get("limit", 10)), 30))
+
+    cli_args = [query, f"--engine={engine}", f"--limit={limit}"]
+    logger.info("tool.hyperx_search.start", q=query[:80], engine=engine, limit=limit)
+    data = await _hyperx_run(cli_args)
+    results = data.get("results") or []
+    logger.info(
+        "tool.hyperx_search.done",
+        q=query[:80],
+        engine=engine,
+        results=len(results),
+        elapsed=data.get("elapsed"),
+    )
+    return {
+        "query": query,
+        "engine": engine,
+        "results": [
+            {
+                "title": r.get("title"),
+                "url": r.get("url"),
+                "snippet": (r.get("snippet") or "")[:300],
+            }
+            for r in results[:limit]
+        ],
+        "count": len(results),
+        "elapsed_ms": data.get("elapsed"),
+        "source": "hyperx",
+    }
+
+
+async def _hyperx_scrape(args: dict, ctx: ToolContext) -> dict:
+    """Scrape a URL with regex selectors via HYPERX.
+
+    Args:
+      url: target URL
+      selectors: dict of {field_name: regex_pattern} to extract from HTML
+    Returns:
+      {extracted: {...}, url, status}
+    """
+    url = (args.get("url") or "").strip()
+    if not url or not url.startswith(("http://", "https://")):
+        raise ToolExecutionError("Valid 'url' (http/https) is required")
+    selectors = args.get("selectors") or {}
+    if not isinstance(selectors, dict) or not selectors:
+        raise ToolExecutionError("'selectors' dict required: {field: regex}")
+
+    # HYPERX scrape API: pass selectors as JSON via --selectors flag (or fall back to fetch + regex)
+    # Since hyperx.js CLI may not have direct --selectors, use --raw HTML then regex client-side
+    cli_args = [url, "--raw"]
+    logger.info("tool.hyperx_scrape.start", url=url[:120], fields=list(selectors.keys()))
+    data = await _hyperx_run(cli_args)
+    html = data.get("html") or ""
+    if not html:
+        raise ToolExecutionError(f"HYPERX returned no HTML for {url[:80]}")
+
+    # Apply each regex
+    import re
+    extracted = {}
+    for field, pattern in selectors.items():
+        try:
+            m = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+            extracted[field] = m.group(1) if (m and m.groups()) else (m.group(0) if m else None)
+        except re.error as exc:
+            extracted[field] = f"[regex error: {exc}]"
+
+    logger.info(
+        "tool.hyperx_scrape.done",
+        url=url[:120],
+        extracted_fields=sum(1 for v in extracted.values() if v),
+        total_fields=len(selectors),
+    )
+    return {
+        "url": url,
+        "status": data.get("status"),
+        "extracted": extracted,
+        "source": "hyperx",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Day 41 — Web Read via Jina Reader (URL → clean markdown for LLM consumption)
 #
 # Why: existing http_get returns raw HTML (kotor: scripts, ads, nav noise).
@@ -1121,6 +1306,10 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "web_read": _web_read,
     "export_pdf": _export_pdf,
     "export_slides": _export_slides,
+    # Day 42 — HYPERX browser (user-built Node.js, anonymous, 7 search engines)
+    "hyperx_get": _hyperx_get,
+    "hyperx_search": _hyperx_search,
+    "hyperx_scrape": _hyperx_scrape,
 }
 
 

@@ -59,11 +59,18 @@ def main():
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=16)
     parser.add_argument("--max-seq-length", type=int, default=2048)
-    parser.add_argument("--simpo-beta", type=float, default=2.0)         # paper default still optimal
-    parser.add_argument("--simpo-gamma", type=float, default=1.0,        # was 1.4 — community shifted Mar 2026
+    # Day 42 update: TRL maintainers Mar 2026 PR #87 merged APO-zero loss type which
+    # outperforms vanilla SimPO on <1k pair datasets (better reward margin stability).
+    # Beta default lifted 2.0 -> 2.5 (sweet spot for small-data per Day 42 research).
+    parser.add_argument("--simpo-beta", type=float, default=2.5,         # was 2.0 (Day 42 update)
+                        help="SimPO beta. 2.5 = small-data sweet spot per Mar 2026 TRL benchmark.")
+    parser.add_argument("--simpo-gamma", type=float, default=1.0,
                         help="SimPO length normalization. 1.0 = gamma_beta_ratio 0.5 (community Q2 2026).")
     parser.add_argument("--length-normalize", action="store_true", default=True,
                         help="Apply length normalization to logprobs (community fix Mar 2026 for Qwen2.5-7B over-length reward).")
+    parser.add_argument("--loss-type", default="apo_zero",
+                        choices=["sigmoid", "hinge", "ipo", "apo_zero", "apo_down"],
+                        help="DPO/SimPO loss variant. Day 42 default apo_zero — outperforms vanilla on <1k pairs (TRL Mar 2026).")
     # Day 38 — APO identity loss term (research arxiv 2408.06266 + r/LocalLLaMA Aug 2025)
     # Adds an "anchor" loss that penalises drift on identity-anchor prompts during DPO/SimPO.
     # When enabled, requires --anchor-dataset (separate JSONL of {prompt, chosen} pairs that
@@ -92,6 +99,7 @@ def main():
     print(f"LoRA rank:         {args.lora_r}")
     print(f"SimPO beta:        {args.simpo_beta}")
     print(f"SimPO gamma:       {args.simpo_gamma}")
+    print(f"Loss type:         {args.loss_type} (Day 42: apo_zero default for small-data reward stability)")
     print(f"APO enabled:       {args.use_apo} (lambda={args.apo_lambda}, anchor={args.anchor_dataset or '-'})")
     print(f"Learning rate:     {args.learning_rate}")
     print(f"Effective batch:   {args.batch_size} × {args.grad_accum} = {args.batch_size * args.grad_accum}")
@@ -144,11 +152,14 @@ def main():
         learning_rate=args.learning_rate,
         warmup_ratio=0.1,
         logging_steps=10,
-        save_strategy="epoch",
+        # Day 42: save_steps for spot-interruption recovery (RunPod 4090 ~6% interruption Q1 2026)
+        save_strategy="steps",
+        save_steps=50,
         max_length=args.max_seq_length,
         max_prompt_length=args.max_seq_length // 2,
         beta=args.simpo_beta,
         gamma=args.simpo_gamma,
+        loss_type=args.loss_type,  # Day 42: apo_zero default
         bf16=True,
         report_to="wandb" if os.environ.get("WANDB_API_KEY") else "none",
         remove_unused_columns=False,

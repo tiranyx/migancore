@@ -359,6 +359,70 @@
       "permissions": ["external.api"],
       "npc_assignable": true,
       "cost_estimate": "free (local CPU render)"
+    },
+    {
+      "id": "hyperx_get",
+      "name": "HYPERX Get (anonymous browser fetch)",
+      "description": "Anonymous webpage fetch via HYPERX browser. Returns parsed text, links, images, meta. Use this for richer extraction than web_read (which only returns markdown). Privacy-friendly — no Chrome/Electron, supports proxy.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "URL to fetch (http or https)." },
+          "raw": { "type": "boolean", "default": false, "description": "Return raw HTML instead of parsed text." }
+        },
+        "required": ["url"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (local Node.js subprocess)"
+    },
+    {
+      "id": "hyperx_search",
+      "name": "HYPERX Search (7-engine web search)",
+      "description": "MANDATORY for finding current information online with engine choice. Searches Google, DDG, Brave, Bing, Startpage, Yandex, or Ecosia. Anonymous, no API key needed. Use INSTEAD of web_search when user wants engine choice or richer results.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Search query." },
+          "engine": {
+            "type": "string",
+            "enum": ["google", "ddg", "brave", "bing", "startpage", "yandex", "ecosia"],
+            "default": "ddg",
+            "description": "Search engine. ddg = privacy default, google = best coverage."
+          },
+          "limit": { "type": "integer", "default": 10, "description": "Max results (1-30)." }
+        },
+        "required": ["query"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (local Node.js subprocess)"
+    },
+    {
+      "id": "hyperx_scrape",
+      "name": "HYPERX Scrape (regex extract)",
+      "description": "Scrape a webpage and extract structured data using regex selectors. Use when you need specific fields (price, title, author, date) from a known page structure. Returns key-value extracted dict.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Target URL." },
+          "selectors": {
+            "type": "object",
+            "description": "Map of {field_name: regex_pattern} to extract from HTML. Use capture groups (parens) to get just the value.",
+            "additionalProperties": { "type": "string" }
+          }
+        },
+        "required": ["url", "selectors"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (local Node.js subprocess)"
     }
   ]
 }
