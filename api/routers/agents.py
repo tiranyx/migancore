@@ -166,9 +166,36 @@ async def create_agent(
     )
 
 
-# IMPORTANT: List + genealogy endpoints MUST come BEFORE /{agent_id} routes
-# otherwise FastAPI matches "/genealogy" as agent_id="genealogy" and 500s on UUID parse.
+# IMPORTANT: List + genealogy + templates endpoints MUST come BEFORE /{agent_id} routes
+# otherwise FastAPI matches "/genealogy" or "/templates" as agent_id and 500s on UUID parse.
 # (Day 29 lesson — route declaration order matters in FastAPI.)
+
+@router.get("/templates", response_model=list[dict])
+async def list_personality_templates(
+    current_user: User = Depends(get_current_user),
+):
+    """List available personality mode templates (Day 31).
+
+    Used by chat.html spawn modal to populate "Choose Template" dropdown.
+    Templates are merged into spawned child's persona_blob.
+    """
+    from services.config_loader import load_personality_templates
+    cfg = load_personality_templates()
+    templates = cfg.get("templates", {})
+    return [
+        {
+            "id": tid,
+            "name": t.get("name", tid),
+            "description": t.get("description", ""),
+            "voice": t.get("voice", ""),
+            "tone": t.get("tone", ""),
+            "values": t.get("values", []),
+            "anti_patterns": t.get("anti_patterns", []),
+            "additions": t.get("additions", ""),
+        }
+        for tid, t in templates.items()
+    ]
+
 
 @router.get("", response_model=list[AgentResponse])
 async def list_agents(
@@ -321,8 +348,20 @@ async def spawn_agent(
             detail="Parent agent's persona is locked. Cannot apply persona overrides.",
         )
 
-    # 5. Build persona blob: parent base + overrides
+    # 5. Build persona blob: parent base + template (if any) + explicit overrides
+    # Day 31: If template_id matches a personality template, apply it as middle layer
     child_persona = dict(parent.persona_blob or {})
+
+    if data.template_id:
+        from services.config_loader import get_personality_template
+        tpl = get_personality_template(data.template_id)
+        if tpl:
+            # Merge template fields — these become the agent's default voice/tone/values
+            for key in ("voice", "tone", "values", "anti_patterns", "additions", "name"):
+                if key in tpl:
+                    child_persona[key] = tpl[key]
+            child_persona["_template_applied"] = data.template_id
+
     if data.persona_overrides:
         child_persona.update(data.persona_overrides)
 

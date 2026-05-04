@@ -34,6 +34,31 @@ def load_skills_config() -> dict:
         return json.load(f)
 
 
+@lru_cache()
+def load_personality_templates() -> dict:
+    """Load and cache personalities.yaml from config directory (Day 31).
+
+    Returns the full dict with 'templates' key containing per-mode personas.
+    Falls back to empty dict if file missing — UI handles gracefully.
+    """
+    path = CONFIG_DIR / "personalities.yaml"
+    if not path.exists():
+        return {"templates": {}}
+    try:
+        import yaml
+    except ImportError:
+        return {"templates": {}}
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data if isinstance(data, dict) else {"templates": {}}
+
+
+def get_personality_template(template_id: str) -> dict | None:
+    """Get a single personality template by id (e.g. 'customer_success')."""
+    cfg = load_personality_templates()
+    return cfg.get("templates", {}).get(template_id)
+
+
 def get_agent_config(agent_id: str) -> dict | None:
     """Get a single agent definition by ID.
 

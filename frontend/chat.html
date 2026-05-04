@@ -893,6 +893,7 @@
     }),
 
     listAgents: () => apiFetch('/v1/agents'),
+    listTemplates: () => apiFetch('/v1/agents/templates'),
     spawnAgent: (parentId, name, persona_overrides, template_id) =>
       apiFetch(`/v1/agents/${parentId}/spawn`, {
         method: 'POST',
@@ -1018,8 +1019,31 @@
     const [voice, setVoice] = useState('');
     const [tone, setTone] = useState('');
     const [values, setValues] = useState('');
+    const [templateId, setTemplateId] = useState('');  // Day 31
+    const [templates, setTemplates] = useState([]);
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState('');
+
+    // Day 31 — load templates on mount
+    useEffect(() => {
+      (async () => {
+        try {
+          const list = await api.listTemplates();
+          setTemplates(Array.isArray(list) ? list : []);
+        } catch {}
+      })();
+    }, []);
+
+    // When template selected — auto-fill voice/tone/values for visibility
+    useEffect(() => {
+      if (!templateId) return;
+      const t = templates.find(t => t.id === templateId);
+      if (t) {
+        if (!voice && t.voice) setVoice(t.voice);
+        if (!tone && t.tone) setTone(t.tone);
+        if (!values && t.values?.length) setValues(t.values.join(', '));
+      }
+    }, [templateId, templates]);
 
     const submit = async (e) => {
       e?.preventDefault();
@@ -1035,7 +1059,7 @@
           parentAgent.id,
           name.trim(),
           Object.keys(overrides).length ? overrides : null,
-          null,  // template_id — Day 31 will add template selector
+          templateId || null,  // Day 31 — pass template_id
         );
         onSpawned(child);
       } catch (e) {
@@ -1066,6 +1090,29 @@
               required
             />
           </div>
+
+          {templates.length > 0 && (
+            <div className="modal-form-row">
+              <label className="modal-form-label">
+                Mode Template (Day 31)
+                {templateId && <span style={{ marginLeft: '0.5rem', color: 'var(--green)', fontSize: '0.65rem' }}>
+                  → applies preset persona
+                </span>}
+              </label>
+              <select
+                className="modal-select"
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+              >
+                <option value="">— No template (custom) —</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — {t.description.slice(0, 50)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="modal-form-row">
             <label className="modal-form-label">Voice (persona override, optional)</label>

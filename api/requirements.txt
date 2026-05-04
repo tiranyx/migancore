@@ -40,6 +40,7 @@ pydantic-settings>=2.5.2,<3  # Day 26: bumped from 2.5.0 — mcp>=1.27 requires 
 python-dotenv==1.0.0
 httpx>=0.27.2,<0.28  # Day 26: bumped from 0.27.0 — mcp>=1.27 requires >=0.27.1
 aiofiles==24.1.0
+pyyaml>=6.0  # Day 31: personality templates (config/personalities.yaml)
 
 # Day 26 — MCP Server (Streamable HTTP)
 mcp>=1.27.0
