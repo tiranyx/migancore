@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     # Distillation budget caps
     DISTILL_BUDGET_USD_HARD_CAP: float = 10.0  # Pipeline aborts if estimated spend > this
     DISTILL_MARGIN_THRESHOLD: float = 2.0      # Only keep pairs with judge_diff >= this
+
+    # Day 37: CAI judge backend selection (research: 2-of-N quorum > single judge, -30% bad pairs)
+    # Options: "ollama" (default, free, slow ~10-20s), "quorum" (Kimi+Gemini, fast 1-2s, ~$0.001/critique)
+    # Fallback chain on quorum mode: Kimi -> Gemini -> Ollama (graceful degrade)
+    JUDGE_BACKEND: str = "ollama"
+    # Quorum requires both judges to agree on revision_needed (score <= threshold both)
+    # If only one says yes, defer to Ollama tiebreak (when fallback enabled)
+    JUDGE_QUORUM_REQUIRE_CONSENSUS: bool = True
     DISTILL_MAX_OUTPUT_TOKENS: int = 600       # Per teacher response cap
 
     # Day 27: API Keys (server-side pepper for HMAC)

@@ -942,6 +942,10 @@
       method: 'POST',
       body: JSON.stringify({ message, conversation_id: convId || null }),
     }),
+
+    // Day 37 — onboarding starter prompts (open endpoint, no auth required)
+    onboardingStarters: (usecase, lang) =>
+      apiFetch(`/v1/onboarding/starters?usecase=${encodeURIComponent(usecase || 'general')}&lang=${encodeURIComponent(lang || 'id')}`),
   };
 
   // ===========================
@@ -1045,6 +1049,151 @@
           {lines.map((l, i) => (
             <div key={i} className={`boot-line ${l.cls}`}>{l.text}</div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ===========================
+  // ONBOARDING MODAL (Day 37 — Two-Question Pattern)
+  // Replaces multi-template picker (deprecated by Cursor/Claude Q1 2026).
+  // Pattern: Perplexity Spaces / Letta blog Mar 2026 — ask 2 questions, then never again.
+  // Q1: usecase (free text), Q2: language preference -> generate dynamic starters
+  // ===========================
+  function OnboardingModal({ user, onComplete }) {
+    const [step, setStep] = useState(1);          // 1 = Q1 usecase, 2 = Q2 lang, 3 = starters
+    const [usecase, setUsecase] = useState('');
+    const [lang, setLang] = useState('');
+    const [starters, setStarters] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [source, setSource] = useState('');
+
+    const submitQ1 = useCallback((e) => {
+      e?.preventDefault?.();
+      if (!usecase.trim()) return;
+      setStep(2);
+    }, [usecase]);
+
+    const pickLang = useCallback(async (chosen) => {
+      setLang(chosen);
+      setLoading(true);
+      try {
+        const res = await api.onboardingStarters(usecase.trim() || 'general', chosen);
+        setStarters(res.starters || []);
+        setSource(res.source || 'unknown');
+      } catch (_) {
+        // Hard-fallback minimal (should never hit — server has its own fallback)
+        setStarters([
+          'Apa yang bisa kamu lakukan? Kasih 3 contoh konkret',
+          'Bantu saya rencanakan to-do list hari ini',
+          'Jelaskan satu konsep kompleks dengan analogi sederhana',
+        ]);
+        setSource('client_fallback');
+      }
+      setStep(3);
+      setLoading(false);
+    }, [usecase]);
+
+    const finish = useCallback((seedPrompt) => {
+      LS.set('mc_onboarded', '1');
+      LS.set('mc_onboard_usecase', usecase.trim() || 'general');
+      LS.set('mc_onboard_lang', lang || 'id');
+      onComplete(seedPrompt || null);
+    }, [onComplete, usecase, lang]);
+
+    return (
+      <div className="modal-bg">
+        <div className="modal" style={{ maxWidth: 520 }}>
+          <div className="modal-head" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+            <div>
+              <div className="modal-title" style={{ fontSize: 18 }}>
+                {step === 1 && '👋 Selamat datang di MiganCore'}
+                {step === 2 && '🌐 Bahasa pilihan'}
+                {step === 3 && '✨ Mulai dari sini'}
+              </div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 4 }}>
+                {step === 1 && `Halo ${user?.display_name || user?.email?.split('@')[0] || 'kamu'}. Sebentar setup, sekali aja.`}
+                {step === 2 && 'Kami pakai bahasa apa untuk obrolan?'}
+                {step === 3 && 'Pilih satu untuk mulai, atau tutup untuk chat bebas.'}
+              </div>
+            </div>
+            <button className="x-btn" onClick={() => finish(null)} title="Lewati">×</button>
+          </div>
+
+          <div className="modal-body" style={{ paddingTop: 16 }}>
+            {step === 1 && (
+              <form onSubmit={submitQ1}>
+                <label style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 8 }}>
+                  Apa yang ingin kamu lakukan dengan MiganCore?
+                </label>
+                <input
+                  className="input"
+                  type="text"
+                  value={usecase}
+                  onChange={(e) => setUsecase(e.target.value)}
+                  placeholder="Contoh: riset AI agent, ngoding Python, nulis konten..."
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+                  <button className="btn-ghost" type="button" onClick={() => finish(null)}>Lewati</button>
+                  <button className="btn-primary" type="submit" disabled={!usecase.trim()}>Lanjut →</button>
+                </div>
+              </form>
+            )}
+
+            {step === 2 && (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  {[
+                    { k: 'id',  label: 'Indonesia',  sub: 'Bahasa utama' },
+                    { k: 'mix', label: 'Campuran',   sub: 'ID + EN' },
+                    { k: 'en',  label: 'English',    sub: 'Primary' },
+                  ].map(opt => (
+                    <button
+                      key={opt.k}
+                      className="btn-ghost"
+                      style={{ padding: '14px 8px', flexDirection: 'column', display: 'flex', gap: 4, height: 'auto' }}
+                      onClick={() => pickLang(opt.k)}
+                      disabled={loading}
+                    >
+                      <div style={{ fontWeight: 600 }}>{opt.label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{opt.sub}</div>
+                    </button>
+                  ))}
+                </div>
+                {loading && (
+                  <div style={{ marginTop: 14, fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
+                    Menyiapkan saran khusus untuk kamu…
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step === 3 && (
+              <div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {starters.map((s, i) => (
+                    <button
+                      key={i}
+                      className="btn-ghost"
+                      style={{ textAlign: 'left', padding: '12px 14px', whiteSpace: 'normal', height: 'auto', lineHeight: 1.4 }}
+                      onClick={() => finish(s)}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ marginTop: 14, fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
+                  {source === 'gemini' && '✨ Saran dipersonalisasi'}
+                  {source && source.startsWith('fallback') && '📋 Saran umum'}
+                  {' · '}MiganCore mengingat 30 hari obrolan
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+                  <button className="btn-ghost" onClick={() => finish(null)}>Lewati</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1481,6 +1630,8 @@
     // Day 29 — agent list + spawn modal
     const [agents, setAgents]       = useState([]);
     const [spawnOpen, setSpawnOpen] = useState(false);
+    // Day 37 — onboarding modal (two-question, dynamic starters)
+    const [showOnboarding, setShowOnboarding] = useState(() => !LS.get('mc_onboarded'));
 
     const endRef     = useRef(null);
     const taRef      = useRef(null);
@@ -1864,6 +2015,17 @@
             parentAgent={agents.find(a => a.id === agentId) || { id: agentId, name: agentName, generation: 0 }}
             onClose={() => setSpawnOpen(false)}
             onSpawned={handleSpawned}
+          />
+        )}
+
+        {/* Day 37: Onboarding Modal — first-run experience, two-question pattern */}
+        {showOnboarding && !initing && (
+          <OnboardingModal
+            user={user}
+            onComplete={(seedPrompt) => {
+              setShowOnboarding(false);
+              if (seedPrompt) setInput(seedPrompt);
+            }}
           />
         )}
       </div>

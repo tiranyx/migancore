@@ -25,6 +25,7 @@ from routers import admin as admin_router
 from routers import chat as chat_router
 from routers import conversations as conversations_router
 from routers import api_keys as api_keys_router  # Day 27
+from routers import onboarding as onboarding_router  # Day 37
 
 # Day 26: MCP Streamable HTTP server (lazy import — degrades gracefully if SDK missing)
 try:
@@ -159,7 +160,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.5.2",
+    version="0.5.3",
     lifespan=lifespan,
 )
 
@@ -208,6 +209,7 @@ app.include_router(admin_router.router)
 app.include_router(chat_router.router)
 app.include_router(conversations_router.router)
 app.include_router(api_keys_router.router)  # Day 27
+app.include_router(onboarding_router.router)  # Day 37
 
 # Day 26: Mount MCP Streamable HTTP server at /mcp
 # Degrades gracefully if `mcp` SDK is unavailable (e.g. dev container without rebuild).

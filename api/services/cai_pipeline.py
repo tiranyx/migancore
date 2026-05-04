@@ -84,18 +84,38 @@ Tulis HANYA respons yang diperbaiki, tanpa penjelasan atau meta-komentar:\
 """
 
 
-async def _critique(user_message: str, assistant_response: str) -> dict | None:
-    """Evaluate response against Constitution principles using 7B judge.
-
-    Returns {"score": int, "violations": list, "suggestions": list} or None on failure.
-    Temperature=0: deterministic, reproducible quality assessment.
+def _parse_critique_json(raw: str, source: str) -> dict | None:
+    """Extract {score, violations, suggestions} JSON from raw LLM text.
+    Source string is for log tagging (e.g. 'ollama', 'kimi', 'gemini').
     """
+    try:
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start == -1 or end == 0:
+            logger.warning("cai.critique_no_json", source=source, raw_preview=raw[:100])
+            return None
+        parsed = json.loads(raw[start:end])
+        score = int(parsed.get("score", 0))
+        if not 1 <= score <= 5:
+            logger.warning("cai.critique_invalid_score", source=source, score=score)
+            return None
+        return {
+            "score": score,
+            "violations": parsed.get("violations", []),
+            "suggestions": parsed.get("suggestions", []),
+        }
+    except (json.JSONDecodeError, ValueError, KeyError) as exc:
+        logger.warning("cai.critique_parse_error", source=source, error=str(exc))
+        return None
+
+
+async def _critique_ollama(user_message: str, assistant_response: str) -> dict | None:
+    """Default: same-model self-critique via Ollama (slow on CPU but free)."""
     prompt = _CRITIQUE_PROMPT_TEMPLATE.format(
         user_message=user_message[:400],
         assistant_response=assistant_response[:600],
     )
     messages = [{"role": "user", "content": prompt}]
-
     try:
         async with OllamaClient(timeout=_CAI_TIMEOUT) as client:
             data = await client.chat(
@@ -104,35 +124,94 @@ async def _critique(user_message: str, assistant_response: str) -> dict | None:
                 options={"num_predict": _MAX_CRITIQUE_TOKENS, "temperature": 0},
             )
         raw = data.get("message", {}).get("content", "").strip()
-
-        # Extract JSON — model may include preamble before the brace
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        if start == -1 or end == 0:
-            logger.warning("cai.critique_no_json", raw_preview=raw[:100])
-            return None
-
-        parsed = json.loads(raw[start:end])
-        score = int(parsed.get("score", 0))
-        if not 1 <= score <= 5:
-            logger.warning("cai.critique_invalid_score", score=score)
-            return None
-
-        return {
-            "score": score,
-            "violations": parsed.get("violations", []),
-            "suggestions": parsed.get("suggestions", []),
-        }
-
-    except (json.JSONDecodeError, ValueError, KeyError) as exc:
-        logger.warning("cai.critique_parse_error", error=str(exc))
-        return None
+        return _parse_critique_json(raw, "ollama")
     except OllamaError as exc:
         logger.warning("cai.critique_ollama_error", error=str(exc))
         return None
     except Exception as exc:
-        logger.warning("cai.critique_error", error=str(exc))
+        logger.warning("cai.critique_error", source="ollama", error=str(exc))
         return None
+
+
+async def _critique_teacher(teacher: str, user_message: str, assistant_response: str) -> dict | None:
+    """Quorum component: critique via external teacher API (Kimi/Gemini/Claude/GPT).
+    Faster (1-2s) and less self-bias than Ollama same-model judge.
+    """
+    from services.teacher_api import call_teacher, TeacherError, is_teacher_available
+    if not is_teacher_available(teacher):
+        logger.warning("cai.critique_teacher_unavailable", teacher=teacher)
+        return None
+    prompt = _CRITIQUE_PROMPT_TEMPLATE.format(
+        user_message=user_message[:400],
+        assistant_response=assistant_response[:600],
+    )
+    try:
+        resp = await call_teacher(teacher, prompt, system="", max_tokens=_MAX_CRITIQUE_TOKENS)
+        return _parse_critique_json(resp.text.strip(), teacher)
+    except TeacherError as exc:
+        logger.warning("cai.critique_teacher_error", teacher=teacher, error=str(exc))
+        return None
+    except Exception as exc:
+        logger.warning("cai.critique_error", source=teacher, error=str(exc))
+        return None
+
+
+async def _critique(user_message: str, assistant_response: str) -> dict | None:
+    """Dispatch critique to backend specified by settings.JUDGE_BACKEND.
+
+    Backends:
+      - 'ollama' (default): same-model self-critique, free, slow ~10-20s
+      - 'quorum': Kimi+Gemini in parallel, consensus required, 1-2s, ~$0.001/critique
+                  Fallback chain: if both teachers fail -> Ollama
+    """
+    backend = (getattr(settings, "JUDGE_BACKEND", "ollama") or "ollama").lower()
+
+    if backend == "quorum":
+        # Run Kimi + Gemini in parallel (cheap teachers, 1-2s each)
+        kimi_task = asyncio.create_task(_critique_teacher("kimi", user_message, assistant_response))
+        gem_task = asyncio.create_task(_critique_teacher("gemini", user_message, assistant_response))
+        kimi_res, gem_res = await asyncio.gather(kimi_task, gem_task, return_exceptions=False)
+
+        # Both succeeded — return averaged consensus result
+        if kimi_res and gem_res:
+            avg_score = round((kimi_res["score"] + gem_res["score"]) / 2)
+            # Combine violations/suggestions for richer revision context
+            merged_violations = list(set((kimi_res.get("violations") or []) + (gem_res.get("violations") or [])))
+            merged_suggestions = (kimi_res.get("suggestions") or []) + (gem_res.get("suggestions") or [])
+            require_consensus = getattr(settings, "JUDGE_QUORUM_REQUIRE_CONSENSUS", True)
+            consensus_low = (kimi_res["score"] <= CRITIQUE_THRESHOLD) == (gem_res["score"] <= CRITIQUE_THRESHOLD)
+            if require_consensus and not consensus_low:
+                logger.info(
+                    "cai.judge.quorum_no_consensus",
+                    kimi_score=kimi_res["score"],
+                    gemini_score=gem_res["score"],
+                    threshold=CRITIQUE_THRESHOLD,
+                )
+                return None  # Skip pair — judges disagree on whether revision needed
+            logger.info(
+                "cai.judge.quorum_consensus",
+                kimi_score=kimi_res["score"],
+                gemini_score=gem_res["score"],
+                avg=avg_score,
+            )
+            return {
+                "score": avg_score,
+                "violations": merged_violations,
+                "suggestions": merged_suggestions[:5],
+            }
+
+        # One teacher failed — use the working one as single judge (lower confidence)
+        if kimi_res or gem_res:
+            single = kimi_res or gem_res
+            logger.info("cai.judge.quorum_single", which="kimi" if kimi_res else "gemini")
+            return single
+
+        # Both teachers failed — fallback to Ollama
+        logger.warning("cai.judge.quorum_full_fallback")
+        return await _critique_ollama(user_message, assistant_response)
+
+    # Default backend: Ollama self-critique
+    return await _critique_ollama(user_message, assistant_response)
 
 
 async def _revise(
