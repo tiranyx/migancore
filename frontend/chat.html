@@ -541,13 +541,52 @@
       border-top-left-radius: 3px;
     }
 
-    .msg-bubble.streaming::after {
+    .msg-bubble.streaming:not(:empty)::after {
       content: '▋';
       color: var(--green);
       animation: blink 0.9s step-end infinite;
+      margin-left: 2px;
     }
 
     .msg-bubble.error-bubble { color: #ff6b6b; }
+
+    /* Day 36 — Thinking indicator (visible while waiting for first chunk) */
+    .thinking-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 0.975rem;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      border-top-left-radius: 3px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      letter-spacing: 0.05em;
+    }
+    .thinking-indicator .dots {
+      display: inline-flex;
+      gap: 3px;
+    }
+    .thinking-indicator .dots span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: thinking-bounce 1.2s infinite ease-in-out;
+    }
+    .thinking-indicator .dots span:nth-child(2) { animation-delay: 0.15s; }
+    .thinking-indicator .dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes thinking-bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-4px); opacity: 1; }
+    }
+    .thinking-elapsed {
+      color: var(--text-faint, var(--text-dim));
+      font-size: 0.7rem;
+      opacity: 0.8;
+    }
 
     @keyframes blink {
       0%, 100% { opacity: 1; }
@@ -1340,13 +1379,42 @@
   function Msg({ role, content, streaming, toolCount }) {
     const label = role === 'user' ? 'YOU' : 'MC';
     const errClass = content.startsWith('⚠') ? ' error-bubble' : '';
+
+    // Day 36: Show thinking indicator when streaming with NO content yet
+    // (Ollama 7B on CPU takes 30-90s for first chunk — user needs visible feedback)
+    const isThinking = streaming && !content;
+
+    // Track elapsed seconds while thinking (resets when content arrives)
+    const [elapsed, setElapsed] = React.useState(0);
+    React.useEffect(() => {
+      if (!isThinking) { setElapsed(0); return; }
+      const start = Date.now();
+      const t = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+      return () => clearInterval(t);
+    }, [isThinking]);
+
     return (
       <div className={`msg-row ${role}`}>
         <div className="msg-avatar">{label}</div>
         <div>
-          <div className={`msg-bubble${streaming ? ' streaming' : ''}${errClass}`}>
-            {content}
-          </div>
+          {isThinking ? (
+            <div className="thinking-indicator">
+              <span className="dots"><span></span><span></span><span></span></span>
+              <span>MiganCore sedang berpikir...</span>
+              {elapsed > 5 && (
+                <span className="thinking-elapsed">· {elapsed}s</span>
+              )}
+              {elapsed > 30 && (
+                <span className="thinking-elapsed" style={{ color: 'var(--orange)' }}>
+                  · CPU 7B (lambat normal)
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className={`msg-bubble${streaming ? ' streaming' : ''}${errClass}`}>
+              {content}
+            </div>
+          )}
           {toolCount > 0 && (
             <div className="tool-badge">⚙ {toolCount} tool call{toolCount > 1 ? 's' : ''}</div>
           )}
