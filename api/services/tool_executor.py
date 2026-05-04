@@ -713,18 +713,25 @@ def _hyperx_available() -> bool:
 
 
 async def _hyperx_run(args: list[str], timeout: int = HYPERX_TIMEOUT_S) -> dict:
-    """Run hyperx.js with --json flag, return parsed JSON. Raises on failure."""
+    """Run hyperx.js with --json + --no-history flags, return parsed JSON.
+
+    --no-history is critical: HYPERX source mount is read-only, so writing
+    history.json fails (EROFS). Also a privacy win for ADO ethos.
+
+    cwd=/tmp because HYPERX may want to write working files; /tmp is always
+    writable in our container (no bind mount). HYPERX_HOME unset uses pwd.
+    """
     import subprocess
     if not _hyperx_available():
         raise ToolExecutionError(
             f"HYPERX not available — expected mount at {HYPERX_DIR}. "
             "Check docker-compose volumes."
         )
-    cmd = ["node", HYPERX_BIN, "--json", *args]
+    cmd = ["node", HYPERX_BIN, "--json", "--no-history", *args]
     try:
         proc = await asyncio.to_thread(
             subprocess.run, cmd,
-            capture_output=True, text=True, timeout=timeout, cwd=HYPERX_DIR,
+            capture_output=True, text=True, timeout=timeout, cwd="/tmp",
         )
     except subprocess.TimeoutExpired:
         raise ToolExecutionError(f"HYPERX timed out ({timeout}s) for args {args[:3]}")
