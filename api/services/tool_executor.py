@@ -715,11 +715,12 @@ def _onamix_available() -> bool:
     return os.path.isfile(ONAMIX_BIN) and Path("/usr/bin/node").exists()
 
 
-async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S) -> dict:
-    """Run the ONAMIX/HYPERX node binary with --json + --no-history flags.
+async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S, json_mode: bool = True) -> str | dict:
+    """Run the ONAMIX/HYPERX node binary, return parsed JSON or raw stdout.
 
-    --no-history flag prevents history.json writes (also privacy win).
-    cwd=/tmp because /tmp is always writable in our container.
+    json_mode=True: pass --json flag, parse JSON from stdout (URL fetch path).
+    json_mode=False: skip --json (used for search — hyperx CLI bug doesn't
+      JSON-encode search results in one-shot mode; we parse text output).
     """
     import subprocess
     if not _onamix_available():
@@ -727,7 +728,10 @@ async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S) -> dict:
             f"ONAMIX not available — expected mount at {ONAMIX_DIR}. "
             "Check docker-compose volumes."
         )
-    cmd = ["node", ONAMIX_BIN, "--json", "--no-history", *args]
+    base_args = ["--no-history"]
+    if json_mode:
+        base_args.insert(0, "--json")
+    cmd = ["node", ONAMIX_BIN, *base_args, *args]
     try:
         proc = await asyncio.to_thread(
             subprocess.run, cmd,
@@ -739,12 +743,66 @@ async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S) -> dict:
         raise ToolExecutionError(
             f"ONAMIX failed (rc={proc.returncode}): {proc.stderr[:300]}"
         )
+    if not json_mode:
+        return proc.stdout
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         raise ToolExecutionError(
             f"ONAMIX JSON parse error: {exc}. Raw: {proc.stdout[:200]}"
         )
+
+
+def _parse_onamix_search_text(stdout: str) -> tuple[list[dict], int | None]:
+    """Parse rendered ONAMIX search output text → list of {title, url, snippet}.
+
+    Format (from renderResults):
+      ━━ Search: "<query>" via <ENGINE> [<elapsed>ms] ━━
+      1. <Title>
+         <URL>
+         <snippet>
+      2. ...
+      'open <n>' to visit ...
+
+    We strip ANSI color codes then regex-parse numbered entries.
+    """
+    import re
+    # Strip ANSI escape sequences
+    stdout_clean = re.sub(r'\x1b\[[0-9;]*m', '', stdout)
+    lines = [l for l in stdout_clean.split("\n") if l.strip()]
+
+    # Try to extract elapsed
+    elapsed = None
+    for line in lines[:3]:
+        m = re.search(r"\[(\d+)ms\]", line)
+        if m:
+            elapsed = int(m.group(1))
+            break
+
+    # Find numbered entries
+    results = []
+    current = None
+    entry_re = re.compile(r"^\s*(\d+)\.\s+(.+)$")
+    url_re = re.compile(r"^\s+(https?://\S+)\s*$")
+    for line in lines:
+        m = entry_re.match(line)
+        if m:
+            if current:
+                results.append(current)
+            current = {"title": m.group(2).strip(), "url": "", "snippet": ""}
+            continue
+        if current and not current["url"]:
+            mu = url_re.match(line)
+            if mu:
+                current["url"] = mu.group(1)
+                continue
+        if current and current["url"] and not current["snippet"]:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("'") and not stripped.startswith("━"):
+                current["snippet"] = stripped[:300]
+    if current:
+        results.append(current)
+    return results, elapsed
 
 
 async def _onamix_get(args: dict, ctx: ToolContext) -> dict:
@@ -802,30 +860,27 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
         engine = "ddg"
     limit = max(1, min(int(args.get("limit", 10)), 30))
 
-    cli_args = [query, f"--engine={engine}", f"--limit={limit}"]
+    # ONAMIX one-shot search: skip --json (CLI bug routes --json through engine.get).
+    # Pass query as positional + --engine flag; parse rendered text output.
+    cli_args = [query, f"--engine={engine}"]
     logger.info("tool.onamix_search.start", q=query[:80], engine=engine, limit=limit)
-    data = await _onamix_run(cli_args)
-    results = data.get("results") or []
+    stdout = await _onamix_run(cli_args, json_mode=False)
+    results, elapsed = _parse_onamix_search_text(stdout)
+    if limit and len(results) > limit:
+        results = results[:limit]
     logger.info(
         "tool.onamix_search.done",
         q=query[:80],
         engine=engine,
         results=len(results),
-        elapsed=data.get("elapsed"),
+        elapsed=elapsed,
     )
     return {
         "query": query,
         "engine": engine,
-        "results": [
-            {
-                "title": r.get("title"),
-                "url": r.get("url"),
-                "snippet": (r.get("snippet") or "")[:300],
-            }
-            for r in results[:limit]
-        ],
+        "results": results,
         "count": len(results),
-        "elapsed_ms": data.get("elapsed"),
+        "elapsed_ms": elapsed,
         "source": "onamix",
     }
 
