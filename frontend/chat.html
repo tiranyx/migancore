@@ -951,7 +951,7 @@
   // ===========================
   // SSE STREAMING
   // ===========================
-  function startStream(agentId, message, convId, { onChunk, onStart, onDone, onError }) {
+  function startStream(agentId, message, convId, { onChunk, onStart, onDone, onError, onToolStart, onToolResult }) {
     const token = LS.get('token');
     const ctrl = new AbortController();
 
@@ -989,10 +989,15 @@
             if (!line.startsWith('data: ')) continue;
             try {
               const ev = JSON.parse(line.slice(6));
-              if (ev.type === 'start')  onStart?.(ev.conversation_id);
-              if (ev.type === 'chunk')  onChunk?.(ev.content || '');
-              if (ev.type === 'done')   onDone?.(ev.conversation_id);
-              if (ev.type === 'error')  onError?.(ev.message || 'Stream error');
+              if (ev.type === 'start')        onStart?.(ev.conversation_id);
+              if (ev.type === 'chunk')        onChunk?.(ev.content || '');
+              if (ev.type === 'done')         onDone?.(ev.conversation_id);
+              if (ev.type === 'error')        onError?.(ev.message || 'Stream error');
+              // Day 40 — tool execution events from hybrid stream endpoint
+              if (ev.type === 'tool_start')   onToolStart?.(ev.tools || []);
+              if (ev.type === 'tool_result')  onToolResult?.({
+                tool: ev.tool, ok: ev.ok, result: ev.result, error: ev.error,
+              });
               // ev.type === 'ping' — heartbeat, ignore silently
             } catch {}
           }
@@ -1525,8 +1530,56 @@
   // ===========================
   // MESSAGE COMPONENT
   // ===========================
+  // Day 40 — single tool execution chip rendered inside assistant bubble.
+  // Memoized by tool key (name + index) so the chip doesn't re-render on every
+  // streamed text chunk (research pitfall #2: re-rendering chips per SSE token).
+  const ToolChip = React.memo(function ToolChip({ tool }) {
+    const icon = tool.state === 'running' ? '⏳' : tool.state === 'error' ? '⚠' : '✓';
+    const color =
+      tool.state === 'running' ? 'var(--orange)' :
+      tool.state === 'error'   ? '#ff6b6b' :
+                                 'var(--green)';
+    const dim =
+      tool.state === 'running' ? 'var(--orange-dim)' :
+      tool.state === 'error'   ? 'rgba(255, 107, 107, 0.10)' :
+                                 'var(--green-dim)';
+    const border =
+      tool.state === 'running' ? 'var(--orange-border)' :
+      tool.state === 'error'   ? 'rgba(255, 107, 107, 0.40)' :
+                                 'var(--green-border)';
+    const previewable = tool.state !== 'running' && (tool.result !== null || tool.error);
+    const label = tool.state === 'running' ? `running ${tool.name}…` : tool.name;
+    return (
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 9px',
+        background: dim, color: color, border: `1px solid ${border}`,
+        borderRadius: 6, fontFamily: 'var(--mono)', fontSize: 11, marginRight: 6, marginBottom: 6,
+      }}>
+        <span>{icon}</span>
+        <span>{label}</span>
+        {previewable && (
+          <details style={{ display: 'inline', marginLeft: 4 }}>
+            <summary style={{ cursor: 'pointer', opacity: 0.7, fontSize: 10 }}>result</summary>
+            <pre style={{
+              maxWidth: 380, maxHeight: 140, overflow: 'auto',
+              background: 'var(--bg-0)', color: 'var(--text-dim)',
+              padding: 6, marginTop: 4, fontSize: 10, borderRadius: 4,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}>
+              {tool.error
+                ? `Error: ${tool.error}`
+                : (typeof tool.result === 'string'
+                    ? tool.result.slice(0, 800)
+                    : JSON.stringify(tool.result, null, 2).slice(0, 800))}
+            </pre>
+          </details>
+        )}
+      </div>
+    );
+  });
+
   function Msg({ msg, onRetry }) {
-    const { role, content, streaming, toolCount, error } = msg;
+    const { role, content, streaming, toolCount, error, tools } = msg;
     const label = role === 'user' ? 'YOU' : 'MC';
     const isError = !!error || (content || '').startsWith('⚠');
     const errClass = isError ? ' error-bubble' : '';
@@ -1568,6 +1621,14 @@
             </div>
           ) : (
             <div className={`msg-bubble${streaming ? ' streaming' : ''}${errClass}`}>
+              {/* Day 40 — tool execution chips inside the assistant bubble, before the streamed text */}
+              {role === 'assistant' && Array.isArray(tools) && tools.length > 0 && (
+                <div style={{ marginBottom: content ? 8 : 0 }}>
+                  {tools.map((t, i) => (
+                    <ToolChip key={`${t.name}-${i}`} tool={t} />
+                  ))}
+                </div>
+              )}
               {content}
             </div>
           )}
@@ -1597,7 +1658,8 @@
             </button>
           )}
 
-          {toolCount > 0 && (
+          {/* Day 40: legacy toolCount badge kept as fallback for sync /chat (no SSE tool events) */}
+          {!Array.isArray(tools) && toolCount > 0 && (
             <div className="tool-badge">⚙ {toolCount} tool call{toolCount > 1 ? 's' : ''}</div>
           )}
         </div>
@@ -1785,6 +1847,41 @@
           localConvId = cid;
           setConvId(cid);
           LS.set('mc_conv', cid);
+        },
+        // Day 40 — tool execution events from hybrid stream endpoint
+        onToolStart: (tools) => {
+          // Append running chips to message.tools[] (preserves order, idempotent on retry)
+          setMsgs(p => p.map(m =>
+            m.id === targetMsgId
+              ? {
+                  ...m,
+                  tools: [
+                    ...(m.tools || []),
+                    ...tools.map(t => ({ name: t.name, state: 'running', result: null, error: null })),
+                  ],
+                  toolCount: (m.toolCount || 0) + tools.length,
+                }
+              : m
+          ));
+        },
+        onToolResult: (ev) => {
+          setMsgs(p => p.map(m => {
+            if (m.id !== targetMsgId) return m;
+            // Find the most recent matching running chip and resolve it
+            const arr = [...(m.tools || [])];
+            for (let i = arr.length - 1; i >= 0; i--) {
+              if (arr[i].name === ev.tool && arr[i].state === 'running') {
+                arr[i] = {
+                  ...arr[i],
+                  state: ev.ok ? 'done' : 'error',
+                  result: ev.result,
+                  error: ev.error,
+                };
+                break;
+              }
+            }
+            return { ...m, tools: arr };
+          }));
         },
         onChunk: (chunk) => {
           if (!firstChunkAt) firstChunkAt = Date.now();
