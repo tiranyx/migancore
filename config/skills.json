@@ -361,9 +361,9 @@
       "cost_estimate": "free (local CPU render)"
     },
     {
-      "id": "hyperx_get",
-      "name": "HYPERX Get (anonymous browser fetch)",
-      "description": "Anonymous webpage fetch via HYPERX browser. Returns parsed text, links, images, meta. Use this for richer extraction than web_read (which only returns markdown). Privacy-friendly — no Chrome/Electron, supports proxy.",
+      "id": "onamix_get",
+      "name": "ONAMIX Get (anonymous browser fetch)",
+      "description": "Anonymous webpage fetch via ONAMIX browser. Returns parsed text, links, images, meta. Use this for richer extraction than web_read (which only returns markdown). Privacy-friendly — no Chrome/Electron, supports proxy.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
@@ -379,8 +379,8 @@
       "cost_estimate": "free (local Node.js subprocess)"
     },
     {
-      "id": "hyperx_search",
-      "name": "HYPERX Search (7-engine web search)",
+      "id": "onamix_search",
+      "name": "ONAMIX Search (7-engine web search)",
       "description": "MANDATORY for finding current information online with engine choice. Searches Google, DDG, Brave, Bing, Startpage, Yandex, or Ecosia. Anonymous, no API key needed. Use INSTEAD of web_search when user wants engine choice or richer results.",
       "handler": "builtin",
       "mcp_compatible": true,
@@ -403,8 +403,8 @@
       "cost_estimate": "free (local Node.js subprocess)"
     },
     {
-      "id": "hyperx_scrape",
-      "name": "HYPERX Scrape (regex extract)",
+      "id": "onamix_scrape",
+      "name": "ONAMIX Scrape (regex extract)",
       "description": "Scrape a webpage and extract structured data using regex selectors. Use when you need specific fields (price, title, author, date) from a known page structure. Returns key-value extracted dict.",
       "handler": "builtin",
       "mcp_compatible": true,
