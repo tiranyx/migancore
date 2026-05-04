@@ -186,4 +186,41 @@ docker compose logs -f api 2>&1 | grep -E "cai.judge|onboarding"
 
 ---
 
-**Day 37 = code complete. VPS deploy + manual E2E pending Fahmi action.**
+---
+
+## 🚀 LIVE DEPLOY UPDATE (Day 37 evening)
+
+Deploy dieksekusi langsung oleh Claude via SSH (VPS at `72.62.125.6`, key `sidix_session_key`, path `/opt/ado/`).
+
+### Deploy timeline + 4 live fixes
+| Commit | Fix | Why |
+|--------|-----|-----|
+| `734d439` | Initial v0.5.3 ship | feature complete |
+| `492b6d2` | Force Gemini 3-line + max_tokens 256→400 | Live test: Gemini returned 1 line only |
+| `e9693a6` | Switch primary to Kimi K2.6, Gemini fallback | Gemini still refuses 3 lines; Kimi compliant |
+| `a269538` | ID colloquial keywords + raw usecase passthrough | Live test: "ngoding"/"nulis" mapped to general bucket |
+
+Plus docker-compose.yml patched on VPS to inject `JUDGE_BACKEND` and `JUDGE_QUORUM_REQUIRE_CONSENSUS` (env vars weren't propagating to container).
+
+### Verified live
+- `https://api.migancore.com/health` → `{"version":"0.5.3"}` ✅
+- `https://app.migancore.com` → 66.5KB chat.html with OnboardingModal ✅
+- `JUDGE_BACKEND=quorum` confirmed in container env ✅
+- Onboarding endpoint dynamic (Kimi-backed) — verified domain-aware:
+  - **ID coding** (`ngoding Python backend`) → "Bantu saya bangun REST API dengan FastAPI..."
+  - **ID writing** (`nulis konten marketing`) → "Tulis copy Instagram untuk promo diskon 50%..."
+  - **EN research** (`research on DPO vs SimPO`) → "Compare DPO and SimPO alignment methods..."
+  - **ID general** (`brainstorm bisnis saas`) → "Bantu saya brainstorm ide SaaS untuk UMKM..."
+- Synthetic generator restarted with `target_pairs=1000`, run_id `07af1184-...`, status `running`
+
+### Pending (background, autonomous)
+- Synthetic gen producing pairs via Kimi+Gemini quorum (Monitor active)
+- First pair via quorum = empirical proof of velocity gain (target 5-10x vs Ollama-only)
+
+### Lessons learned (live deploy added 4 fresh ones)
+8. **Docker compose only wires env vars listed explicitly.** `.env` ≠ container env. Always patch compose for new vars.
+9. **Gemini 2.5 Flash sometimes refuses count instructions.** "EXACTLY 3" → returned 1. Kimi follows count better, esp. ID.
+10. **Pass raw user input to LLM, normalized version only for hardcoded fallback lookup.** Normalization throws away signal.
+11. **Live test caught 3 issues automated tests would have missed.** Worth deploying immediately even with WIP code.
+
+**Day 37 = SHIPPED + DEPLOYED + VERIFIED LIVE. Onboarding dynamic-prompt path proven working through Kimi.**
