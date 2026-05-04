@@ -469,6 +469,95 @@ def get_mcp_app():
         scope["state"]["subject"] = subject
 
         logger.info("mcp.auth.ok", subject=subject, tenant_id=tenant_id, path=path)
+
+        # Day 40 Smithery compat: detect clients that DON'T speak SSE.
+        # FastMCP's Streamable HTTP transport always wraps responses in
+        #   event: message
+        #   data: {...json...}
+        # which Smithery (and several other gateways) do not unwrap. Workaround:
+        #  1. Always inject text/event-stream into Accept so FastMCP processes the
+        #     request without 406'ing.
+        #  2. Capture the SSE response, extract the JSON-RPC payload from `data:`
+        #     lines, and return plain JSON to the client when they didn't ask for SSE.
+        accept_header = b""
+        for k, v in scope.get("headers", []):
+            if k.lower() == b"accept":
+                accept_header = v
+                break
+        client_wants_sse = b"text/event-stream" in accept_header
+        client_wants_json_only = (
+            (b"application/json" in accept_header or accept_header == b"" or accept_header == b"*/*")
+            and not client_wants_sse
+        )
+
+        if client_wants_json_only:
+            # Inject SSE Accept so FastMCP doesn't 406
+            new_headers = []
+            seen_accept = False
+            for k, v in scope.get("headers", []):
+                if k.lower() == b"accept":
+                    new_headers.append((k, b"application/json, text/event-stream"))
+                    seen_accept = True
+                else:
+                    new_headers.append((k, v))
+            if not seen_accept:
+                new_headers.append((b"accept", b"application/json, text/event-stream"))
+            scope = {**scope, "headers": new_headers}
+
+            # Capture SSE response and unwrap
+            captured_status = {"v": 200}
+            captured_headers = {"v": []}
+            body_chunks: list[bytes] = []
+
+            async def capture_send(msg):
+                if msg["type"] == "http.response.start":
+                    captured_status["v"] = msg["status"]
+                    captured_headers["v"] = list(msg.get("headers", []))
+                elif msg["type"] == "http.response.body":
+                    body_chunks.append(msg.get("body", b""))
+                    if not msg.get("more_body", False):
+                        raw = b"".join(body_chunks).decode("utf-8", errors="replace")
+                        # Parse SSE: collect every JSON object from `data:` lines
+                        payloads = []
+                        for line in raw.splitlines():
+                            line = line.strip()
+                            if line.startswith("data:"):
+                                blob = line[5:].lstrip()
+                                try:
+                                    payloads.append(json.loads(blob))
+                                except json.JSONDecodeError:
+                                    pass
+                        # Decide response shape: single object if 1 payload, else array
+                        if len(payloads) == 1:
+                            unwrapped = json.dumps(payloads[0]).encode()
+                        elif payloads:
+                            unwrapped = json.dumps(payloads).encode()
+                        else:
+                            # Nothing to unwrap — pass through original body (may be JSON already)
+                            unwrapped = b"".join(body_chunks)
+                        # Replace content-type / content-length headers
+                        out_headers = [
+                            (k, v) for k, v in captured_headers["v"]
+                            if k.lower() not in (b"content-type", b"content-length", b"transfer-encoding")
+                        ]
+                        out_headers.extend([
+                            (b"content-type", b"application/json"),
+                            (b"content-length", str(len(unwrapped)).encode()),
+                        ])
+                        await send({
+                            "type": "http.response.start",
+                            "status": captured_status["v"],
+                            "headers": out_headers,
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": unwrapped,
+                        })
+
+            await asgi_app(scope, receive, capture_send)
+            return
+
+        # Native SSE client — pass through untouched
         await asgi_app(scope, receive, send)
 
     return jwt_auth_asgi
