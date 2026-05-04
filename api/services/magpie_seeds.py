@@ -37,14 +37,17 @@ import structlog
 
 logger = structlog.get_logger()
 
-# HuggingFace dataset Parquet URL (public, no auth)
-# Magpie-Qwen2.5-Pro-300K-Filtered ships as a single train split
-_MAGPIE_PARQUET_URL = (
+# HuggingFace dataset Parquet URLs (public, no auth)
+# Magpie-Qwen2.5-Pro-300K-Filtered is sharded into 5 parquet files (verified via HF API)
+_MAGPIE_BASE_URL = (
     "https://huggingface.co/datasets/Magpie-Align/Magpie-Qwen2.5-Pro-300K-Filtered/"
-    "resolve/main/data/train-00000-of-00001.parquet"
+    "resolve/main/data/"
 )
+_MAGPIE_SHARDS = [f"train-{i:05d}-of-00005.parquet" for i in range(5)]
 _MAGPIE_CACHE_DIR = Path("/app/.cache")
 _MAGPIE_CACHE_FILE = _MAGPIE_CACHE_DIR / "magpie_300k_instructions.json"
+# Quick-mode: download only first shard (~60K prompts) to validate pipeline fast
+_MAGPIE_QUICK_SHARD_ONLY = (os.environ.get("MAGPIE_QUICK") or "").lower() in ("1", "true", "yes")
 
 # Memory cache to avoid re-reading the JSON on every round
 _in_memory_cache: list[str] | None = None
@@ -52,8 +55,11 @@ _download_lock = asyncio.Lock()
 
 
 async def _download_and_extract() -> list[str]:
-    """Download the Magpie parquet and extract the 'instruction' column.
-    Saves both the raw parquet (transient) and processed JSON (persistent cache).
+    """Download all Magpie parquet shards and extract the 'instruction' column.
+    Saves processed JSON (~30MB) to /app/.cache for instant re-loads.
+
+    With MAGPIE_QUICK=1 env: downloads only first shard (~60K prompts) for faster
+    initial verify; remove flag and re-download to get full 300K.
     """
     try:
         import pyarrow.parquet as pq
@@ -62,41 +68,45 @@ async def _download_and_extract() -> list[str]:
         logger.error("magpie.pyarrow_missing", note="Install: pip install pyarrow")
         raise RuntimeError("pyarrow not installed (needed for Magpie parquet read)")
 
-    logger.info("magpie.download.start", url=_MAGPIE_PARQUET_URL)
+    shards_to_fetch = _MAGPIE_SHARDS[:1] if _MAGPIE_QUICK_SHARD_ONLY else _MAGPIE_SHARDS
+    logger.info("magpie.download.start", shards=len(shards_to_fetch), quick=_MAGPIE_QUICK_SHARD_ONLY)
+
+    all_instructions: list[str] = []
     async with httpx.AsyncClient(timeout=httpx.Timeout(600.0), follow_redirects=True) as client:
-        resp = await client.get(_MAGPIE_PARQUET_URL)
-        resp.raise_for_status()
-        raw = resp.content
+        for shard_name in shards_to_fetch:
+            url = _MAGPIE_BASE_URL + shard_name
+            try:
+                resp = await client.get(url)
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                logger.warning("magpie.shard_failed", shard=shard_name, status=exc.response.status_code)
+                continue
+            raw = resp.content
+            logger.info("magpie.shard_downloaded", shard=shard_name, bytes=len(raw))
 
-    logger.info("magpie.download.done", bytes=len(raw))
+            table = pq.read_table(io.BytesIO(raw))
+            column_names = table.column_names
+            target = "instruction" if "instruction" in column_names else column_names[0]
+            instructions_arr = table.column(target).to_pylist()
 
-    # Read parquet from in-memory bytes
-    table = pq.read_table(io.BytesIO(raw))
-    column_names = table.column_names
+            kept = [
+                s.strip() for s in instructions_arr
+                if isinstance(s, str) and 20 <= len(s.strip()) <= 1500
+            ]
+            logger.info("magpie.shard_parsed", shard=shard_name, total=len(instructions_arr), kept=len(kept))
+            all_instructions.extend(kept)
 
-    # The dataset uses 'instruction' field; verify
-    target = "instruction" if "instruction" in column_names else column_names[0]
-    instructions_arr = table.column(target).to_pylist()
+    if not all_instructions:
+        raise RuntimeError("No Magpie shards downloaded successfully")
 
-    # Filter: non-empty strings, reasonable length (avoid degenerate cases)
-    instructions = [
-        s.strip() for s in instructions_arr
-        if isinstance(s, str) and 20 <= len(s.strip()) <= 1500
-    ]
-
-    logger.info(
-        "magpie.parsed",
-        column=target,
-        total=len(instructions_arr),
-        kept=len(instructions),
-    )
+    logger.info("magpie.parsed_total", count=len(all_instructions))
 
     # Persist to cache
     _MAGPIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with open(_MAGPIE_CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(instructions, f, ensure_ascii=False)
+        json.dump(all_instructions, f, ensure_ascii=False)
 
-    return instructions
+    return all_instructions
 
 
 async def get_magpie_seeds(force_refresh: bool = False) -> list[str]:
