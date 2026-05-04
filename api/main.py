@@ -159,6 +159,52 @@ async def lifespan(app: FastAPI):
         logger.error("onamix.mcp.lifespan_start_failed", error=str(exc))
         onamix_mcp = None
 
+    # 8. Day 45 (lesson #45): Auto-resume synthetic generation if Redis
+    #    state shows an interrupted auto-rerun run. Background asyncio
+    #    tasks die with the container — without this, every deploy
+    #    silently kills the DPO flywheel until manual restart.
+    #
+    #    Conditions to resume:
+    #      - Redis target_pairs is set (auto-rerun mode, not single-shot)
+    #      - cumulative_stored < target_pairs (work remains)
+    #      - status not in {idle, completed, stopped} (was actively running)
+    try:
+        from services.synthetic_pipeline import (
+            get_synthetic_status,
+            start_synthetic_generation,
+        )
+        st = await get_synthetic_status()
+        target = st.get("target_pairs")
+        cumulative = st.get("cumulative_stored", 0)
+        prev_status = (st.get("status") or "idle").lower()
+        if target and cumulative < target and prev_status not in (
+            "idle", "completed", "stopped", "cancelled"
+        ):
+            logger.info(
+                "synthetic.auto_resume.attempt",
+                prev_run_id=st.get("run_id"),
+                prev_status=prev_status,
+                cumulative=cumulative,
+                target=target,
+            )
+            ok, new_run_id, msg = await start_synthetic_generation(target_pairs=target)
+            logger.info(
+                "synthetic.auto_resume.result",
+                ok=ok,
+                new_run_id=new_run_id,
+                message=msg,
+            )
+        else:
+            logger.info(
+                "synthetic.auto_resume.skipped",
+                reason="no incomplete auto-rerun in redis",
+                target=target,
+                cumulative=cumulative,
+                prev_status=prev_status,
+            )
+    except Exception as exc:
+        logger.warning("synthetic.auto_resume.error", error=str(exc))
+
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
@@ -190,7 +236,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.5.13",
+    version="0.5.14",
     lifespan=lifespan,
 )
 

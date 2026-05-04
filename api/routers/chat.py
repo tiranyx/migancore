@@ -148,7 +148,11 @@ async def chat(
         db, data, agent, current_user
     )
 
-    messages = _build_messages(system_prompt, history, data.message)
+    # Day 45 — fold cached summary if available (Innovation #1)
+    history, prepend_summary = await _apply_cached_summary(
+        str(conversation.id), history
+    )
+    messages = _build_messages(system_prompt, history, data.message, prepend_summary=prepend_summary)
 
     # Build tools spec from agent's declared tools in agents.json
     agent_tools = agent_cfg.get("default_tools", []) if agent_cfg else []
@@ -332,10 +336,15 @@ async def chat_stream(
         await db.commit()
     # DB session closes here — before streaming starts
 
+    # Day 45 — fold cached summary if available (Innovation #1)
+    history, prepend_summary = await _apply_cached_summary(
+        str(conversation_id), history
+    )
     messages = _build_messages(
         system_prompt,
         history,  # history loaded before session closed
         data.message,
+        prepend_summary=prepend_summary,
     )
 
     # Day 39 — tool spec + executor for the streaming generator
@@ -512,6 +521,24 @@ async def chat_stream(
             )
             _background_tasks.add(_t)
             _t.add_done_callback(_background_tasks.discard)
+
+            # Day 45 — Innovation #1: trigger conv summarization if threshold met.
+            # Build the full message list including new user msg + assistant response,
+            # exclude the synthetic system prompt + summary (those are not "history").
+            try:
+                from services.conv_summarizer import trigger_background_summarization
+                # run_messages is the full list at end of stream (incl. all tool turns
+                # and the assistant final answer accumulated). Strip leading system msg(s)
+                # so we summarize only role in {user, assistant, tool}.
+                hist_for_summary = [
+                    m for m in run_messages if m.get("role") in ("user", "assistant", "tool")
+                ]
+                # Append the just-streamed assistant final text if not already last
+                if not hist_for_summary or hist_for_summary[-1].get("role") != "assistant" or hist_for_summary[-1].get("content") != full_text:
+                    hist_for_summary.append({"role": "assistant", "content": full_text})
+                await trigger_background_summarization(str(conversation_id), hist_for_summary)
+            except Exception as _sum_exc:
+                logger.warning("chat.summarizer_trigger_failed", error=str(_sum_exc))
 
         except asyncio.CancelledError:
             # Day 36: client disconnected (Stop button or browser close)
@@ -830,21 +857,68 @@ def _build_messages(
     system_prompt: str,
     history: list[Message],
     user_message: str,
+    prepend_summary: dict | None = None,
 ) -> list[dict]:
     """Build Ollama messages list from system prompt + history + new message.
 
     Day 20: Applies token-budget trimming before building message list.
-    Each history message is capped at MAX_MSG_CONTENT_CHARS, then oldest
-    messages are dropped until total history ≤ MAX_HISTORY_TOKENS.
-    This prevents context overflow on Ollama (NUM_CTX=4096).
+    Day 45: Optional `prepend_summary` injects a synthetic system message
+    representing summarized older turns (Innovation #1 conv_summarizer).
+    The caller is responsible for stripping the summarized head messages
+    from `history` before passing in.
     """
     history_dicts = [{"role": msg.role, "content": msg.content} for msg in history]
     trimmed = _trim_history_to_budget(history_dicts)
 
     messages = [{"role": "system", "content": system_prompt}]
+    if prepend_summary and isinstance(prepend_summary, dict) and prepend_summary.get("content"):
+        messages.append(prepend_summary)
     messages.extend(trimmed)
     messages.append({"role": "user", "content": user_message})
     return messages
+
+
+async def _apply_cached_summary(
+    conv_id: str,
+    history: list[Message],
+) -> tuple[list[Message], dict | None]:
+    """Day 45 — if a Redis-cached summary covers the head of `history`, return
+    (truncated_history, summary_message). Else return (history, None) unchanged.
+
+    Cache contract: `head_message_count` says how many EARLIEST messages of
+    the conversation are covered by the summary. We drop exactly that many
+    from `history` and inject the summary as a synthetic system message.
+
+    Silent failure on cache error — chat path stays usable.
+    """
+    if not conv_id:
+        return history, None
+    try:
+        from services.conv_summarizer import get_cached_summary, format_summary_as_system_message
+        cached = await get_cached_summary(str(conv_id))
+        if not cached:
+            return history, None
+        head_count = int(cached.get("head_message_count") or 0)
+        summary = cached.get("summary") or {}
+        if head_count <= 0 or not summary:
+            return history, None
+        # Only fold if there's still meaningful tail beyond what's summarized
+        if head_count >= len(history):
+            return history, None
+        truncated = history[head_count:]
+        sys_msg = format_summary_as_system_message(summary)
+        if not sys_msg.get("content"):
+            return history, None
+        logger.info(
+            "chat.summary_applied",
+            conv_id=str(conv_id),
+            head_dropped=head_count,
+            tail_kept=len(truncated),
+        )
+        return truncated, sys_msg
+    except Exception as exc:
+        logger.warning("chat.summary_apply_error", conv_id=str(conv_id), error=str(exc))
+        return history, None
 
 
 async def _persist_assistant_message(
