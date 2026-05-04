@@ -23,7 +23,10 @@ class Settings(BaseSettings):
     JWT_PRIVATE_KEY_PATH: str = "/etc/ado/keys/private.pem"
     JWT_PUBLIC_KEY_PATH: str = "/etc/ado/keys/public.pem"
     JWT_ALGORITHM: str = "RS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    # Day 43: bumped 15 -> 60 min (was forcing user 401 errors mid-debug session).
+    # Frontend now does silent refresh on 401 anyway, but longer TTL = fewer
+    # refresh round-trips + better UX during streaming chats (CPU 7B 30-90s).
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     JWT_ISSUER: str = "https://api.migancore.com"
     JWT_AUDIENCE: str = "migancore-api"

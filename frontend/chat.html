@@ -902,13 +902,56 @@
   // ===========================
   // API HELPERS
   // ===========================
-  async function apiFetch(path, opts = {}) {
+  // Day 43 — JWT silent refresh state. Single-flight: only one /auth/refresh
+  // in-flight at a time; concurrent 401s wait for the same promise.
+  let _refreshInFlight = null;
+
+  async function _doRefreshToken() {
+    const rt = LS.get('refresh_token');
+    if (!rt) return false;
+    try {
+      const r = await fetch(`${API_BASE}/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!r.ok) return false;
+      const data = await r.json();
+      if (!data.access_token) return false;
+      LS.set('token', data.access_token);
+      if (data.refresh_token) LS.set('refresh_token', data.refresh_token);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function tryRefreshToken() {
+    if (!_refreshInFlight) {
+      _refreshInFlight = _doRefreshToken().finally(() => {
+        // Allow next refresh attempt after a short cooldown
+        setTimeout(() => { _refreshInFlight = null; }, 1000);
+      });
+    }
+    return _refreshInFlight;
+  }
+
+  async function apiFetch(path, opts = {}, _retried = false) {
     const token = LS.get('token');
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     if (opts.headers) Object.assign(headers, opts.headers);
 
     const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+
+    // Day 43 — silent JWT refresh on 401, retry once
+    if (res.status === 401 && !_retried && LS.get('refresh_token')) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) {
+        return apiFetch(path, opts, true);  // retry once with new token
+      }
+    }
+
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -968,20 +1011,34 @@
   // SSE STREAMING
   // ===========================
   function startStream(agentId, message, convId, { onChunk, onStart, onDone, onError, onToolStart, onToolResult }) {
-    const token = LS.get('token');
     const ctrl = new AbortController();
+
+    // Day 43 — helper to fire the actual stream POST. Used for original call AND
+    // for retry after silent JWT refresh on 401.
+    const doFetch = () => {
+      const token = LS.get('token');
+      return fetch(`${API_BASE}/v1/agents/${agentId}/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message, conversation_id: convId || null }),
+        signal: ctrl.signal,
+      });
+    };
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/v1/agents/${agentId}/chat/stream`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({ message, conversation_id: convId || null }),
-          signal: ctrl.signal,
-        });
+        let res = await doFetch();
+
+        // Day 43 — silent JWT refresh on 401, retry once
+        if (res.status === 401 && LS.get('refresh_token')) {
+          const refreshed = await tryRefreshToken();
+          if (refreshed) {
+            res = await doFetch();
+          }
+        }
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
