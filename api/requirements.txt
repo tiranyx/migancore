@@ -45,6 +45,12 @@ pyyaml>=6.0  # Day 31: personality templates (config/personalities.yaml)
 # Day 26 — MCP Server (Streamable HTTP)
 mcp>=1.27.0
 
+# Day 38 — Magpie-Qwen2.5-Pro-300K-Filtered seed loader (HuggingFace parquet read)
+pyarrow>=15.0
+
+# Day 38 — multipart form for STT audio upload
+python-multipart>=0.0.18
+
 # Testing
 pytest==8.3.0
 pytest-asyncio==0.24.0
