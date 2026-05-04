@@ -416,6 +416,118 @@
       "permissions": ["web.read"],
       "npc_assignable": true,
       "cost_estimate": "free (local Node.js subprocess)"
+    },
+    {
+      "id": "onamix_post",
+      "name": "ONAMIX POST",
+      "description": "Send POST request anonymously via ONAMIX (form-encoded or JSON body). Use for API calls, form submission, or scraping endpoints that require POST. Returns title + text + status code.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Target URL (http/https)." },
+          "body": { "description": "Request body — string for form, object for JSON.", "type": ["string", "object"] },
+          "json": { "type": "boolean", "description": "Send as application/json (default: true if body is object)." }
+        },
+        "required": ["url", "body"]
+      },
+      "permissions": ["web.write"],
+      "npc_assignable": true,
+      "cost_estimate": "free (MCP stdio)"
+    },
+    {
+      "id": "onamix_crawl",
+      "name": "ONAMIX Crawl (multi-page)",
+      "description": "Crawl up to 50 pages from a seed URL within the same origin. Use to map a site or collect content across multiple pages. Returns list of {url, title, text} per page.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Seed URL." },
+          "maxPages": { "type": "integer", "description": "Max pages to crawl (default 10, hard cap 50).", "default": 10 },
+          "sameOrigin": { "type": "boolean", "description": "Restrict to same origin (default true).", "default": true }
+        },
+        "required": ["url"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (MCP stdio)"
+    },
+    {
+      "id": "onamix_history",
+      "name": "ONAMIX History",
+      "description": "List recent ONAMIX fetch history (URLs visited this session). Use to debug, re-visit, or verify what the brain has already browsed. Optional filter by type.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer", "description": "Max entries to return (default 50).", "default": 50 },
+          "filter": { "type": "string", "description": "Optional type filter: get|search|scrape|post." }
+        }
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (MCP stdio)"
+    },
+    {
+      "id": "onamix_links",
+      "name": "ONAMIX Links Extract",
+      "description": "Fetch a URL and return only its outgoing links (filtered by substring if provided). Cheaper than onamix_get when you only need link discovery, not content.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "URL to extract links from." },
+          "filter": { "type": "string", "description": "Substring to filter links (matches URL or anchor text, case-insensitive)." }
+        },
+        "required": ["url"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (MCP stdio)"
+    },
+    {
+      "id": "onamix_config",
+      "name": "ONAMIX Config",
+      "description": "Get or set ONAMIX engine configuration (default search engine, user agent, proxy, etc.). Use sparingly — affects all subsequent ONAMIX calls.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "get": { "type": "boolean", "description": "Return current config (default: true if no 'set')." },
+          "set": { "type": "object", "description": "Config patch to apply (e.g. {engine: 'brave', userAgent: '...'})." }
+        }
+      },
+      "permissions": ["admin.tools"],
+      "npc_assignable": false,
+      "cost_estimate": "free (MCP stdio)"
+    },
+    {
+      "id": "onamix_multi",
+      "name": "ONAMIX Multi-Fetch (parallel)",
+      "description": "Fetch up to 10 URLs in parallel via ONAMIX. Use when you need content from multiple pages and want to save round-trip time. Returns array of {url, title, text, status} per URL.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of URLs (max 10 enforced)."
+          },
+          "raw": { "type": "boolean", "description": "Return raw HTML instead of parsed text.", "default": false }
+        },
+        "required": ["urls"]
+      },
+      "permissions": ["web.read"],
+      "npc_assignable": true,
+      "cost_estimate": "free (MCP stdio)"
     }
   ]
 }

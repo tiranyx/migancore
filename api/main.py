@@ -138,9 +138,37 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("memory_pruner.start_failed", error=str(exc))
 
+    # 7. Day 44: Start ONAMIX MCP stdio singleton client (Track A)
+    #    Replaces per-call subprocess.run pattern (Day 42) — eliminates
+    #    Node.js cold-start cost per request, unlocks 6 new tools.
+    onamix_mcp = None
+    try:
+        from services.onamix_mcp import OnamixMCPClient, set_global_client
+        onamix_mcp = OnamixMCPClient()
+        ok = await onamix_mcp.start()
+        if ok:
+            set_global_client(onamix_mcp)
+            logger.info("onamix.mcp.lifespan_started")
+        else:
+            logger.warning(
+                "onamix.mcp.lifespan_start_skipped",
+                reason="binary unavailable or session open failed — falling back to subprocess",
+            )
+            onamix_mcp = None
+    except Exception as exc:
+        logger.error("onamix.mcp.lifespan_start_failed", error=str(exc))
+        onamix_mcp = None
+
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
+
+    # Tear down ONAMIX MCP client
+    if onamix_mcp is not None:
+        try:
+            await onamix_mcp.stop()
+        except Exception as exc:
+            logger.error("onamix.mcp.lifespan_stop_failed", error=str(exc))
 
     # Tear down memory pruner
     if pruner_task is not None and not pruner_task.done():
@@ -162,7 +190,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.5.12",
+    version="0.5.13",
     lifespan=lifespan,
 )
 

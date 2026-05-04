@@ -831,6 +831,9 @@ async def _onamix_get(args: dict, ctx: ToolContext) -> dict:
 
     Returns parsed text + links + images + meta + status.
     Use this for richer extraction than web_read (which only returns markdown).
+
+    Day 44: prefer persistent MCP stdio client (8-10x faster); fall back
+    to subprocess.run if MCP client unavailable / not yet started.
     """
     url = (args.get("url") or "").strip()
     if not url:
@@ -839,12 +842,35 @@ async def _onamix_get(args: dict, ctx: ToolContext) -> dict:
         raise ToolExecutionError("URL must start with http(s)://")
     raw = bool(args.get("raw", False))
 
-    cli_args = [url]
-    if raw:
-        cli_args.append("--raw")
-
     logger.info("tool.onamix_get.start", url=url[:120], raw=raw)
-    data = await _onamix_run(cli_args)
+
+    # Day 44: try persistent MCP client first
+    try:
+        from .onamix_mcp import get_global_client
+        client = get_global_client()
+    except Exception:
+        client = None
+
+    if client is not None and client.is_alive():
+        try:
+            data = await client.call_tool("hyperx_get", {"url": url, "raw": raw})
+            transport = "mcp"
+        except ToolExecutionError:
+            # Fall through to subprocess fallback
+            data = None
+            transport = "subprocess"
+        else:
+            transport = "mcp"
+    else:
+        data = None
+        transport = "subprocess"
+
+    if data is None:
+        cli_args = [url]
+        if raw:
+            cli_args.append("--raw")
+        data = await _onamix_run(cli_args)
+
     logger.info(
         "tool.onamix_get.done",
         url=url[:120],
@@ -852,18 +878,20 @@ async def _onamix_get(args: dict, ctx: ToolContext) -> dict:
         text_len=len(data.get("text") or ""),
         links=len(data.get("links") or []),
         elapsed=data.get("elapsed"),
+        transport=transport,
     )
     text = (data.get("text") or "")[:30_000]
     return {
         "url": data.get("url"),
         "final_url": data.get("finalUrl"),
         "status": data.get("status"),
-        "title": data.get("meta", {}).get("title"),
+        "title": (data.get("meta") or {}).get("title") if isinstance(data.get("meta"), dict) else data.get("title"),
         "text": text,
         "links": (data.get("links") or [])[:50],
         "images": (data.get("images") or [])[:30],
         "elapsed_ms": data.get("elapsed"),
         "source": "onamix",
+        "transport": transport,
     }
 
 
@@ -887,10 +915,41 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
     #    into query string (regex /^--[^\s]+\s*/g matches once)
     # Workaround: pass --engine FIRST (single leading flag), query LAST, no
     # other flags. Mount is RW so history.json writes work without --no-history.
-    cli_args = [f"--engine={engine}", query]
     logger.info("tool.onamix_search.start", q=query[:80], engine=engine, limit=limit)
-    stdout = await _onamix_run_search(cli_args)
-    results, elapsed = _parse_onamix_search_text(stdout)
+
+    # Day 44: prefer persistent MCP client (clean structured response — no regex parser needed)
+    try:
+        from .onamix_mcp import get_global_client
+        client = get_global_client()
+    except Exception:
+        client = None
+
+    if client is not None and client.is_alive():
+        try:
+            data = await client.call_tool(
+                "hyperx_search",
+                {"query": query, "engine": engine, "limit": limit},
+            )
+            # MCP server returns { query, engine, elapsed, results: [{title, url, snippet}, ...] }
+            results = data.get("results") or []
+            elapsed = data.get("elapsed")
+            transport = "mcp"
+        except ToolExecutionError:
+            data = None
+            transport = "subprocess"
+            results = []
+            elapsed = None
+    else:
+        data = None
+        transport = "subprocess"
+        results = []
+        elapsed = None
+
+    if data is None:
+        cli_args = [f"--engine={engine}", query]
+        stdout = await _onamix_run_search(cli_args)
+        results, elapsed = _parse_onamix_search_text(stdout)
+
     if limit and len(results) > limit:
         results = results[:limit]
     logger.info(
@@ -899,6 +958,7 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
         engine=engine,
         results=len(results),
         elapsed=elapsed,
+        transport=transport,
     )
     return {
         "query": query,
@@ -907,6 +967,7 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
         "count": len(results),
         "elapsed_ms": elapsed,
         "source": "onamix",
+        "transport": transport,
     }
 
 
@@ -926,8 +987,41 @@ async def _onamix_scrape(args: dict, ctx: ToolContext) -> dict:
     if not isinstance(selectors, dict) or not selectors:
         raise ToolExecutionError("'selectors' dict required: {field: regex}")
 
-    cli_args = [url, "--raw"]
     logger.info("tool.onamix_scrape.start", url=url[:120], fields=list(selectors.keys()))
+
+    # Day 44: prefer MCP — server-side handles regex extraction, lighter response
+    try:
+        from .onamix_mcp import get_global_client
+        client = get_global_client()
+    except Exception:
+        client = None
+
+    if client is not None and client.is_alive():
+        try:
+            data = await client.call_tool(
+                "hyperx_scrape",
+                {"url": url, "selectors": selectors},
+            )
+            # MCP server returns { url, status, extracted: {field: value} }
+            logger.info(
+                "tool.onamix_scrape.done",
+                url=url[:120],
+                extracted_fields=sum(1 for v in (data.get("extracted") or {}).values() if v),
+                total_fields=len(selectors),
+                transport="mcp",
+            )
+            return {
+                "url": data.get("url") or url,
+                "status": data.get("status"),
+                "extracted": data.get("extracted") or {},
+                "source": "onamix",
+                "transport": "mcp",
+            }
+        except ToolExecutionError:
+            pass  # fall through to subprocess
+
+    # Subprocess fallback (original path)
+    cli_args = [url, "--raw"]
     data = await _onamix_run(cli_args)
     html = data.get("html") or ""
     if not html:
@@ -947,12 +1041,205 @@ async def _onamix_scrape(args: dict, ctx: ToolContext) -> dict:
         url=url[:120],
         extracted_fields=sum(1 for v in extracted.values() if v),
         total_fields=len(selectors),
+        transport="subprocess",
     )
     return {
         "url": url,
         "status": data.get("status"),
         "extracted": extracted,
         "source": "onamix",
+        "transport": "subprocess",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Day 44 — 6 NEW ONAMIX tools (MCP-only, no subprocess fallback)
+#
+# These are passthrough wrappers around the persistent MCP client. If the
+# MCP client is unavailable, the call fails fast (no subprocess wrappers
+# exist for these — they're new capability surface unlocked by Day 44).
+# ---------------------------------------------------------------------------
+def _require_onamix_mcp():
+    from .onamix_mcp import get_global_client
+    client = get_global_client()
+    if client is None or not client.is_alive():
+        raise ToolExecutionError(
+            "ONAMIX MCP client not started — these tools require persistent stdio session. "
+            "Check API startup logs for 'onamix.mcp.lifespan_started'."
+        )
+    return client
+
+
+async def _onamix_post(args: dict, ctx: ToolContext) -> dict:
+    """POST request via ONAMIX (form or JSON body). Returns title + text + status."""
+    url = (args.get("url") or "").strip()
+    if not url or not url.startswith(("http://", "https://")):
+        raise ToolExecutionError("Valid 'url' (http/https) is required")
+    body = args.get("body")
+    if body is None:
+        raise ToolExecutionError("'body' is required (string or object)")
+    json_body = bool(args.get("json", isinstance(body, dict)))
+
+    client = _require_onamix_mcp()
+    logger.info("tool.onamix_post.start", url=url[:120], json=json_body)
+    data = await client.call_tool("hyperx_post", {"url": url, "body": body, "json": json_body})
+    logger.info("tool.onamix_post.done", url=url[:120], status=data.get("status"))
+    return {
+        "url": data.get("url") or url,
+        "status": data.get("status"),
+        "title": data.get("title"),
+        "text": (data.get("text") or "")[:30_000],
+        "source": "onamix",
+        "transport": "mcp",
+    }
+
+
+async def _onamix_crawl(args: dict, ctx: ToolContext) -> dict:
+    """Multi-page same-origin crawl via ONAMIX. Max 50 pages.
+
+    Args:
+      url: seed URL
+      maxPages: int (default 10, max 50)
+      sameOrigin: bool (default True)
+    """
+    url = (args.get("url") or "").strip()
+    if not url or not url.startswith(("http://", "https://")):
+        raise ToolExecutionError("Valid 'url' (http/https) is required")
+    max_pages = max(1, min(int(args.get("maxPages", 10)), 50))
+    same_origin = bool(args.get("sameOrigin", True))
+
+    client = _require_onamix_mcp()
+    logger.info("tool.onamix_crawl.start", url=url[:120], max_pages=max_pages, same_origin=same_origin)
+    # Crawl can take a while — bump timeout
+    data = await client.call_tool(
+        "hyperx_crawl",
+        {"url": url, "maxPages": max_pages, "sameOrigin": same_origin},
+        timeout_s=120.0,
+    )
+    pages = data.get("pages") or data.get("results") or []
+    logger.info("tool.onamix_crawl.done", url=url[:120], pages=len(pages) if isinstance(pages, list) else 0)
+    return {
+        "seed_url": url,
+        "max_pages": max_pages,
+        "same_origin": same_origin,
+        "pages": pages if isinstance(pages, list) else [],
+        "count": len(pages) if isinstance(pages, list) else 0,
+        "source": "onamix",
+        "transport": "mcp",
+    }
+
+
+async def _onamix_history(args: dict, ctx: ToolContext) -> dict:
+    """Recent ONAMIX fetch history.
+
+    Args:
+      limit: int (default 50)
+      filter: 'get'|'search'|'scrape'|... (optional)
+    """
+    limit = max(1, min(int(args.get("limit", 50)), 200))
+    filt = args.get("filter")
+    payload: dict[str, Any] = {"limit": limit}
+    if filt:
+        payload["filter"] = str(filt)
+
+    client = _require_onamix_mcp()
+    logger.info("tool.onamix_history.start", limit=limit, filter=filt)
+    data = await client.call_tool("hyperx_history", payload)
+    logger.info("tool.onamix_history.done", count=data.get("count"))
+    return {
+        "count": data.get("count", 0),
+        "items": data.get("items") or [],
+        "source": "onamix",
+        "transport": "mcp",
+    }
+
+
+async def _onamix_links(args: dict, ctx: ToolContext) -> dict:
+    """Extract + filter links from a URL via ONAMIX.
+
+    Args:
+      url: target URL
+      filter: substring to filter link.url or link.text by (case-insensitive)
+    """
+    url = (args.get("url") or "").strip()
+    if not url or not url.startswith(("http://", "https://")):
+        raise ToolExecutionError("Valid 'url' (http/https) is required")
+    filt = args.get("filter")
+    payload: dict[str, Any] = {"url": url}
+    if filt:
+        payload["filter"] = str(filt)
+
+    client = _require_onamix_mcp()
+    logger.info("tool.onamix_links.start", url=url[:120], filter=filt)
+    data = await client.call_tool("hyperx_links", payload)
+    logger.info("tool.onamix_links.done", url=url[:120], count=data.get("count"))
+    return {
+        "url": data.get("url") or url,
+        "count": data.get("count", 0),
+        "links": (data.get("links") or [])[:200],
+        "source": "onamix",
+        "transport": "mcp",
+    }
+
+
+async def _onamix_config(args: dict, ctx: ToolContext) -> dict:
+    """Get or set ONAMIX engine config.
+
+    Args:
+      get: bool (return current config)
+      set: dict (apply config patch — engine, userAgent, proxy, etc.)
+    """
+    payload: dict[str, Any] = {}
+    if "get" in args:
+        payload["get"] = bool(args["get"])
+    if "set" in args and isinstance(args["set"], dict):
+        payload["set"] = args["set"]
+
+    client = _require_onamix_mcp()
+    logger.info("tool.onamix_config.start", action="set" if "set" in payload else "get")
+    data = await client.call_tool("hyperx_config", payload)
+    return {
+        "config": data.get("config") or data,
+        "updated": data.get("updated"),
+        "source": "onamix",
+        "transport": "mcp",
+    }
+
+
+async def _onamix_multi(args: dict, ctx: ToolContext) -> dict:
+    """Parallel fetch up to 10 URLs via ONAMIX. Returns array of {url, title, text, status}.
+
+    Args:
+      urls: list[str] of URLs (max 10 enforced)
+      raw: bool (return raw HTML instead of text)
+    """
+    urls = args.get("urls") or []
+    if not isinstance(urls, list) or not urls:
+        raise ToolExecutionError("'urls' must be a non-empty list")
+    urls = [str(u).strip() for u in urls if str(u).strip()][:10]
+    if not all(u.startswith(("http://", "https://")) for u in urls):
+        raise ToolExecutionError("All URLs must start with http(s)://")
+    raw = bool(args.get("raw", False))
+
+    client = _require_onamix_mcp()
+    logger.info("tool.onamix_multi.start", count=len(urls), raw=raw)
+    data = await client.call_tool(
+        "hyperx_multi",
+        {"urls": urls, "raw": raw},
+        timeout_s=60.0,
+    )
+    # MCP returns either {value: [...]} (array) or array directly via JSON parse
+    results = data.get("value") if isinstance(data.get("value"), list) else None
+    if results is None:
+        # If parser returned an array at top level, _parse_mcp_result wraps in {value:...}
+        # Otherwise data IS the dict from JSON.stringify of a single object — unlikely here
+        results = data if isinstance(data, list) else []
+    logger.info("tool.onamix_multi.done", count=len(results) if isinstance(results, list) else 0)
+    return {
+        "count": len(results) if isinstance(results, list) else 0,
+        "results": results if isinstance(results, list) else [],
+        "source": "onamix",
+        "transport": "mcp",
     }
 
 
@@ -1393,6 +1680,13 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "onamix_get": _onamix_get,
     "onamix_search": _onamix_search,
     "onamix_scrape": _onamix_scrape,
+    # Day 44 — ONAMIX MCP-only tools (require persistent stdio client)
+    "onamix_post": _onamix_post,
+    "onamix_crawl": _onamix_crawl,
+    "onamix_history": _onamix_history,
+    "onamix_links": _onamix_links,
+    "onamix_config": _onamix_config,
+    "onamix_multi": _onamix_multi,
 }
 
 

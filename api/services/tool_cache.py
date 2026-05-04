@@ -51,6 +51,13 @@ TOOL_CACHE_CONFIG: dict[str, tuple[int | None, str]] = {
     "onamix_get":       (600,    "v1"),   # 10 min
     "onamix_search":    (300,    "v1"),   # 5 min
     "onamix_scrape":    (600,    "v1"),   # 10 min
+    # Day 44: 6 new ONAMIX MCP tools
+    "onamix_post":      (None,   "v1"),   # POST is mutating — never cache
+    "onamix_crawl":     (1800,   "v1"),   # 30 min — crawls are expensive, content semi-stable
+    "onamix_history":   (None,   "v1"),   # session-state, varies per call
+    "onamix_links":     (600,    "v1"),   # 10 min — same as onamix_get
+    "onamix_config":    (None,   "v1"),   # config get/set is mutating
+    "onamix_multi":     (600,    "v1"),   # 10 min — same TTL as single-page fetch
     "analyze_image":    (86400,  "v1"),   # 24h — image hash → caption stable
     # NEVER cache (mutating / creative / per-request unique):
     "memory_write":     (None,   "v1"),
