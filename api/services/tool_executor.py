@@ -753,6 +753,27 @@ async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S, json_mod
         )
 
 
+async def _onamix_run_search(args: list[str], timeout: int = ONAMIX_TIMEOUT_S) -> str:
+    """Search-mode invocation: NO --json, NO --no-history (mount is RW).
+    Single --engine flag at start so hyperx CLI argv-parser strips it cleanly.
+    Returns raw stdout text for parser.
+    """
+    import subprocess
+    if not _onamix_available():
+        raise ToolExecutionError(f"ONAMIX not available — expected mount at {ONAMIX_DIR}")
+    cmd = ["node", ONAMIX_BIN, *args]
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run, cmd,
+            capture_output=True, text=True, timeout=timeout, cwd="/tmp",
+        )
+    except subprocess.TimeoutExpired:
+        raise ToolExecutionError(f"ONAMIX search timed out ({timeout}s)")
+    if proc.returncode != 0:
+        raise ToolExecutionError(f"ONAMIX search failed (rc={proc.returncode}): {proc.stderr[:300]}")
+    return proc.stdout
+
+
 def _parse_onamix_search_text(stdout: str) -> tuple[list[dict], int | None]:
     """Parse rendered ONAMIX search output text → list of {title, url, snippet}.
 
@@ -860,11 +881,15 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
         engine = "ddg"
     limit = max(1, min(int(args.get("limit", 10)), 30))
 
-    # ONAMIX one-shot search: skip --json (CLI bug routes --json through engine.get).
-    # Pass query as positional + --engine flag; parse rendered text output.
-    cli_args = [query, f"--engine={engine}"]
+    # ONAMIX one-shot search has 2 CLI bugs:
+    # 1. --json forces engine.get() → "Failed to parse URL" for queries
+    # 2. argv slicing bug: only ONE leading --flag stripped, rest concatenated
+    #    into query string (regex /^--[^\s]+\s*/g matches once)
+    # Workaround: pass --engine FIRST (single leading flag), query LAST, no
+    # other flags. Mount is RW so history.json writes work without --no-history.
+    cli_args = [f"--engine={engine}", query]
     logger.info("tool.onamix_search.start", q=query[:80], engine=engine, limit=limit)
-    stdout = await _onamix_run(cli_args, json_mode=False)
+    stdout = await _onamix_run_search(cli_args)
     results, elapsed = _parse_onamix_search_text(stdout)
     if limit and len(results) > limit:
         results = results[:limit]
