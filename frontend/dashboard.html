@@ -12,6 +12,8 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Day 30: D3.js force-directed graph for genealogy -->
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
 
   <style>
     :root {
@@ -695,6 +697,7 @@
     // ===========================
     function Dashboard({ adminKey, onLogout }) {
       const [stats, setStats] = useState(null);
+      const [tab, setTab] = useState('overview');  // Day 30: tab navigation
 
       async function loadStats() {
         try {
@@ -737,60 +740,270 @@
           </div>
 
           <div className="container">
-            <h1>DPO Flywheel Dashboard</h1>
-            <div className="subtitle">Real-time monitoring — preference pairs, pipelines, training readiness</div>
-
-            {/* Top stats row */}
-            <div className="grid grid-4">
-              <Stat label="Total Pairs" value={totalPairs} color="green"
-                sub={ready?.message?.slice(0, 60) + '...'} />
-              <Stat label="Unused (Available)" value={unused} color="orange"
-                sub={`${ready?.progress_pct?.toFixed(1) || 0}% to ready threshold`} />
-              <Stat label="Last 24h Collected" value={last24} color="green"
-                sub={`avg ${dailyAvg?.toFixed(1) || 0}/day (7d)`} />
-              <Stat label="Status"
-                value={ready?.status?.toUpperCase() || '—'}
-                color={ready?.status === 'ready' ? 'green' : ready?.status === 'approaching' ? 'orange' : 'red'}
-                sub={ready?.next_threshold ? `next: ${ready.next_threshold}` : ''} />
+            <h1>{tab === 'overview' ? 'DPO Flywheel Dashboard' : 'Agent Genealogy'}</h1>
+            <div className="subtitle">
+              {tab === 'overview'
+                ? 'Real-time monitoring — preference pairs, pipelines, training readiness'
+                : 'Agent lineage tree — Level 5 visibility (The Breeder)'}
             </div>
 
-            {/* Source breakdown */}
-            <div className="section">
-              <div className="section-title">Pairs by Source Method</div>
-              <div className="card">
-                {Object.keys(sources).length === 0 ? (
-                  <div className="empty">No pairs yet. Start synthetic or distillation pipeline.</div>
-                ) : (
-                  <>
-                    {Object.entries(sources)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([k, v]) => {
-                        let color = 'green';
-                        if (k.startsWith('synthetic_')) color = 'blue';
-                        else if (k.startsWith('distill_')) color = 'orange';
-                        else if (k.startsWith('cai_')) color = 'purple';
-                        else if (k.startsWith('manual_')) color = 'yellow';
-                        return <BarRow key={k} label={k} count={v} max={sourceMax} color={color} />;
-                      })}
-                  </>
-                )}
+            {/* Day 30 — Tab nav */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
+              {[['overview','📊 Overview'], ['lineage','🌳 Lineage']].map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setTab(k)}
+                  style={{
+                    background: tab === k ? 'var(--orange-dim)' : 'transparent',
+                    color: tab === k ? 'var(--orange)' : 'var(--text-dim)',
+                    border: 'none',
+                    borderBottom: tab === k ? '2px solid var(--orange)' : '2px solid transparent',
+                    borderRadius: 0,
+                    padding: '0.6rem 1rem',
+                    fontFamily: 'var(--mono)',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'overview' && (
+              <>
+                {/* Top stats row */}
+                <div className="grid grid-4">
+                  <Stat label="Total Pairs" value={totalPairs} color="green"
+                    sub={ready?.message?.slice(0, 60) + '...'} />
+                  <Stat label="Unused (Available)" value={unused} color="orange"
+                    sub={`${ready?.progress_pct?.toFixed(1) || 0}% to ready threshold`} />
+                  <Stat label="Last 24h Collected" value={last24} color="green"
+                    sub={`avg ${dailyAvg?.toFixed(1) || 0}/day (7d)`} />
+                  <Stat label="Status"
+                    value={ready?.status?.toUpperCase() || '—'}
+                    color={ready?.status === 'ready' ? 'green' : ready?.status === 'approaching' ? 'orange' : 'red'}
+                    sub={ready?.next_threshold ? `next: ${ready.next_threshold}` : ''} />
+                </div>
+
+                {/* Source breakdown */}
+                <div className="section">
+                  <div className="section-title">Pairs by Source Method</div>
+                  <div className="card">
+                    {Object.keys(sources).length === 0 ? (
+                      <div className="empty">No pairs yet. Start synthetic or distillation pipeline.</div>
+                    ) : (
+                      <>
+                        {Object.entries(sources)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([k, v]) => {
+                            let color = 'green';
+                            if (k.startsWith('synthetic_')) color = 'blue';
+                            else if (k.startsWith('distill_')) color = 'orange';
+                            else if (k.startsWith('cai_')) color = 'purple';
+                            else if (k.startsWith('manual_')) color = 'yellow';
+                            return <BarRow key={k} label={k} count={v} max={sourceMax} color={color} />;
+                          })}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pipelines side-by-side */}
+                <div className="section">
+                  <div className="grid grid-2">
+                    <DistillPanel adminKey={adminKey} onRefresh={loadStats} />
+                    <SyntheticPanel adminKey={adminKey} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {tab === 'lineage' && (
+              <div className="section">
+                <GenealogyPanel adminKey={adminKey} />
               </div>
-            </div>
-
-            {/* Pipelines side-by-side */}
-            <div className="section">
-              <div className="grid grid-2">
-                <DistillPanel adminKey={adminKey} onRefresh={loadStats} />
-                <SyntheticPanel adminKey={adminKey} />
-              </div>
-            </div>
+            )}
 
             {/* Footer */}
             <div style={{ marginTop: '3rem', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--text-faint)' }}>
-              MiganCore Admin v0.4.6 · Endpoint {API_BASE}
+              MiganCore Admin v0.4.7 · Endpoint {API_BASE}
             </div>
           </div>
         </>
+      );
+    }
+
+    // ===========================
+    // Genealogy Panel (Day 30 — D3.js force-directed)
+    // ===========================
+    function GenealogyPanel({ adminKey }) {
+      const svgRef = useRef(null);
+      const [nodes, setNodes] = useState([]);
+      const [selected, setSelected] = useState(null);
+      const [err, setErr] = useState('');
+
+      async function load() {
+        try {
+          const r = await fetch(`${API_BASE}/v1/admin/genealogy`, {
+            headers: { 'X-Admin-Key': adminKey },
+          });
+          if (!r.ok) { setErr(`HTTP ${r.status}`); return; }
+          const d = await r.json();
+          setNodes(d);
+          setErr('');
+        } catch (e) { setErr(e.message); }
+      }
+
+      useEffect(() => {
+        load();
+        const t = setInterval(load, 8000);
+        return () => clearInterval(t);
+      }, [adminKey]);
+
+      // Build d3 graph when nodes change
+      useEffect(() => {
+        if (!nodes.length || !svgRef.current || !window.d3) return;
+        const d3 = window.d3;
+
+        const width = svgRef.current.clientWidth || 800;
+        const height = 500;
+
+        const svg = d3.select(svgRef.current);
+        svg.selectAll('*').remove();
+        svg.attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+
+        // Build links from parent_id
+        const links = nodes
+          .filter(n => n.parent_id)
+          .map(n => ({ source: n.parent_id, target: n.id }));
+        const dataNodes = nodes.map(n => ({
+          ...n,
+          x: width / 2 + (Math.random() - 0.5) * 200,
+          y: height / 2 + (Math.random() - 0.5) * 200,
+        }));
+
+        const colorByGen = (g) => {
+          if (g === 0) return '#ff8a24'; // orange — root
+          if (g === 1) return '#2fe39a'; // green — G1
+          if (g === 2) return '#5fb8ff'; // blue
+          return '#b58aff';              // purple — G3+
+        };
+
+        const sim = d3.forceSimulation(dataNodes)
+          .force('link', d3.forceLink(links).id(d => d.id).distance(90).strength(0.5))
+          .force('charge', d3.forceManyBody().strength(-280))
+          .force('center', d3.forceCenter(width / 2, height / 2))
+          .force('collide', d3.forceCollide(28));
+
+        // Draw links
+        const link = svg.append('g')
+          .attr('stroke', 'rgba(47, 227, 154, 0.4)')
+          .attr('stroke-width', 1.5)
+          .selectAll('line')
+          .data(links)
+          .join('line');
+
+        // Draw node groups
+        const node = svg.append('g')
+          .selectAll('g')
+          .data(dataNodes)
+          .join('g')
+          .style('cursor', 'pointer')
+          .on('click', (e, d) => setSelected(d))
+          .call(d3.drag()
+            .on('start', (e, d) => {
+              if (!e.active) sim.alphaTarget(0.3).restart();
+              d.fx = d.x; d.fy = d.y;
+            })
+            .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+            .on('end', (e, d) => {
+              if (!e.active) sim.alphaTarget(0);
+              d.fx = null; d.fy = null;
+            }));
+
+        node.append('circle')
+          .attr('r', d => 18 - Math.min(8, d.generation * 3))
+          .attr('fill', d => colorByGen(d.generation))
+          .attr('stroke', '#0d1f1a')
+          .attr('stroke-width', 2);
+
+        node.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', '0.35em')
+          .attr('font-family', 'JetBrains Mono, monospace')
+          .attr('font-size', '9px')
+          .attr('font-weight', '600')
+          .attr('fill', '#0d1f1a')
+          .text(d => `G${d.generation}`);
+
+        node.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', d => (18 - Math.min(8, d.generation * 3)) + 14)
+          .attr('font-family', 'JetBrains Mono, monospace')
+          .attr('font-size', '10px')
+          .attr('fill', '#e9f5ee')
+          .text(d => d.name.length > 20 ? d.name.slice(0, 20) + '...' : d.name);
+
+        sim.on('tick', () => {
+          link
+            .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+          node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+
+        return () => sim.stop();
+      }, [nodes]);
+
+      const counts = useMemo(() => {
+        const byGen = {};
+        nodes.forEach(n => { byGen[n.generation] = (byGen[n.generation] || 0) + 1; });
+        return byGen;
+      }, [nodes]);
+
+      return (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div className="section-title" style={{ marginBottom: 0 }}>Agent Genealogy Tree</div>
+            <div className="refresh-hint">{nodes.length} agents · auto-refresh 8s</div>
+          </div>
+
+          {err && <div className="err">⚠ {err}</div>}
+
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontFamily: 'var(--mono)', fontSize: '0.7rem' }}>
+            {Object.entries(counts).sort().map(([g, c]) => (
+              <span key={g} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: g === '0' ? '#ff8a24' : g === '1' ? '#2fe39a' : g === '2' ? '#5fb8ff' : '#b58aff' }}></span>
+                G{g}: {c}
+              </span>
+            ))}
+          </div>
+
+          {nodes.length === 0 ? (
+            <div className="empty">No agents yet. Spawn child agents from chat UI to see lineage.</div>
+          ) : (
+            <>
+              <svg ref={svgRef} style={{ width: '100%', height: '500px', background: 'var(--bg-2)', borderRadius: '6px' }} />
+
+              {selected && (
+                <div style={{ marginTop: '1rem', padding: '0.75rem', background: 'var(--bg-2)', borderRadius: '6px', fontFamily: 'var(--mono)', fontSize: '0.8rem' }}>
+                  <div style={{ color: 'var(--orange)', fontWeight: 600, marginBottom: '0.5rem' }}>{selected.name}</div>
+                  <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                    id: {selected.id}<br/>
+                    generation: {selected.generation}<br/>
+                    parent: {selected.parent_id || 'ROOT'}<br/>
+                    template: {selected.template_id || '—'}<br/>
+                    tenant: {selected.tenant_name} ({selected.tenant_id?.slice(0, 8)}...)<br/>
+                    model: {selected.model_version}<br/>
+                    created: {new Date(selected.created_at).toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       );
     }
 

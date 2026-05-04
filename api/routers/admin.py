@@ -554,3 +554,43 @@ async def distill_summary():
     """Aggregate stats per teacher across all distillation runs."""
     from services.distillation import get_distill_summary
     return await get_distill_summary()
+
+
+# ---------------------------------------------------------------------------
+# Genealogy view (Day 30) — system-wide for admin dashboard
+# ---------------------------------------------------------------------------
+
+@router.get("/genealogy", dependencies=[Depends(require_admin_key)])
+async def admin_genealogy(db: AsyncSession = Depends(get_db)):
+    """System-wide agent genealogy across ALL tenants (admin only).
+
+    Used by dashboard.html Lineage tab to render D3.js force-directed graph.
+    """
+    from models.agent import Agent
+
+    result = await db.execute(
+        text(
+            "SELECT a.id, a.name, a.parent_agent_id, a.generation, a.template_id, "
+            "a.status, a.created_at, a.model_version, a.tenant_id, t.name AS tenant_name "
+            "FROM agents a "
+            "LEFT JOIN tenants t ON t.id = a.tenant_id "
+            "WHERE a.status != 'archived' "
+            "ORDER BY a.generation ASC, a.created_at ASC"
+        )
+    )
+    rows = result.fetchall()
+    return [
+        {
+            "id": str(r.id),
+            "name": r.name,
+            "parent_id": str(r.parent_agent_id) if r.parent_agent_id else None,
+            "generation": r.generation,
+            "template_id": r.template_id,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "model_version": r.model_version,
+            "tenant_id": str(r.tenant_id),
+            "tenant_name": r.tenant_name,
+        }
+        for r in rows
+    ]
