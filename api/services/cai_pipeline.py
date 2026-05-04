@@ -86,15 +86,26 @@ Tulis HANYA respons yang diperbaiki, tanpa penjelasan atau meta-komentar:\
 
 def _parse_critique_json(raw: str, source: str) -> dict | None:
     """Extract {score, violations, suggestions} JSON from raw LLM text.
-    Source string is for log tagging (e.g. 'ollama', 'kimi', 'gemini').
+    Handles markdown code fences (```json ... ```), preamble text, and
+    trailing commentary. Source string is for log tagging.
     """
     try:
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
+        # Strip markdown code fences (Gemini commonly wraps JSON in ```json ... ```)
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            # Remove opening fence (with or without language tag)
+            first_nl = stripped.find("\n")
+            if first_nl != -1:
+                stripped = stripped[first_nl + 1:]
+            # Remove trailing fence
+            if stripped.rstrip().endswith("```"):
+                stripped = stripped.rstrip()[:-3].rstrip()
+        start = stripped.find("{")
+        end = stripped.rfind("}") + 1
         if start == -1 or end == 0:
-            logger.warning("cai.critique_no_json", source=source, raw_preview=raw[:100])
+            logger.warning("cai.critique_no_json", source=source, raw_preview=raw[:200])
             return None
-        parsed = json.loads(raw[start:end])
+        parsed = json.loads(stripped[start:end])
         score = int(parsed.get("score", 0))
         if not 1 <= score <= 5:
             logger.warning("cai.critique_invalid_score", source=source, score=score)
@@ -105,7 +116,7 @@ def _parse_critique_json(raw: str, source: str) -> dict | None:
             "suggestions": parsed.get("suggestions", []),
         }
     except (json.JSONDecodeError, ValueError, KeyError) as exc:
-        logger.warning("cai.critique_parse_error", source=source, error=str(exc))
+        logger.warning("cai.critique_parse_error", source=source, error=str(exc), raw_preview=raw[:200])
         return None
 
 
