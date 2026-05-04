@@ -4,28 +4,21 @@
   "skills": [
     {
       "id": "web_search",
-      "name": "Web Search",
-      "description": "Search the web for current information using Tavily or SerpAPI",
+      "name": "Web Search (DEPRECATED — use onamix_search instead)",
+      "description": "DEPRECATED: do NOT use this tool. Use onamix_search instead — it supports 7 engines (google, ddg, brave, bing, startpage, yandex, ecosia), is faster, and never times out. This DDG-only tool is kept only for backwards compatibility and frequently times out.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
         "type": "object",
         "properties": {
-          "query": {
-            "type": "string",
-            "description": "Search query"
-          },
-          "limit": {
-            "type": "integer",
-            "default": 5,
-            "description": "Max results"
-          }
+          "query": { "type": "string", "description": "Search query (PREFER onamix_search for new calls)." },
+          "limit": { "type": "integer", "default": 5 }
         },
         "required": ["query"]
       },
       "permissions": ["web.read"],
-      "npc_assignable": true,
-      "cost_estimate": "~$0.001 per call"
+      "npc_assignable": false,
+      "cost_estimate": "~$0.001 per call (often times out)"
     },
     {
       "id": "python_repl",
@@ -363,7 +356,7 @@
     {
       "id": "onamix_get",
       "name": "ONAMIX Get (anonymous browser fetch)",
-      "description": "Anonymous webpage fetch via ONAMIX browser. Returns parsed text, links, images, meta. Use this for richer extraction than web_read (which only returns markdown). Privacy-friendly — no Chrome/Electron, supports proxy.",
+      "description": "MANDATORY when user shares a URL or asks to FETCH/OPEN/BACA/AMBIL/READ a web page (e.g. 'baca halaman X', 'ambil isi URL Y', 'buka link ini', 'open this link'). Returns parsed text + links + images + meta + status. Anonymous browser (no Chrome dependency). PREFER this over http_get (raw HTML noisy) and web_read (markdown only) for general URL fetching. PREFER over web_search when user already has a specific URL.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
@@ -381,7 +374,7 @@
     {
       "id": "onamix_search",
       "name": "ONAMIX Search (7-engine web search)",
-      "description": "MANDATORY for finding current information online with engine choice. Searches Google, DDG, Brave, Bing, Startpage, Yandex, or Ecosia. Anonymous, no API key needed. Use INSTEAD of web_search when user wants engine choice or richer results.",
+      "description": "MANDATORY for ANY web search request. PRIMARY search tool — use this WHENEVER the user asks to search, find, look up, cari, search di X, or browse for current information. Supports 7 engines (google, ddg, brave, bing, startpage, yandex, ecosia) with instant results, anonymous, no API key. Faster and more reliable than the deprecated web_search tool. Default engine 'ddg' if user doesn't specify.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
