@@ -10,15 +10,20 @@
       "model_version": "qwen2.5:7b-instruct-q4_K_M",
       "memory_blocks": ["persona", "human", "world_state"],
       "default_tools": [
-        "web_search",
-        "python_repl",
+        "onamix_search",
+        "onamix_get",
+        "onamix_scrape",
+        "web_read",
         "memory_write",
         "memory_search",
         "spawn_agent",
+        "analyze_image",
         "generate_image",
         "read_file",
         "write_file",
-        "text_to_speech"
+        "text_to_speech",
+        "export_pdf",
+        "export_slides"
       ],
       "persona_locked": true,
       "visibility": "public",
