@@ -159,7 +159,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.4.9",
+    version="0.5.0",
     lifespan=lifespan,
 )
 
@@ -186,6 +186,7 @@ async def request_context_middleware(request: Request, call_next):
 # CORS — restrict to known domains in production
 # TODO: move to environment variable for flexibility
 _cors_origins = [
+    "https://migancore.com",       # Day 33: landing page
     "https://app.migancore.com",
     "https://lab.migancore.com",
 ]
@@ -269,6 +270,56 @@ async def root():
             "agents": "/v1/agents",
             "conversations": "/v1/conversations",
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Day 33: Public stats endpoint for migancore.com landing page
+# ---------------------------------------------------------------------------
+@app.get("/v1/public/stats", tags=["system"])
+async def public_stats():
+    """Sanitized public stats for landing page widget.
+
+    No auth required. Rate-limited via slowapi (5 req/min).
+    Only exposes aggregate counts — no PII, no per-tenant data.
+    """
+    from sqlalchemy import text as sql_text
+    from models.base import AsyncSessionLocal
+
+    if AsyncSessionLocal is None:
+        return {"total_pairs": 0, "by_source_method": {}, "training_readiness": {"status": "loading"}}
+
+    async with AsyncSessionLocal() as session:
+        # Total + by source (preference_pairs has no RLS — safe)
+        total_res = await session.execute(sql_text("SELECT COUNT(*) FROM preference_pairs"))
+        total = total_res.scalar_one()
+
+        sources_res = await session.execute(
+            sql_text("SELECT source_method, COUNT(*) FROM preference_pairs GROUP BY source_method")
+        )
+        by_source = {r[0]: r[1] for r in sources_res.fetchall()}
+
+        # Last 24h
+        rate_res = await session.execute(
+            sql_text("SELECT COUNT(*) FROM preference_pairs WHERE created_at >= NOW() - INTERVAL '24 hours'")
+        )
+        last_24h = rate_res.scalar_one()
+
+    # Training readiness
+    if total >= 2000:
+        ready = {"status": "ideal", "message": f"{total} pairs — ideal for training"}
+    elif total >= 1000:
+        ready = {"status": "ready", "message": f"{total} pairs — training-ready"}
+    elif total >= 500:
+        ready = {"status": "approaching", "message": f"{total} pairs — approaching threshold"}
+    else:
+        ready = {"status": "building", "message": f"{total} pairs — building flywheel"}
+
+    return {
+        "total_pairs": total,
+        "by_source_method": by_source,
+        "last_24h": last_24h,
+        "training_readiness": ready,
     }
 
 

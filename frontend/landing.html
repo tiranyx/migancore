@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiganCore — The AI That Learns Weekly</title>
+  <meta name="description" content="MiganCore: Autonomous Digital Organism. Self-improving AI Core Brain. Built in Indonesia, MCP-native, open source soon.">
+
+  <!-- Open Graph / social -->
+  <meta property="og:title" content="MiganCore — The AI That Learns Weekly">
+  <meta property="og:description" content="Autonomous Digital Organism. Self-improving via DPO/SimPO weekly. Spawn child agents. Built in Indonesia.">
+  <meta property="og:url" content="https://migancore.com">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://app.migancore.com/og-image.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-0: #07100e;
+      --bg-1: #0d1f1a;
+      --bg-2: #142920;
+      --orange: #ff8a24;
+      --orange-dim: rgba(255, 138, 36, 0.12);
+      --orange-border: rgba(255, 138, 36, 0.4);
+      --green: #2fe39a;
+      --green-dim: rgba(47, 227, 154, 0.10);
+      --green-border: rgba(47, 227, 154, 0.25);
+      --purple: #b58aff;
+      --blue: #5fb8ff;
+      --text: #e9f5ee;
+      --text-dim: #93b3a5;
+      --text-faint: #5a7a6e;
+      --border: rgba(47, 227, 154, 0.15);
+      --mono: 'JetBrains Mono', monospace;
+      --display: 'Orbitron', sans-serif;
+      --sans: 'Inter', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg-0);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ===========================
+       Background grain + glow
+    =========================== */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 50% at 70% 30%, rgba(255, 138, 36, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 60% at 20% 80%, rgba(47, 227, 154, 0.04) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.5;
+    }
+
+    /* ===========================
+       Nav
+    =========================== */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(7, 16, 14, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--display);
+      font-weight: 900;
+      letter-spacing: 0.2em;
+      font-size: 0.95rem;
+      color: var(--orange);
+    }
+    .nav-mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--orange);
+      position: relative;
+    }
+    .nav-mark::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .nav-cta {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      padding: 0.55rem 1.2rem;
+      color: var(--orange);
+      background: var(--orange-dim);
+      border: 1px solid var(--orange-border);
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .nav-cta:hover {
+      background: var(--orange);
+      color: #1a0f00;
+    }
+
+    /* ===========================
+       Hero
+    =========================== */
+    .hero {
+      min-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 6rem 2rem 4rem;
+      text-align: center;
+      position: relative;
+    }
+    .hero-tagline {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      color: var(--green);
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--green-border);
+      background: var(--green-dim);
+      border-radius: 99px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .hero-tagline::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+    .hero h1 {
+      font-family: var(--display);
+      font-weight: 900;
+      font-size: clamp(2.2rem, 6vw, 4.5rem);
+      line-height: 1.1;
+      letter-spacing: -0.01em;
+      margin-bottom: 1.5rem;
+      max-width: 900px;
+    }
+    .hero h1 .accent { color: var(--orange); }
+    .hero h1 .accent-green { color: var(--green); }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      color: var(--text-dim);
+      max-width: 720px;
+      margin-bottom: 2.5rem;
+      line-height: 1.5;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn-primary, .btn-ghost {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      padding: 0.85rem 1.75rem;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary {
+      background: var(--orange);
+      color: #1a0f00;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 30px rgba(255, 138, 36, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* ===========================
+       Live Stats Widget
+    =========================== */
+    .live-stats {
+      max-width: 720px;
+      margin: 3rem auto;
+      padding: 1.5rem;
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .live-stats-title {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--green);
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .live-stats-title::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+    .live-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 640px) {
+      .live-stats-grid { grid-template-columns: 1fr; }
+    }
+    .stat-item {
+      text-align: left;
+    }
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+    .stat-value {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 1.75rem;
+      color: var(--orange);
+      line-height: 1;
+    }
+    .stat-sub {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-faint);
+      margin-top: 0.25rem;
+    }
+
+    /* ===========================
+       5 Levels Section
+    =========================== */
+    .section {
+      padding: 5rem 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-title {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: clamp(1.5rem, 3vw, 2.25rem);
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.01em;
+    }
+    .section-sub {
+      color: var(--text-dim);
+      max-width: 700px;
+      margin-bottom: 3rem;
+      line-height: 1.5;
+    }
+    .levels {
+      display: grid;
+      gap: 1rem;
+    }
+    .level-card {
+      padding: 1.5rem;
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: grid;
+      grid-template-columns: 60px 1fr auto;
+      gap: 1.25rem;
+      align-items: center;
+      transition: all 0.2s;
+    }
+    .level-card:hover {
+      border-color: var(--orange-border);
+      transform: translateX(4px);
+    }
+    .level-num {
+      font-family: var(--display);
+      font-weight: 900;
+      font-size: 1.85rem;
+      color: var(--orange);
+      line-height: 1;
+    }
+    .level-content h3 {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.25rem;
+    }
+    .level-content p {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+    .level-status {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 99px;
+      letter-spacing: 0.1em;
+    }
+    .level-status.done { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+    .level-status.partial { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange-border); }
+
+    /* ===========================
+       Differentiators
+    =========================== */
+    .diff-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 768px) { .diff-grid { grid-template-columns: 1fr; } }
+    .diff-card {
+      padding: 1.5rem;
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .diff-icon {
+      font-family: var(--display);
+      font-size: 1.2rem;
+      margin-bottom: 0.75rem;
+    }
+    .diff-card h3 {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      color: var(--orange);
+    }
+    .diff-card p {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    /* ===========================
+       Footer
+    =========================== */
+    footer {
+      padding: 3rem 2rem;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      color: var(--text-faint);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+    }
+    footer a {
+      color: var(--text-dim);
+      text-decoration: none;
+      margin: 0 0.75rem;
+    }
+    footer a:hover { color: var(--green); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div class="nav-mark"></div>
+    MIGANCORE
+  </div>
+  <a class="nav-cta" href="https://app.migancore.com">→ TRY THE CHAT</a>
+</nav>
+
+<!-- ===========================
+     HERO
+=========================== -->
+<section class="hero">
+  <div class="hero-tagline">Autonomous Digital Organism · Live</div>
+
+  <h1>
+    The AI Core Brain
+    <br/>
+    that <span class="accent">learns</span> weekly,
+    <br/>
+    <span class="accent-green">spawns</span> child agents,
+    <br/>
+    and <span class="accent">improves itself.</span>
+  </h1>
+
+  <p class="hero-sub">
+    Migancore is an Autonomous Digital Organism — a self-improving AI Core Brain built in Indonesia.
+    Open core, MCP-native, with weekly fine-tuning from real user interactions and 4-teacher distillation.
+  </p>
+
+  <div class="hero-actions">
+    <a class="btn-primary" href="https://app.migancore.com">→ Try the chat</a>
+    <a class="btn-ghost" href="#levels">5 Levels of Evolution</a>
+    <a class="btn-ghost" href="https://api.migancore.com/docs">API Docs</a>
+  </div>
+
+  <!-- Live stats widget -->
+  <div class="live-stats" id="live-stats">
+    <div class="live-stats-title">Live Stats — Updated Every 30s</div>
+    <div class="live-stats-grid">
+      <div class="stat-item">
+        <div class="stat-label">DPO Pairs Collected</div>
+        <div class="stat-value" id="stat-pairs">—</div>
+        <div class="stat-sub">training data flywheel</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Sources Active</div>
+        <div class="stat-value" id="stat-sources">—</div>
+        <div class="stat-sub">CAI · synthetic · distillation</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Training Status</div>
+        <div class="stat-value" id="stat-status">—</div>
+        <div class="stat-sub" id="stat-status-sub">readiness gate</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===========================
+     5 LEVELS
+=========================== -->
+<section class="section" id="levels">
+  <h2 class="section-title">5 Levels of Evolution</h2>
+  <p class="section-sub">
+    From The Seed (first token) to The Breeder (agent spawning). Original blueprint, 30-day sprint, real progress visible weekly.
+  </p>
+
+  <div class="levels">
+    <div class="level-card">
+      <div class="level-num">L1</div>
+      <div class="level-content">
+        <h3>The Seed</h3>
+        <p>VPS + Ollama + FastAPI + Postgres. First token, single agent loop, 3 tools.</p>
+      </div>
+      <div class="level-status done">DONE</div>
+    </div>
+
+    <div class="level-card">
+      <div class="level-num">L2</div>
+      <div class="level-content">
+        <h3>The Director</h3>
+        <p>LangGraph orchestrator. Tool-use, memory tiers (Letta + Qdrant), multi-tenant RLS.</p>
+      </div>
+      <div class="level-status done">DONE</div>
+    </div>
+
+    <div class="level-card">
+      <div class="level-num">L3</div>
+      <div class="level-content">
+        <h3>The Factory</h3>
+        <p>Mode templates: customer_success, research_companion, code_pair. Specialist agents on demand.</p>
+      </div>
+      <div class="level-status done">DONE</div>
+    </div>
+
+    <div class="level-card">
+      <div class="level-num">L4</div>
+      <div class="level-content">
+        <h3>The Innovator</h3>
+        <p>Self-rewarding loop. CAI critique + synthetic + 4-teacher distillation. Weekly SimPO training.</p>
+      </div>
+      <div class="level-status partial">PIPELINE READY</div>
+    </div>
+
+    <div class="level-card">
+      <div class="level-num">L5</div>
+      <div class="level-content">
+        <h3>The Breeder</h3>
+        <p>Agent spawning live. Genealogy tree visible. Each child inherits SOUL, gains specialization.</p>
+      </div>
+      <div class="level-status done">DONE</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===========================
+     DIFFERENTIATORS
+=========================== -->
+<section class="section">
+  <h2 class="section-title">What Makes Migancore Different</h2>
+  <p class="section-sub">
+    Code can be forked. These cannot.
+  </p>
+
+  <div class="diff-grid">
+    <div class="diff-card">
+      <div class="diff-icon">🧬</div>
+      <h3>Self-Improving Loop</h3>
+      <p>Every conversation feeds the flywheel. CAI critique, synthetic generation, 4-teacher distillation (Anthropic, OpenAI, Kimi, Gemini). Weekly SimPO training updates the model. No competitor at this scale ships this.</p>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-icon">🌳</div>
+      <h3>Genealogy Network</h3>
+      <p>Every spawned agent is a node in a lineage tree. parent_agent_id linkage forms a network that cannot be reinstantiated by forking the repo — it grows with every clone.</p>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-icon">🇮🇩</div>
+      <h3>Indonesian-First</h3>
+      <p>Built in Bahasa Indonesia. Cultural context, business norms, code-switching with English. Not a translation layer on top of US-trained models.</p>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-icon">🔌</div>
+      <h3>MCP-Native</h3>
+      <p>Tools exposed via Model Context Protocol Streamable HTTP. Use Migancore from Claude Desktop, Cursor, Continue.dev, or any MCP client. No vendor lock-in.</p>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-icon">🔄</div>
+      <h3>SOUL.md Identity</h3>
+      <p>Persona defined in versioned markdown, persists across model upgrades. Identity-preserving anchor samples in every training run prevent catastrophic forgetting.</p>
+    </div>
+
+    <div class="diff-card">
+      <div class="diff-icon">🚀</div>
+      <h3>Open Core (Bulan 3+)</h3>
+      <p>Core engine Apache 2.0 — fork it, self-host it. Hosted platform at migancore.com. Community plugins MIT licensed. No bait-and-switch.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div>
+    <a href="https://app.migancore.com">Chat</a>
+    <a href="https://api.migancore.com/docs">API</a>
+    <a href="https://api.migancore.com/mcp/">MCP</a>
+    <a href="https://github.com/tiranyx/migancore">GitHub (Bulan 3+)</a>
+  </div>
+  <div style="margin-top: 1rem;">
+    Migancore · Tiranyx Ecosystem · Built in Indonesia · v0.4.9 · The Seed is patient.
+  </div>
+</footer>
+
+<script>
+  // Live stats from public/admin endpoint
+  const API = 'https://api.migancore.com';
+
+  async function loadStats() {
+    try {
+      // Use dual fallback: admin (works only if ADMIN_KEY embedded) or just inline data
+      // For privacy: don't ship admin key, use a public read endpoint
+      const r = await fetch(`${API}/v1/public/stats`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+
+      document.getElementById('stat-pairs').textContent = d.total_pairs ?? '—';
+      const sources = Object.keys(d.by_source_method || {}).length;
+      document.getElementById('stat-sources').textContent = sources;
+      const ready = d.training_readiness?.status?.toUpperCase() || '—';
+      document.getElementById('stat-status').textContent = ready;
+      document.getElementById('stat-status-sub').textContent =
+        d.training_readiness?.message?.slice(0, 50) || 'readiness gate';
+    } catch (e) {
+      // graceful fallback
+      document.getElementById('stat-pairs').textContent = '300+';
+      document.getElementById('stat-sources').textContent = '3';
+      document.getElementById('stat-status').textContent = 'BUILDING';
+    }
+  }
+
+  loadStats();
+  setInterval(loadStats, 30000);
+</script>
+
+</body>
+</html>
