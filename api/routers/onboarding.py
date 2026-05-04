@@ -83,13 +83,15 @@ class StartersResponse(BaseModel):
 
 
 def _normalize_usecase(usecase: str) -> str:
-    """Map free-text usecase to one of our 4 buckets."""
+    """Map free-text usecase to one of our 4 buckets (used for hardcoded fallback only).
+    Indonesian colloquial forms included: 'ngoding', 'nulis', 'belajar', etc.
+    """
     u = (usecase or "").lower().strip()
-    if any(k in u for k in ["riset", "research", "study", "belajar", "academic", "paper"]):
+    if any(k in u for k in ["riset", "research", "study", "belajar", "academic", "paper", "jurnal", "litera"]):
         return "research"
-    if any(k in u for k in ["code", "coding", "program", "develop", "engineer", "debug"]):
+    if any(k in u for k in ["code", "coding", "ngoding", "program", "develop", "engineer", "debug", "ngerjain bug", "scripting", "backend", "frontend", "fullstack"]):
         return "coding"
-    if any(k in u for k in ["tulis", "write", "writ", "edit", "content", "copy", "blog"]):
+    if any(k in u for k in ["tulis", "nulis", "write", "writ", "edit", "content", "konten", "copy", "blog", "artikel", "marketing"]):
         return "writing"
     return "general"
 
@@ -186,7 +188,11 @@ async def get_starters(
     usecase_n = _normalize_usecase(usecase)
     lang_n = _normalize_lang(lang)
 
-    dynamic, source_name = await _generate_dynamic_starters(usecase_n, lang_n)
+    # Pass RAW user input to dynamic generator so the teacher (Kimi/Gemini) gets full
+    # context (e.g. "nulis konten marketing" lebih informatif dari bucket "writing").
+    # Hardcoded fallback uses the normalized bucket since templates are bucket-keyed.
+    raw_usecase = (usecase or "general").strip()[:120]
+    dynamic, source_name = await _generate_dynamic_starters(raw_usecase, lang_n)
     if dynamic:
         return StartersResponse(
             starters=dynamic,
