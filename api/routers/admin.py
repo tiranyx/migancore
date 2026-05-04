@@ -565,32 +565,42 @@ async def admin_genealogy(db: AsyncSession = Depends(get_db)):
     """System-wide agent genealogy across ALL tenants (admin only).
 
     Used by dashboard.html Lineage tab to render D3.js force-directed graph.
-    """
-    from models.agent import Agent
 
-    result = await db.execute(
-        text(
-            "SELECT a.id, a.name, a.parent_agent_id, a.generation, a.template_id, "
-            "a.status, a.created_at, a.model_version, a.tenant_id, t.name AS tenant_name "
-            "FROM agents a "
-            "LEFT JOIN tenants t ON t.id = a.tenant_id "
-            "WHERE a.status != 'archived' "
-            "ORDER BY a.generation ASC, a.created_at ASC"
-        )
-    )
-    rows = result.fetchall()
-    return [
-        {
-            "id": str(r.id),
-            "name": r.name,
-            "parent_id": str(r.parent_agent_id) if r.parent_agent_id else None,
-            "generation": r.generation,
-            "template_id": r.template_id,
-            "status": r.status,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "model_version": r.model_version,
-            "tenant_id": str(r.tenant_id),
-            "tenant_name": r.tenant_name,
-        }
-        for r in rows
-    ]
+    NOTE: agents table has RLS — must iterate per tenant_id with set_tenant_context.
+    Single global query returns 0 rows because no tenant context is active.
+    """
+    from deps.db import set_tenant_context
+
+    # 1. List all tenants (tenants table has no RLS policy blocking admin)
+    tenants_res = await db.execute(text("SELECT id, name FROM tenants"))
+    tenants = [(str(r[0]), r[1]) for r in tenants_res.fetchall()]
+
+    all_agents = []
+    for tenant_id, tenant_name in tenants:
+        try:
+            await set_tenant_context(db, tenant_id)
+            agents_res = await db.execute(
+                text(
+                    "SELECT id, name, parent_agent_id, generation, template_id, "
+                    "status, created_at, model_version, tenant_id "
+                    "FROM agents WHERE status != 'archived' "
+                    "ORDER BY generation ASC, created_at ASC"
+                )
+            )
+            for r in agents_res.fetchall():
+                all_agents.append({
+                    "id": str(r[0]),
+                    "name": r[1],
+                    "parent_id": str(r[2]) if r[2] else None,
+                    "generation": r[3],
+                    "template_id": r[4],
+                    "status": r[5],
+                    "created_at": r[6].isoformat() if r[6] else None,
+                    "model_version": r[7],
+                    "tenant_id": str(r[8]),
+                    "tenant_name": tenant_name,
+                })
+        except Exception as exc:
+            logger.warning("admin.genealogy.tenant_failed", tenant_id=tenant_id, error=str(exc))
+
+    return all_agents
