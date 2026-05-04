@@ -115,24 +115,38 @@ async def _generate_dynamic_starters(usecase: str, lang: str) -> list[str] | Non
 
     lang_label = "Bahasa Indonesia natural" if lang == "id" else "English"
     sys = (
-        "You generate 3 short, concrete starter prompts for an AI chat. "
-        "Each prompt is 1 line, action-oriented, and would make sense as a clickable card "
-        "the user taps to begin a conversation. Output ONLY the 3 prompts, "
-        "one per line, no numbering, no preamble, no quotes."
+        "You output EXACTLY 3 starter prompts for an AI chat, one per line. "
+        "Strict format: each line is a complete actionable prompt the user could "
+        "click to begin a conversation. NO numbering. NO bullets. NO preamble. "
+        "NO trailing punctuation other than what belongs in a sentence. "
+        "Just 3 lines separated by single newlines, nothing else."
     )
     user = (
-        f"User's use case: {usecase}\n"
-        f"Language for the prompts: {lang_label}\n"
-        f"Tone: practical, friendly, professional. Avoid generic small talk."
+        f"Use case the user described: {usecase}\n"
+        f"Write the 3 prompts in: {lang_label}\n"
+        f"Tone: practical, friendly, professional. Avoid generic small talk.\n"
+        f"Each prompt should be 8-25 words. Concrete, specific, useful.\n\n"
+        f"Output now (3 lines):"
     )
     try:
-        resp = await call_teacher("gemini", user, system=sys, max_tokens=256)
-        lines = [l.strip(" -•*\t").strip() for l in resp.text.splitlines() if l.strip()]
-        # Drop quotes / numbering remnants
-        lines = [l.lstrip("0123456789.) ").strip() for l in lines]
-        lines = [l for l in lines if 8 <= len(l) <= 200]
+        # max_tokens=400 — 3 ID prompts ~80-120 tokens each + safety margin
+        resp = await call_teacher("gemini", user, system=sys, max_tokens=400)
+        # Strip bullets/numbering at line start, then filter by length
+        lines = []
+        for raw_l in resp.text.splitlines():
+            l = raw_l.strip()
+            if not l:
+                continue
+            # Strip leading bullets / numbering
+            l = l.lstrip("0123456789.)-•*–— ").strip()
+            # Strip surrounding quotes
+            if (l.startswith('"') and l.endswith('"')) or (l.startswith("'") and l.endswith("'")):
+                l = l[1:-1].strip()
+            if 8 <= len(l) <= 200:
+                lines.append(l)
         if len(lines) >= 3:
             return lines[:3]
+        logger.warning("onboarding.starters_too_few_lines", got=len(lines), raw_preview=resp.text[:200])
         return None
     except TeacherError as exc:
         logger.warning("onboarding.starters_gemini_error", error=str(exc))
