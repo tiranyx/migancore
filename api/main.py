@@ -177,9 +177,10 @@ async def lifespan(app: FastAPI):
         target = st.get("target_pairs")
         cumulative = st.get("cumulative_stored", 0)
         prev_status = (st.get("status") or "idle").lower()
-        if target and cumulative < target and prev_status not in (
-            "idle", "completed", "stopped", "cancelled"
-        ):
+        # Day 45 fix: "cancelled" and "stopped" are EXACTLY the deploy-kill
+        # signature we want to recover from. Only skip for terminal-success
+        # states (completed) or true idle (no run was ever active).
+        if target and cumulative < target and prev_status not in ("idle", "completed"):
             logger.info(
                 "synthetic.auto_resume.attempt",
                 prev_run_id=st.get("run_id"),
