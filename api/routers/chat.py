@@ -387,27 +387,37 @@ async def chat_stream(
                     content_now = (msg.get("content") or "").strip()
 
                     if not tcs:
-                        # Model returned plain text — emit as one chunk if we already
-                        # spent the budget on tool calls, otherwise let the stream
-                        # branch below redo the call to get token-by-token deltas.
-                        if tool_iter == 0:
-                            break  # never used tools — go to streaming branch
-                        full_response.append(content_now)
+                        # Model returned plain text (no tool needed).
+                        # Day 40 fix: If we already got real content from chat_with_tools,
+                        # USE IT — don't re-call chat_stream (second call often returns empty
+                        # because Ollama treats the prompt as 'already answered' and yields
+                        # 0 tokens). This caused user-visible 'gagal merespond' bug.
                         if content_now:
+                            full_response.append(content_now)
                             yield _sse({"type": "chunk", "content": content_now})
                             chunk_count += 1
-                        full_text = "".join(full_response)
+                            full_text = "".join(full_response)
+                            yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+                            logger.info("chat.stream.done_via_toolcall", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
+                            _t_done = asyncio.create_task(_persist_assistant_message(
+                                conversation_id=conversation_id,
+                                tenant_id=tenant_id,
+                                content=full_text,
+                                message_count=len(history) + 2,
+                            ))
+                            _background_tasks.add(_t_done)
+                            _t_done.add_done_callback(_background_tasks.discard)
+                            return
+                        # Empty content + no tool calls — degenerate state. At iter 0
+                        # let the streaming branch try once more (may recover); at >0
+                        # bail with empty done so client doesn't hang.
+                        if tool_iter == 0:
+                            logger.warning("chat.stream.empty_first_response_falling_through_to_stream")
+                            break
+                        # Already spent tool iters but got no content/calls — finish
+                        full_text = ""
                         yield _sse({"type": "done", "conversation_id": str(conversation_id)})
-                        logger.info("chat.stream.done", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
-                        # Background persist
-                        _t_done = asyncio.create_task(_persist_assistant_message(
-                            conversation_id=conversation_id,
-                            tenant_id=tenant_id,
-                            content=full_text,
-                            message_count=len(history) + 2,
-                        ))
-                        _background_tasks.add(_t_done)
-                        _t_done.add_done_callback(_background_tasks.discard)
+                        logger.warning("chat.stream.done_empty_after_tools", tool_iters=tool_iter)
                         return
 
                     # Append assistant message with tool_calls + execute each
