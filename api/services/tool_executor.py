@@ -504,10 +504,22 @@ ANALYZE_MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8MB cap (Gemini accepts up to 20MB 
 
 
 async def _fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
-    """Download an image URL and return (bytes, mime_type). Raises on too-large or non-image."""
+    """Download an image URL and return (bytes, mime_type). Raises on too-large or non-image.
+
+    Sends a real browser User-Agent because some hosts (Wikipedia, CDN, etc.)
+    return 403 to default Python clients to discourage scraping.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36 MiganCore-Vision/1.0"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
         try:
-            resp = await client.get(image_url, follow_redirects=True)
+            resp = await client.get(image_url, follow_redirects=True, headers=headers)
             resp.raise_for_status()
         except httpx.TimeoutException:
             raise ToolExecutionError(f"Timeout fetching image from {image_url[:80]}")
