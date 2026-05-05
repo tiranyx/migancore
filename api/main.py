@@ -206,9 +206,31 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("synthetic.auto_resume.error", error=str(exc))
 
+    # 9. Day 47: boot-time contract validation (catches Day 46 tool-config drift)
+    #    + start TaskRegistry watchdog (catches Day 39 + Day 44 silent task death)
+    watchdog_task = None
+    try:
+        from services.contracts import boot_check_and_log, watchdog_loop, safe_task
+        boot_check_and_log()  # logs ok/warning/error; non-fatal
+        watchdog_task = safe_task(
+            watchdog_loop(interval_s=60.0),
+            name="contracts_watchdog",
+            register=False,  # don't register the watchdog itself in its own registry
+        )
+    except Exception as exc:
+        logger.error("contracts.startup_failed", error=str(exc))
+
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
+
+    # Tear down contracts watchdog
+    if watchdog_task is not None and not watchdog_task.done():
+        watchdog_task.cancel()
+        try:
+            await watchdog_task
+        except asyncio.CancelledError:
+            pass
 
     # Tear down ONAMIX MCP client
     if onamix_mcp is not None:
@@ -237,7 +259,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.5.14",
+    version="0.5.15",
     lifespan=lifespan,
 )
 
