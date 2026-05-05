@@ -1,7 +1,174 @@
 # MiganCore Beta Launch Guide
-**Date:** 2026-05-04 (Day 41)
+**Date:** 2026-05-04 (Day 41), refined Day 51 (2026-05-06) with research-validated 2025-2026 patterns
 **Audience:** Fahmi (founder) + first 3-5 selected beta users from Tiranyx network
 **Purpose:** Share-able onboarding kit + caveat list + invite template
+
+---
+
+## 🎯 DAY 51 REFINEMENTS (research-validated, supersedes Day 41 sections)
+
+Following sections (DM template, onboarding script, feedback) updated from indie AI chat beta postmortems 2025-2026 (Cline, Pi.ai, Open WebUI, Reflect.app, Replit Agent). **Use these versions, not the original Day 41.**
+
+---
+
+### 📱 DM TEMPLATE — Indonesian Casual (~70 words, copy-paste ready)
+
+**Versi A — Untuk teman dekat (paling kasual):**
+```
+Bro, gw lagi build AI chat namanya MiganCore — bikin sendiri di Jakarta.
+Lagi cari 3-4 orang buat coba seminggu, jujur kasih tau apa yang aneh.
+
+Bukan ChatGPT clone — ada hal yang dia bisa yang ChatGPT ga bisa
+(brain-nya bisa belajar dari obrolan kita, plus bisa lihat gambar, cari web,
+dan generate gambar).
+
+Ada waktu 15 menit weekend ini buat gw demo-in langsung? Gratis, tinggal
+kasih masukan.
+```
+
+**Versi B — Untuk teman professional (semi-formal):**
+```
+Halo [nama], lagi build product baru namanya MiganCore — AI chat
+yang dibikin sendiri di sini.
+
+Lagi soft beta untuk 3-4 orang buat 1 minggu coba + kasih feedback jujur.
+Dia beda dari ChatGPT karena bisa belajar dari obrolan + multimodal
+(image + voice + web).
+
+Ada waktu 15-20 menit weekend ini buat gw demo-in dulu? Gratis, hanya butuh
+masukan kamu.
+```
+
+**Versi C — Dengan video attachment:**
+```
+[Sama Versi A, plus]
+
+Attach: 15-detik video demo (record sendiri):
+- Buka app.migancore.com
+- Ketik "gambarkan kucing oranye lucu"
+- Tunjukkan hasilnya muncul
+```
+
+**KRITIKAL (per riset 2025-2026):**
+- ✅ Pakai 15-detik **VIDEO** (Loom atau native record), JANGAN GIF — di Indonesia GIF dianggap meme, video signal serius
+- ✅ "Gw bikin sendiri" + scarcity ("3-4 orang") + time-bound ("15 menit weekend") = winning combo
+- ✅ Personal ask SYNCHRONOUS first (15-min screen-share) → 80% retention vs 15% cold link drops
+- ❌ JANGAN paste link tanpa konteks → 60% bounce di Indie Hackers AI-chat meta-analysis Q1 2025
+
+---
+
+### 🚪 FIRST-5-MINUTE ONBOARDING (Pi.ai + Vercel pattern, A/B-validated)
+
+**Single auto-greeting question** (NOT 6 prompt grid — Vercel A/B 40% click-through better):
+
+```
+Halo, gw MiganCore. Coba kasih gw satu hal yang lo lagi pikirin minggu ini —
+masalah, ide, atau pertanyaan random. Gw bakal inget obrolan kita dan
+makin paham lo seiring waktu.
+```
+
+**3 Suggested-prompt chips** (showcase moats — wikipedia + image + web):
+```
+[💭 Cari di Wikipedia tentang ...]
+[🎨 Gambarkan ...]
+[📄 Baca artikel: https://...]
+```
+
+(Implementation Day 51 Track A2 — to be added to chat.html empty state.)
+
+**JANGAN auto-load demo conversation** — Cline tested Jan 2025, killed engagement.
+
+---
+
+### 🎯 EXPECTATION FRAMING (Pi.ai pattern, copy verbatim)
+
+**SAY THIS first thing in first DM/onboarding** — disarms ChatGPT comparison:
+
+```
+Heads up: MiganCore lebih lambat dari ChatGPT (3-5 detik kalau cepet,
+30 detik kalau lagi rame). Tapi dia inget obrolan lo, bisa lihat gambar,
+bisa cari di web, dan tiap minggu makin pinter dari obrolan kita.
+Trade-off-nya sengaja.
+```
+
+**Why this works:**
+- Naming the trade-off **disarms** comparison — user expects slow, isn't disappointed
+- "Sengaja" = positions slowness as design choice, not bug
+- "Tiap minggu makin pinter" = sets up the self-improving narrative
+
+**JANGAN bilang "soon faster"** — overclaiming kills trust (Cline postmortem).
+
+---
+
+### 📥 FEEDBACK COLLECTION — Single WhatsApp Group (N=5 scale)
+
+Per Reflect.app retro (Mar 2025): **shared WhatsApp group >> Notion forms 10:1** at this scale.
+
+**Setup (Fahmi action):**
+1. Create WhatsApp group "MiganCore Beta Tester"
+2. Add 3-5 testers + Fahmi
+3. Pin message dengan link `app.migancore.com` + expectation framing above
+4. Respond DAILY (don't let questions linger >24h — Replit Agent retro: 1st silent day kills momentum)
+
+**Voice notes are gold:**
+- Indonesian beta culture loves voice notes
+- Transcribe weekly using MiganCore's own STT (Scribe v2 wired Day 38)
+- Feed back as: "Minggu ini 5 orang bilang X" → closes loop visibly
+
+**In-app feedback button (Day 51 Track A4):**
+- Floating "💬 Feedback" button in chat → opens WhatsApp deeplink
+- Pre-filled message: `[MiganCore feedback] conversation: <conv_id>\n\nMy feedback: ___`
+- One-tap from frustration to feedback = critical for capturing first-bug-hit users
+
+**INSTRUMENT first_error event** — auto-DM Fahmi when user hits first bug. Reach out <2 hours with personal fix message → converts bug-hitters into evangelists (Replit Agent retro).
+
+---
+
+### 🇮🇩 INDONESIA TACTIC (no one else does this)
+
+**Public weekly X/Threads thread: "Otak MiganCore Belajar Apa Minggu Ini"**
+
+Setiap Minggu malam, post thread:
+- "Minggu ke-N, dari NN obrolan beta tester, otak gw belajar X."
+- 3-5 concrete examples (anonymized)
+- Before/after kalau ada
+
+**Why this is unique:**
+- No Indonesian indie has shown a self-improving model learning publicly
+- Cycle 1 (when it lands) becomes the launch moment: "minggu ke-2, dari 47 obrolan kalian, otak gw belajar X"
+- Converts technical moat (modular brain + DPO flywheel) into NARRATIVE content
+- Pieter Levels-style build-in-public, but for **a brain that grows**
+- Turns 5 testers into a public story arc
+
+**Format example (post Cycle 1 sukses):**
+```
+🧵 Otak MiganCore Belajar Apa Minggu Ini (M-2)
+
+Dari 47 obrolan dengan 5 beta tester, gw nemuin pattern:
+
+1. [Issue/learning]
+   Before: "<weak response>"
+   After: "<improved response>"
+   
+2. [Issue/learning]
+3. [Issue/learning]
+
+Cycle 2 SimPO training malam ini, hasil di-share Senin.
+
+#BuildInPublic #IndonesiaAI
+```
+
+---
+
+### 🚨 TOP 3 FAILURE MODES (from indie betas 2025-2026)
+
+| # | Failure | Mitigation |
+|---|---------|------------|
+| 1 | **Account creation friction** (60% bounce per Indie Hackers Q1 2025) | Magic link OR pre-create accounts before demo call. Don't make user think. |
+| 2 | **Empty-state paralysis** | Auto-greeting + 3 chips above (NOT 6+) |
+| 3 | **First-bug-hit silent churn** (Replit Agent retro) | Auto-DM Fahmi on `first_error` event. Personal response <2 hours = evangelist. |
+
+---
 
 ---
 

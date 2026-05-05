@@ -1771,13 +1771,13 @@
   // ===========================
   // CHAT SCREEN
   // ===========================
+  // Day 51: Research-validated chips (Vercel A/B 2025 — 3 chips beat 6 by 40%)
+  // Strategy: showcase 3 unique moats (Wikipedia search + image generation + web read)
+  // NOT generic "what can you do" — that triggers empty-state paralysis
   const HINTS = [
-    'Apa yang bisa kamu lakukan?',
-    'Jelaskan arsitektur MiganCore',
-    'Tulis puisi tentang AI',
-    'Bantu saya brainstorm ide produk',
-    'Apa itu DPO training?',
-    'Bagaimana cara deploy ke VPS?',
+    '💭 Cari di Wikipedia tentang Soekarno',
+    '🎨 Gambarkan kucing oranye lucu sedang tidur',
+    '📄 Baca https://news.ycombinator.com',
   ];
 
   function ChatScreen({ user, onLogout }) {
@@ -2606,6 +2606,26 @@
                 ? '👁 Vision processing… brain akan terima caption.'
                 : 'ENTER kirim · SHIFT+ENTER baris baru · 📎 / paste / drop gambar · 🎤 mic'}
             </div>
+            {/* Day 51: Beta feedback shortcut — WhatsApp deeplink (research: WhatsApp >> forms 10:1 at N=5) */}
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `[MiganCore Beta Feedback]\n\nConv: ${conversationId || 'new'}\nUser: ${user?.email || 'guest'}\n\nMy feedback:\n`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-block',
+                marginTop: '0.5rem',
+                fontSize: '0.7rem',
+                color: 'var(--text-dim)',
+                textDecoration: 'none',
+                opacity: 0.7,
+                fontFamily: 'var(--mono)',
+              }}
+              title="Kirim feedback via WhatsApp (auto-fill conversation context)"
+            >
+              💬 Beta feedback? Klik untuk WhatsApp
+            </a>
           </div>
         </main>
 
