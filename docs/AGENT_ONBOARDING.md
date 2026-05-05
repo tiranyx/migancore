@@ -80,7 +80,7 @@ User's exact words yang HARUS diikuti tiap sprint:
 
 ## 🚨 CRITICAL FAILURE MODES (LESSONS PAST)
 
-Top 6 yang HARUS diingat (74 lessons total — semua di MEMORY.md per-day notes):
+Top 6 yang HARUS diingat (76 lessons total — semua di MEMORY.md per-day notes):
 
 | # | Lesson | Forever-rule |
 |---|--------|--------------|
@@ -110,6 +110,8 @@ Top 6 yang HARUS diingat (74 lessons total — semua di MEMORY.md per-day notes)
 | **72** | **Self-learning sources are Migan's "library card", NOT its tongue** | Day 53 user added w3schools/roadmap.sh/freecodecamp/discuss.python/stackoverflow as approved sources. Library card = read access (via web_read/onamix_search) for mentor knowledge. Tongue = response — always own model + own voice. Confusing the two = wrapper pattern (#68) extended to web. Right pattern: read source → distill to DPO pair → train → eventually answer without source. See `docs/SELF_LEARNING_SOURCES.md`. |
 | **73** | **After flipping a default, audit ALL surfaces that re-derive the same decision** | Day 53 evening: I flipped `auto` from speculative→ollama (Lesson #71) but the response header `X-Inference-Engine-Resolved` re-derived the choice via duplicated logic that wasn't updated → header reported `speculative` while runtime used Ollama. Pure observability lie. External agent caught within hours. Rule: when a default flips, `grep` codebase for all parallel derivations of the same decision; either delete duplicates and pass the resolved value, or update atomically. **Single source of truth = drift-free.** Fix in `api/routers/chat.py` resolves engine ONCE, hands result to both header and generator. |
 | **74** | **Spend on the bottleneck, not on the comfortable upgrade** | Day 53 evening Fahmi tanya "Hostinger VPS plan mana yang cukup?" karena local desktop penuh. Tapi blocker aktual = Cycle 1 (butuh GPU). Hostinger KVM = CPU only, 0% bantu Cycle 1. Comfortable upgrade ($25-51/mo dedicated VPS) tidak solve real problem ($5 RunPod top-up does). Rule: sebelum approve purchase, jawab "ini solve bottleneck atau comfort?" Pair dengan #57 (STOP — don't add tools/cloud when X already enough) + #70 (speed → better local model NOT vendor swap by default). Doc: `docs/VPS_DECISION_DAY53.md`. |
+| **75** | **Audit vendor's first-class features BEFORE building custom from raw REST** | Day 54 morning: saya tulis 250-line `cycle1_runpod.py` dengan raw `urllib.request` REST calls. Fahmi tunjukin RunPod console punya Fine-tuning UI + Pod Templates + Network Volumes + `runpodctl` CLI — fitur yang dirancang persis untuk hindari boilerplate ini. Fine-tuning UI tidak fit SimPO+APO custom kita, tapi **Pod Templates** (pre-baked image, boot ~60-120s vs 300s+) dan **Network Volumes** (persist Qwen 7B base 15GB across cycles) absolutely would have helped. Rule: sebelum commit ke custom integration, spend 15min baca vendor's docs **table of contents** (bukan API reference). Identify high-leverage features ABOVE raw REST. Custom code only kalau tidak ada built-in match. Doc: `docs/RUNPOD_FEATURES_AUDIT.md`. Pair dengan #57 (STOP — don't build what already exists). |
+| **76** | **Explicit timezone discipline in mixed-locale teams** | Day 54: server logs UTC (Docker default), Fahmi reads Jakarta WIB (UTC+7). Saya tulis "22:37" tanpa konteks WIB → cognitive load di Fahmi untuk mental convert. Rule: setiap operational timestamp di user-facing reports = sertakan UTC + WIB. Format: `22:37 UTC (05:37 WIB Jakarta)`. Logs internal boleh UTC-only, tapi any human-facing summary WAJIB dual. |
 
 ---
 
