@@ -347,16 +347,56 @@ Lihat `docs/QA_FULLREVIEW_2026-05-05.md` Section 7 Sprint 4 untuk full list.
 | 45 | Claude | v0.5.14 | **conv_summarizer.py** (2900-tok trigger) + VISION_DISTINCTIVENESS_2026.md strategic compass |
 | 46 | Claude | v0.5.14 | **Empty bubble bug FIXED** end-to-end (4 root causes: agents.json drift + HYPERX dispatcher + Wikipedia missing + valid_engines narrow). Wikipedia search NEW |
 | **47** | Claude | v0.5.14 | **QA Sprint 1 DONE** (6 security/reliability fixes, commit `31acdea`). Dokumen ini dibuat. |
+| **47b** | Claude (parallel session) | v0.5.15 | **Design by Contract for LLM Agents** (`services/contracts.py`): boot validator + safe_task + TaskRegistry watchdog + output contracts. Caught 2 real issues + 1 false-positive in <1s on first deploy. 5-dim QA sweep + full E2E user pipeline VALIDATED. |
+| **48** | Claude | v0.5.16 | **QA close-out — all 6 known bugs FIXED**: (1) Cloudflare ENETUNREACH (hyperx dns ipv4first), (2+3) drop 4 stale schemas/handlers (skills.json 23→19), (4) [H2] admin Redis rate limit 10/min, (5) [H5] analyze_image SSRF block, (6) [H7] config.py fail-safe on default creds. 4-test E2E sweep all PASS. **Production SEAMLESS.** |
+| **49** | Claude | v0.5.16 | **Cycle 1 SimPO STAGED** + pre-flight ALL GREEN. Critical finding: original 30-day blueprint promised "Seed + Self-Improving v1" but Cycle 1 NEVER triggered. 596 DPO pairs exported (TRL-compatible JSONL). 3 hyperparam refinements (lr 5e-7, padding_free, use_liger_kernel). **AWAITING USER GO** for $0.15-0.50 RunPod trigger. |
 
 ---
 
-## BULAN 2 ROADMAP (SISA)
+## ⚡ DAY 49 BREAK STATE (CURRENT — read this first if resuming)
 
-### Sekarang — Day 47 (Dalam Progress)
-1. ✅ QA Sprint 1: 6 critical/high fixes
-2. ✅ Dokumen master ini
-3. 🟡 Trigger Cycle 1 jika DPO ≥500 (verifikasi status synthetic generator)
-4. 🟡 QA Sprint 2: training pipeline fixes (H15, H16, H17, H18, H19)
+**Single source of truth for resume:** `docs/RESUME_DAY49_TO_DAY50.md` (5-min read).
+
+**Production state:** API v0.5.16 healthy, contracts.boot.ok handlers=19 schemas=19, DPO **601** (and growing).
+
+**Single immediate next action:** User GO/NO-GO for A2 RunPod Cycle 1 trigger.
+- Cost: $0.15-0.50 (well under $7 hard cap)
+- Time: 15-25 min wall-clock
+- Output: First MiganCore-branded adapter `migancore-7b-soul-v0.1`
+- Validates: "Self-Improving" half of original 30-day vision
+
+**If user replies "go":** trigger autonomously per `RESUME_DAY49_TO_DAY50.md` § "Trigger command (when GO)".
+**If user replies "wait":** standby preserved; pick from Branch C alternative work.
+
+**Key new docs added Day 47-49:**
+- `docs/VISION_DISTINCTIVENESS_2026.md` — strategic compass (3 moats, STOP/DOUBLE DOWN, Dream Cycle bold move)
+- `docs/QA_FULLREVIEW_2026-05-05.md` — 65-issue catalog (Sprint 1 done, Sprint 2/3 backlog)
+- `docs/DAY47_PLAN.md` + `DAY47_RETRO.md` — meta-pattern Contract Assertions
+- `docs/DAY48_QA_CLOSEOUT.md` — 6 fixes for production SEAMLESS
+- `docs/DAY49_PLAN.md` + `DAY49_PREFLIGHT_RETRO.md` — Cycle 1 staged
+- `docs/RESUME_DAY49_TO_DAY50.md` — break-state checkpoint (THIS RESUME ANCHOR)
+
+**Lessons added Day 47-49 (50 → 53 cumulative):**
+- #51: Design by Contract for LLM Agents
+- #52: 5-dimension QA discipline (backend/frontend/db/tools/integration)
+- #53: Parallel sessions are emerging coordination challenge — `git pull` + scan recent commits at session start
+
+**Critical lessons to internalize before any code change:** #45, #48, #50, #51 (see `RESUME_DAY49_TO_DAY50.md` § "Critical Lessons")
+
+---
+
+## BULAN 2 ROADMAP (SISA — revised post-Day-49)
+
+### IMMEDIATE — Day 49 close (USER GATE)
+1. ✅ Pre-flight A1 ALL GREEN (this session)
+2. 🟡 **USER GO/NO-GO** on A2 Cycle 1 RunPod trigger
+3. (If GO) Trigger Cycle 1 → identity eval → hot-swap if PROMOTE
+4. (If WAIT) Pick from Branch C alternative work
+
+### Day 50 — Branch A (Cycle 1 PROMOTED)
+1. GGUF convert + Ollama hot-swap to `migancore:0.1`
+2. A/B 10% traffic split via FastAPI header `X-Model-Variant`
+3. Monitor 24h win-rate, error rate, identity drift
 
 ### Day 47–49 — Cycle 1 Training Trigger
 1. Verifikasi `/v1/admin/stats` → `unused_pairs ≥ 500`
