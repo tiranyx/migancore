@@ -3,49 +3,6 @@
   "description": "Skill registry for MiganCore — declarative tool definitions with permission model.",
   "skills": [
     {
-      "id": "web_search",
-      "name": "Web Search (DEPRECATED — use onamix_search instead)",
-      "description": "DEPRECATED: do NOT use this tool. Use onamix_search instead — it supports 7 engines (google, ddg, brave, bing, startpage, yandex, ecosia), is faster, and never times out. This DDG-only tool is kept only for backwards compatibility and frequently times out.",
-      "handler": "builtin",
-      "mcp_compatible": true,
-      "schema": {
-        "type": "object",
-        "properties": {
-          "query": { "type": "string", "description": "Search query (PREFER onamix_search for new calls)." },
-          "limit": { "type": "integer", "default": 5 }
-        },
-        "required": ["query"]
-      },
-      "permissions": ["web.read"],
-      "npc_assignable": false,
-      "cost_estimate": "~$0.001 per call (often times out)"
-    },
-    {
-      "id": "python_repl",
-      "name": "Python REPL",
-      "description": "Execute Python code in a sandboxed environment",
-      "handler": "builtin",
-      "mcp_compatible": true,
-      "schema": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Python code to execute"
-          },
-          "timeout": {
-            "type": "integer",
-            "default": 30,
-            "description": "Execution timeout in seconds"
-          }
-        },
-        "required": ["code"]
-      },
-      "permissions": ["sandbox.execute"],
-      "npc_assignable": true,
-      "cost_estimate": "free"
-    },
-    {
       "id": "memory_write",
       "name": "Memory Write",
       "description": "Write a fact to long-term memory",
@@ -68,9 +25,14 @@
             "description": "Memory namespace"
           }
         },
-        "required": ["key", "value"]
+        "required": [
+          "key",
+          "value"
+        ]
       },
-      "permissions": ["memory.write"],
+      "permissions": [
+        "memory.write"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free"
     },
@@ -93,40 +55,15 @@
             "description": "Max results"
           }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       },
-      "permissions": ["memory.read"],
+      "permissions": [
+        "memory.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free"
-    },
-    {
-      "id": "spawn_agent",
-      "name": "Spawn Agent",
-      "description": "Create a new child agent with inherited persona",
-      "handler": "builtin",
-      "mcp_compatible": false,
-      "schema": {
-        "type": "object",
-        "properties": {
-          "template_id": {
-            "type": "string",
-            "description": "Agent template ID from agents.json"
-          },
-          "name": {
-            "type": "string",
-            "description": "Agent name"
-          },
-          "persona_overrides": {
-            "type": "object",
-            "description": "Custom persona modifications"
-          }
-        },
-        "required": ["name"]
-      },
-      "permissions": ["agent.spawn"],
-      "npc_assignable": false,
-      "requires_approval": true,
-      "cost_estimate": "free (compute only)"
     },
     {
       "id": "read_file",
@@ -142,33 +79,13 @@
             "description": "File path"
           }
         },
-        "required": ["path"]
+        "required": [
+          "path"
+        ]
       },
-      "permissions": ["fs.read"],
-      "npc_assignable": true,
-      "cost_estimate": "free"
-    },
-    {
-      "id": "http_get",
-      "name": "HTTP GET",
-      "description": "Make an HTTP GET request to an external API",
-      "handler": "builtin",
-      "mcp_compatible": true,
-      "schema": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "URL to fetch"
-          },
-          "headers": {
-            "type": "object",
-            "description": "Optional headers"
-          }
-        },
-        "required": ["url"]
-      },
-      "permissions": ["web.read"],
+      "permissions": [
+        "fs.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free"
     },
@@ -187,7 +104,14 @@
           },
           "image_size": {
             "type": "string",
-            "enum": ["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"],
+            "enum": [
+              "square_hd",
+              "square",
+              "portrait_4_3",
+              "portrait_16_9",
+              "landscape_4_3",
+              "landscape_16_9"
+            ],
             "default": "landscape_4_3",
             "description": "Output image dimensions. landscape_4_3 = 1024x768. square_hd = 1024x1024."
           },
@@ -199,9 +123,13 @@
             "description": "Number of images to generate (1-4)"
           }
         },
-        "required": ["prompt"]
+        "required": [
+          "prompt"
+        ]
       },
-      "permissions": ["external.api"],
+      "permissions": [
+        "external.api"
+      ],
       "npc_assignable": true,
       "cost_estimate": "~$0.003 per image"
     },
@@ -227,9 +155,13 @@
             "description": "Optional model ID. Default: eleven_flash_v2_5 (fastest)"
           }
         },
-        "required": ["text"]
+        "required": [
+          "text"
+        ]
       },
-      "permissions": ["external.api"],
+      "permissions": [
+        "external.api"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free tier 10k chars/month (~$0 for testing)"
     },
@@ -251,9 +183,14 @@
             "description": "Text content to write to the file"
           }
         },
-        "required": ["path", "content"]
+        "required": [
+          "path",
+          "content"
+        ]
       },
-      "permissions": ["fs.write"],
+      "permissions": [
+        "fs.write"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free"
     },
@@ -286,13 +223,18 @@
           },
           "lang": {
             "type": "string",
-            "enum": ["id", "en"],
+            "enum": [
+              "id",
+              "en"
+            ],
             "default": "id",
             "description": "Response language: 'id' for Indonesian, 'en' for English."
           }
         }
       },
-      "permissions": ["external.api"],
+      "permissions": [
+        "external.api"
+      ],
       "npc_assignable": true,
       "cost_estimate": "~$0.0001 per image (Gemini Vision); fallback Claude ~$0.005"
     },
@@ -305,13 +247,28 @@
       "schema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "HTTPS URL to read." },
-          "no_cache": { "type": "boolean", "default": false, "description": "Bypass Jina CDN cache for fresh content." },
-          "max_chars": { "type": "integer", "default": 30000, "description": "Cap returned markdown length (1000-30000)." }
+          "url": {
+            "type": "string",
+            "description": "HTTPS URL to read."
+          },
+          "no_cache": {
+            "type": "boolean",
+            "default": false,
+            "description": "Bypass Jina CDN cache for fresh content."
+          },
+          "max_chars": {
+            "type": "integer",
+            "default": 30000,
+            "description": "Cap returned markdown length (1000-30000)."
+          }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free tier 1M token/month (Jina Reader)"
     },
@@ -324,13 +281,31 @@
       "schema": {
         "type": "object",
         "properties": {
-          "markdown": { "type": "string", "description": "The markdown source to render." },
-          "title": { "type": "string", "default": "MiganCore Document", "description": "Document title (HTML <title>)." },
-          "page_size": { "type": "string", "enum": ["A4", "Letter"], "default": "A4" }
+          "markdown": {
+            "type": "string",
+            "description": "The markdown source to render."
+          },
+          "title": {
+            "type": "string",
+            "default": "MiganCore Document",
+            "description": "Document title (HTML <title>)."
+          },
+          "page_size": {
+            "type": "string",
+            "enum": [
+              "A4",
+              "Letter"
+            ],
+            "default": "A4"
+          }
         },
-        "required": ["markdown"]
+        "required": [
+          "markdown"
+        ]
       },
-      "permissions": ["external.api"],
+      "permissions": [
+        "external.api"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (local CPU render)"
     },
@@ -343,13 +318,36 @@
       "schema": {
         "type": "object",
         "properties": {
-          "markdown": { "type": "string", "description": "Marp markdown — slides separated by --- lines." },
-          "format": { "type": "string", "enum": ["pptx", "pdf", "html"], "default": "pptx" },
-          "theme": { "type": "string", "enum": ["default", "gaia", "uncover"], "default": "default" }
+          "markdown": {
+            "type": "string",
+            "description": "Marp markdown — slides separated by --- lines."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "pptx",
+              "pdf",
+              "html"
+            ],
+            "default": "pptx"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "default",
+              "gaia",
+              "uncover"
+            ],
+            "default": "default"
+          }
         },
-        "required": ["markdown"]
+        "required": [
+          "markdown"
+        ]
       },
-      "permissions": ["external.api"],
+      "permissions": [
+        "external.api"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (local CPU render)"
     },
@@ -362,12 +360,23 @@
       "schema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "URL to fetch (http or https)." },
-          "raw": { "type": "boolean", "default": false, "description": "Return raw HTML instead of parsed text." }
+          "url": {
+            "type": "string",
+            "description": "URL to fetch (http or https)."
+          },
+          "raw": {
+            "type": "boolean",
+            "default": false,
+            "description": "Return raw HTML instead of parsed text."
+          }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (local Node.js subprocess)"
     },
@@ -380,18 +389,42 @@
       "schema": {
         "type": "object",
         "properties": {
-          "query": { "type": "string", "description": "Search query (Indonesian or English both work)." },
+          "query": {
+            "type": "string",
+            "description": "Search query (Indonesian or English both work)."
+          },
           "engine": {
             "type": "string",
-            "enum": ["wikipedia", "ddg", "brave", "bing", "google", "startpage", "ecosia", "yandex", "github", "hn", "wiby", "multi"],
+            "enum": [
+              "wikipedia",
+              "ddg",
+              "brave",
+              "bing",
+              "google",
+              "startpage",
+              "ecosia",
+              "yandex",
+              "github",
+              "hn",
+              "wiby",
+              "multi"
+            ],
             "default": "multi",
             "description": "Pick by intent: 'wikipedia' (encyclopedia/biographical/factual lookups — STRONG match for queries with 'wikipedia', 'apa itu', 'tentang', 'siapa'), 'ddg/brave/bing/google' (general web), 'github' (code), 'hn' (tech news/discussions), 'multi' (default — combines wikipedia+hn+github+wiby)."
           },
-          "limit": { "type": "integer", "default": 10, "description": "Max results (1-30)." }
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "description": "Max results (1-30)."
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (local Node.js subprocess)"
     },
@@ -404,16 +437,26 @@
       "schema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "Target URL." },
+          "url": {
+            "type": "string",
+            "description": "Target URL."
+          },
           "selectors": {
             "type": "object",
             "description": "Map of {field_name: regex_pattern} to extract from HTML. Use capture groups (parens) to get just the value.",
-            "additionalProperties": { "type": "string" }
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
-        "required": ["url", "selectors"]
+        "required": [
+          "url",
+          "selectors"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (local Node.js subprocess)"
     },
@@ -426,13 +469,30 @@
       "schema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "Target URL (http/https)." },
-          "body": { "description": "Request body — string for form, object for JSON.", "type": ["string", "object"] },
-          "json": { "type": "boolean", "description": "Send as application/json (default: true if body is object)." }
+          "url": {
+            "type": "string",
+            "description": "Target URL (http/https)."
+          },
+          "body": {
+            "description": "Request body — string for form, object for JSON.",
+            "type": [
+              "string",
+              "object"
+            ]
+          },
+          "json": {
+            "type": "boolean",
+            "description": "Send as application/json (default: true if body is object)."
+          }
         },
-        "required": ["url", "body"]
+        "required": [
+          "url",
+          "body"
+        ]
       },
-      "permissions": ["web.write"],
+      "permissions": [
+        "web.write"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (MCP stdio)"
     },
@@ -445,13 +505,28 @@
       "schema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "Seed URL." },
-          "maxPages": { "type": "integer", "description": "Max pages to crawl (default 10, hard cap 50).", "default": 10 },
-          "sameOrigin": { "type": "boolean", "description": "Restrict to same origin (default true).", "default": true }
+          "url": {
+            "type": "string",
+            "description": "Seed URL."
+          },
+          "maxPages": {
+            "type": "integer",
+            "description": "Max pages to crawl (default 10, hard cap 50).",
+            "default": 10
+          },
+          "sameOrigin": {
+            "type": "boolean",
+            "description": "Restrict to same origin (default true).",
+            "default": true
+          }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (MCP stdio)"
     },
@@ -464,11 +539,20 @@
       "schema": {
         "type": "object",
         "properties": {
-          "limit": { "type": "integer", "description": "Max entries to return (default 50).", "default": 50 },
-          "filter": { "type": "string", "description": "Optional type filter: get|search|scrape|post." }
+          "limit": {
+            "type": "integer",
+            "description": "Max entries to return (default 50).",
+            "default": 50
+          },
+          "filter": {
+            "type": "string",
+            "description": "Optional type filter: get|search|scrape|post."
+          }
         }
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (MCP stdio)"
     },
@@ -481,12 +565,22 @@
       "schema": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "URL to extract links from." },
-          "filter": { "type": "string", "description": "Substring to filter links (matches URL or anchor text, case-insensitive)." }
+          "url": {
+            "type": "string",
+            "description": "URL to extract links from."
+          },
+          "filter": {
+            "type": "string",
+            "description": "Substring to filter links (matches URL or anchor text, case-insensitive)."
+          }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (MCP stdio)"
     },
@@ -499,11 +593,19 @@
       "schema": {
         "type": "object",
         "properties": {
-          "get": { "type": "boolean", "description": "Return current config (default: true if no 'set')." },
-          "set": { "type": "object", "description": "Config patch to apply (e.g. {engine: 'brave', userAgent: '...'})." }
+          "get": {
+            "type": "boolean",
+            "description": "Return current config (default: true if no 'set')."
+          },
+          "set": {
+            "type": "object",
+            "description": "Config patch to apply (e.g. {engine: 'brave', userAgent: '...'})."
+          }
         }
       },
-      "permissions": ["admin.tools"],
+      "permissions": [
+        "admin.tools"
+      ],
       "npc_assignable": false,
       "cost_estimate": "free (MCP stdio)"
     },
@@ -518,14 +620,24 @@
         "properties": {
           "urls": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of URLs (max 10 enforced)."
           },
-          "raw": { "type": "boolean", "description": "Return raw HTML instead of parsed text.", "default": false }
+          "raw": {
+            "type": "boolean",
+            "description": "Return raw HTML instead of parsed text.",
+            "default": false
+          }
         },
-        "required": ["urls"]
+        "required": [
+          "urls"
+        ]
       },
-      "permissions": ["web.read"],
+      "permissions": [
+        "web.read"
+      ],
       "npc_assignable": true,
       "cost_estimate": "free (MCP stdio)"
     }

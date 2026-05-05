@@ -104,6 +104,40 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
+# ---------------------------------------------------------------------------
+# Day 48 [H7] — Fail-safe credential check at import time.
+# Prevents accidental production deploy with hardcoded "changeme" defaults.
+# ---------------------------------------------------------------------------
+def _assert_no_default_creds() -> None:
+    """Crash startup if production env still uses placeholder credentials.
+
+    Production = ENVIRONMENT='production'. Any "changeme" or empty critical
+    secret triggers ImportError at module load (fast-fail beats silent
+    accept-and-leak).
+    """
+    if settings.ENVIRONMENT != "production":
+        return
+    bad = []
+    # DATABASE_URL must not contain :changeme@
+    if ":changeme@" in (settings.DATABASE_URL or ""):
+        bad.append("DATABASE_URL still has ':changeme@' (default password)")
+    # REDIS_URL same check (only flag if password segment present)
+    if ":changeme@" in (settings.REDIS_URL or ""):
+        bad.append("REDIS_URL still has ':changeme@' (default password)")
+    # ADMIN_SECRET_KEY must be either set OR explicitly empty (admin-disabled)
+    if settings.ADMIN_SECRET_KEY and len(settings.ADMIN_SECRET_KEY) < 16:
+        bad.append("ADMIN_SECRET_KEY is shorter than 16 chars — increase entropy")
+    if bad:
+        raise RuntimeError(
+            "Refusing to start — default/weak credentials detected in production:\n  - "
+            + "\n  - ".join(bad)
+            + "\nSet real values via .env or container env vars before deploy."
+        )
+
+
+_assert_no_default_creds()
+
+
 def load_jwt_keys() -> tuple[str, str]:
     """Load RSA private and public keys from filesystem."""
     private_path = Path(settings.JWT_PRIVATE_KEY_PATH)

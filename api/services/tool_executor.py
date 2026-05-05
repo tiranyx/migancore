@@ -509,7 +509,60 @@ async def _fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
 
     Sends a real browser User-Agent because some hosts (Wikipedia, CDN, etc.)
     return 403 to default Python clients to discourage scraping.
+
+    Day 48 [H5]: SSRF guard. Reject URLs that resolve to private/loopback/
+    link-local/cloud-metadata IPs. Disable redirect-follow (verify each hop).
     """
+    # SSRF pre-check
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse(image_url)
+    if parsed.scheme not in ("http", "https"):
+        raise ToolExecutionError(f"Image URL must be http/https (got {parsed.scheme!r})")
+    host = parsed.hostname
+    if not host:
+        raise ToolExecutionError("Image URL has no host")
+
+    def _is_blocked(ip_str: str) -> bool:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return True  # malformed = block
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+            # Cloud metadata: AWS/GCP/Azure use 169.254.169.254 (caught by link_local),
+            # Alibaba 100.100.100.200 — explicit block:
+            or ip_str == "100.100.100.200"
+        )
+
+    # Resolve hostname (sync — we want failure to be immediate not async-buried)
+    try:
+        infos = await asyncio.to_thread(
+            socket.getaddrinfo, host, None, socket.AF_INET, socket.SOCK_STREAM
+        )
+    except socket.gaierror as exc:
+        raise ToolExecutionError(f"Cannot resolve image host {host!r}: {exc}")
+    for info in infos:
+        ip = info[4][0]
+        if _is_blocked(ip):
+            logger.warning(
+                "tool.analyze_image.ssrf_blocked",
+                host=host,
+                ip=ip,
+                url=image_url[:120],
+            )
+            raise ToolExecutionError(
+                f"Image host {host!r} resolves to blocked IP range ({ip}) — "
+                f"private/loopback/link-local/metadata addresses are not allowed."
+            )
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -518,9 +571,14 @@ async def _fetch_image_bytes(image_url: str) -> tuple[bytes, str]:
         ),
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     }
+    # Day 48 [H5]: follow_redirects=False — caller validated the resolved IP.
+    # If the host returns a 30x to a different host, we'd lose the SSRF check.
+    # Trade-off: legit redirect chains (CDN) may break. If this proves too
+    # strict in practice, switch to manual redirect loop with per-hop SSRF
+    # check (same pattern as recurse-resolve above).
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
         try:
-            resp = await client.get(image_url, follow_redirects=True, headers=headers)
+            resp = await client.get(image_url, follow_redirects=False, headers=headers)
             resp.raise_for_status()
         except httpx.TimeoutException:
             raise ToolExecutionError(f"Timeout fetching image from {image_url[:80]}")
@@ -1666,10 +1724,15 @@ async def _write_file(args: dict, ctx: ToolContext) -> dict:
 HandlerFn = Callable[[dict, ToolContext], Coroutine[Any, Any, dict]]
 
 TOOL_REGISTRY: dict[str, HandlerFn] = {
-    "web_search": _web_search,
+    # Day 48: web_search + python_repl handlers REMOVED from registry
+    # (deprecated since Day 42 + 47, schemas dropped from skills.json today).
+    # Handler functions retained in module for back-compat — re-add by
+    # uncommenting one line if a use case re-emerges. ONAMIX = web; sandbox
+    # tooling = E2B (Bulan 3 Day 50+ per VISION compass).
+    # "web_search": _web_search,
+    # "python_repl": _python_repl,
     "memory_write": _memory_write,
     "memory_search": _memory_search,
-    "python_repl": _python_repl,
     # Day 24 — Tool Expansion
     "generate_image": _generate_image,
     "read_file": _read_file,

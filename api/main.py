@@ -259,7 +259,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MiganCore API",
     description="Autonomous Digital Organism — Core Gateway",
-    version="0.5.15",
+    version="0.5.16",
     lifespan=lifespan,
 )
 

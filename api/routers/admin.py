@@ -29,7 +29,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text, func, select
@@ -58,17 +58,72 @@ _THRESHOLD_IDEAL = 2_000
 # Auth dependency
 # ---------------------------------------------------------------------------
 
-async def require_admin_key(x_admin_key: Optional[str] = Header(default=None)) -> None:
+async def _check_admin_rate_limit(client_ip: str, max_per_min: int = 10) -> None:
+    """Day 48 [H2] — Redis-backed per-IP rate limit on admin endpoints.
+
+    Defends against brute-force of ADMIN_SECRET_KEY. Counts ALL admin
+    requests per IP per minute (failed AND successful), since legit admin
+    use is bursty-low (a few clicks per minute at most).
+
+    Silent on Redis failure — never block admin during infra issue.
+    """
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+        # Fixed-window counter: bucket per (IP, minute)
+        bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+        key = f"admin:ratelimit:{client_ip}:{bucket}"
+        count = await r.incr(key)
+        if count == 1:
+            await r.expire(key, 65)  # bucket lifetime + small grace
+        await r.aclose()
+        if count > max_per_min:
+            logger.warning(
+                "admin.rate_limit_exceeded",
+                ip=client_ip,
+                count=count,
+                limit=max_per_min,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Admin rate limit exceeded ({max_per_min}/min per IP).",
+                headers={"Retry-After": "60"},
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Redis down or other — log but don't block (admin must stay reachable)
+        logger.warning("admin.rate_limit_check_failed", error=str(exc))
+
+
+async def require_admin_key(
+    request: Request,
+    x_admin_key: Optional[str] = Header(default=None),
+) -> None:
     """Validate X-Admin-Key header against settings.ADMIN_SECRET_KEY.
 
-    Raises 503 if admin is not configured (empty key in settings).
-    Raises 401 if the provided key does not match.
+    Day 48: Now also enforces per-IP rate limit (10/min) to defend against
+    brute-force of ADMIN_SECRET_KEY ([H2] from QA_FULLREVIEW Sprint 2).
+
+    Raises:
+      503 if admin is not configured (empty key in settings)
+      429 if rate limit exceeded
+      401 if the provided key does not match
     """
     if not settings.ADMIN_SECRET_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin endpoints not configured. Set ADMIN_SECRET_KEY in environment.",
         )
+    # Rate-limit FIRST so wrong-key attempts are throttled before they leak timing
+    client_ip = request.client.host if request.client else "unknown"
+    # Trust X-Forwarded-For only when nginx terminates TLS for us — already
+    # validated upstream in nginx config. Take leftmost (real client).
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        client_ip = fwd.split(",")[0].strip() or client_ip
+    await _check_admin_rate_limit(client_ip)
+
     if not secrets.compare_digest(x_admin_key or "", settings.ADMIN_SECRET_KEY):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
