@@ -16,11 +16,12 @@ curl -s https://api.migancore.com/health
 curl -s https://api.migancore.com/v1/public/stats | head -2
 git -C /c/migancore/migancore log --oneline -10
 
-# 2. Read 4 docs (priority order, total ~15 min):
+# 2. Read 5 docs (priority order, total ~20 min):
 #    a) docs/AGENT_ONBOARDING.md (THIS FILE)
-#    b) docs/ENVIRONMENT_MAP.md (VPS topology — CRITICAL, shared with 4 other projects)
-#    c) docs/RESUME_DAY*_TO_DAY*.md (latest break-state checkpoint)
-#    d) docs/VISION_DISTINCTIVENESS_2026.md (strategic compass)
+#    b) docs/VISION_PRINCIPLES_LOCKED.md ⭐ NEW Day 52 — anti-strategi-drift
+#    c) docs/ENVIRONMENT_MAP.md (VPS topology — CRITICAL, shared with 4 other projects)
+#    d) docs/RESUME_DAY*_TO_DAY*.md (latest break-state checkpoint)
+#    e) docs/VISION_DISTINCTIVENESS_2026.md (strategic compass)
 
 # 3. Skim memory:
 #    cat ~/.claude/projects/C--migancore/memory/MEMORY.md
@@ -102,6 +103,9 @@ Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes)
 | **65** | **Verify END-TO-END backend BEFORE assuming UX broken** | Day 49.5 panik chat slow → 5 jam diagnose Ollama/dual daemon. Real cause: tiranyx CPU contention (Lesson #56). Day 50 morning chat fast 22tps karena tiranyx idle. Rule: shared-resource contention check FIRST sebelum deep-dive code. |
 | **66** | **Indie indie launch Indonesia: "gw bikin sendiri" + scarcity + time-bound + 15-sec video** | Day 51 research synthesis: synchronous 15-min demo = 80% week-2 retention (vs 15% cold link). Video > GIF (Indonesian WA = GIF=meme). DM ~70 words max. 3 chips beat 6 by 40% (Vercel A/B). Pi.ai expectation framing "lebih lambat tapi inget" disarms ChatGPT comparison. WhatsApp group >> Notion forms 10:1 at N=5 (Reflect.app retro). Indonesia tactic uniqueness: weekly public X thread "Otak Belajar Apa Minggu Ini" — narrate self-improving moat. |
 | **67** | **JSX edits WAJIB verify variable scope FIRST + render BEFORE declare done** | Day 51 saya add WhatsApp button dengan `conversationId` (tebakan) — actual var `convId`. ReferenceError → JS fail top-level → React never render → BLANK page di production at moment-of-launch. User caught immediately. Rule: BEFORE declare any frontend edit done, (a) `grep -nE "varName"` untuk cek variable real ada, (b) reload browser dan verify render, (c) test Ctrl+Shift+R kalau cache stale. Backend semudah `import ast; ast.parse()` tapi frontend HARUS render-test. Cost: zero-tokens fix (3 char change), tapi reputasi 5 detik blank. |
+| **68** | **Teacher API = MENTOR, NEVER live RESPONDER** | Day 52 saya hampir usulkan Hybrid Brain (Kimi K2 sebagai live chat responder). User tarik kembali — itu wrapper pattern, defeats vision. Teacher API (Anthropic/OpenAI/Kimi/Gemini) ROLE: synthetic data generator, CAI critique, DPO pair generator (chosen=teacher, rejected=migan_baseline) → SimPO trains Migan. **Migan harus respond ke user pakai own brain.** Read `docs/VISION_PRINCIPLES_LOCKED.md`. |
+| **69** | **Standing alone principle — own tools default, third-party as teacher only** | ONAMIX pattern (took user-owned HYPERX, made own MCP) is the model. Don't add new third-party SDK as DEFAULT path. Acceptable trade-offs: (a) Gemini Vision as TEACHER for vision data → distill local Qwen-VL Day 60+, (b) fal.ai image gen (large diffusion impractical local). NEVER: route user chat to third-party. |
+| **70** | **Speed problems → better local model, NOT wrapper** | When CPU 7B too slow, vision-aligned solutions ranked: (1) speculative decoding (Qwen 0.5B+7B, all local, 2-3x), (2) distill 7B→3B own model, (3) better quantization, (4) dedicated GPU, (5) Cycle N+ better Qwen. NEVER: live teacher API. Speed trade-off doesn't justify breaking vision. |
 
 ---
 
