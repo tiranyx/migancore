@@ -97,6 +97,7 @@ Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes)
 | **59** | **JANGAN trust HTTP 204 untuk DELETE pod — selalu VERIFY** | Hari ini saya laporkan "DELETE 204" → asumsikan pod gone. Reality: termination delayed/silent-fail → pod jalan 10+ jam = $6.76 wasted. Setelah DELETE, WAJIB GET /pods/{id} → expect 404, ATAU GET /pods → expect pod tidak di list. |
 | **60** | **SECURE non-spot pod BILL DARI ALLOCATION, bukan dari boot** | Pod stuck "Rented by User" tanpa runtime jalan tetap kena charge $0.69/hr. SPOT pods only charge when running. ATURAN: kalau pod tidak boot dalam 5 menit, IMMEDIATE terminate + retry, jangan tunggu. |
 | **61** | **Cost telemetry harus polling otomatis, bukan manual check** | User screenshot menunjukkan pod jalan, saya pikir sudah mati. Butuh: cron job 5-menit yang query /v1/pods + log to file. Kalau ada pod >$0/hr lebih dari 1 jam tanpa progress = alert. |
+| **62** | **RunPod has bad days — diversify OR accept variability** | Hari ini 2x attempts (4090 RO + A40 CA, both SECURE) gagal boot. Bukan masalah image (10GB → 3GB tidak bantu). RunPod-side allocation issue. Rule: jangan spend >2 jam same vendor same fail mode → switch vendor (Vast.ai, Lambda) ATAU change strategy (defer + ship other tracks). |
 
 ---
 
