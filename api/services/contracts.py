@@ -106,14 +106,23 @@ def validate_tool_registry(
         )
 
     # Day 46 — DEPRECATED reference detector: any skill description that
-    # mentions "use X instead" where X is not a real handler
+    # mentions "use X instead" where X is not a real handler.
+    # Day 47 v2 refinement: skip generic English filler ("use this/that/it instead")
+    # — the regex must match a snake_case-looking token (underscore present
+    # OR length>=4) AND not be a stopword. Otherwise we get false positives
+    # on natural language like "use this instead of http_get".
     import re
+    _GENERIC_STOPWORDS = {"this", "that", "it", "these", "those", "them", "one"}
     for skill in skills_config.get("skills", []):
         desc = (skill.get("description") or "")
-        # Match patterns like "use foo_bar instead" or "use `foo_bar`"
         for m in re.finditer(r"use\s+`?([a-z_][a-z_0-9]*)`?\s+instead", desc, re.I):
             referenced = m.group(1).lower()
-            if referenced not in handler_names:
+            looks_like_tool = ("_" in referenced) or len(referenced) >= 4
+            if (
+                referenced not in _GENERIC_STOPWORDS
+                and looks_like_tool
+                and referenced not in handler_names
+            ):
                 errors.append(
                     f"skill '{skill['id']}' description tells LLM to "
                     f"'use {referenced} instead' but {referenced} is NOT in TOOL_HANDLERS "

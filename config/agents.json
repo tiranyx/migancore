@@ -16,7 +16,6 @@
         "web_read",
         "memory_write",
         "memory_search",
-        "spawn_agent",
         "analyze_image",
         "generate_image",
         "read_file",
