@@ -89,7 +89,11 @@ Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes)
 | 46 | Tool description "use X instead" tapi X tidak ada → brain emit empty | Boot validator `services/contracts.py:validate_tool_registry()` |
 | 51 | **Design by Contract for LLM Agents** — boot validators + safe_task + watchdog + output contracts | One module = catches 4 bug classes |
 | 53 | Parallel sessions coordination | `git pull` + scan recent commits di session start |
-| **54** (NEW today) | **VPS SHARED — selalu cek environment map dulu** | Dual ollama daemon (host vs container) hari ini buang berjam-jam karena tidak baca topology |
+| **54** | **VPS SHARED — selalu cek environment map dulu** | Dual ollama daemon (host vs container) buang berjam-jam karena tidak baca topology |
+| **55** | **Cycle 1 trigger TANPA pre-flight availability check = waste** | Sebelum spawn pod $0.69/hr, query RunPod API dulu untuk GPU availability di data center. Hari ini langsung spawn → 2.5 jam stuck → $1.38 wasted. |
+| **56** | **Heavy build di tenant lain (next/webpack) saturasi CPU → user chat slow** | Owner Fahmi commit untuk: jangan run `next build` di tiranyx-co-id selama jam chat MiganCore. Atau dedicated VPS untuk migancore. |
+| **57** | **JANGAN sarankan tools/cloud baru saat sudah cukup — STOP per VISION compass** | 21 tools sudah cukup; STOP wrapper tool addition. Vendor cloud alternative bukan jawaban — yang penting pre-flight check. **DOUBLE DOWN ke identity eval + hot-swap demo + Dream Cycle, bukan feature collection.** |
+| **58** | **Mencampur dua konteks dalam 1 kalimat → user bingung** | Pisahkan: "GPU cloud alternative" (infra ops) ≠ "brain tools" (skill registry). Selalu sebut domain konteks eksplisit. |
 
 ---
 
