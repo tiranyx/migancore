@@ -373,19 +373,19 @@
     },
     {
       "id": "onamix_search",
-      "name": "ONAMIX Search (7-engine web search)",
-      "description": "MANDATORY for ANY web search request. PRIMARY search tool — use this WHENEVER the user asks to search, find, look up, cari, search di X, or browse for current information. Supports 7 engines (google, ddg, brave, bing, startpage, yandex, ecosia) with instant results, anonymous, no API key. Faster and more reliable than the deprecated web_search tool. Default engine 'ddg' if user doesn't specify.",
+      "name": "ONAMIX Search (multi-engine web search)",
+      "description": "MANDATORY for ANY web search request. PRIMARY search tool — use this WHENEVER the user asks to search, find, look up, cari, search di X, or browse for current information. Supports multi-engine search: 'wikipedia' (BEST for 'cari di wikipedia', 'apa itu X', encyclopedia queries — supports id+en), 'ddg/brave/bing/google' (general web), 'github' (code repos), 'hn' (Hacker News), 'multi' (aggregate wikipedia+hn+github+wiby for broadest coverage). Pick the engine that matches user intent: wikipedia for encyclopedia, github for code, ddg for general web, multi when unsure.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {
         "type": "object",
         "properties": {
-          "query": { "type": "string", "description": "Search query." },
+          "query": { "type": "string", "description": "Search query (Indonesian or English both work)." },
           "engine": {
             "type": "string",
-            "enum": ["google", "ddg", "brave", "bing", "startpage", "yandex", "ecosia"],
-            "default": "ddg",
-            "description": "Search engine. ddg = privacy default, google = best coverage."
+            "enum": ["wikipedia", "ddg", "brave", "bing", "google", "startpage", "ecosia", "yandex", "github", "hn", "wiby", "multi"],
+            "default": "multi",
+            "description": "Pick by intent: 'wikipedia' (encyclopedia/biographical/factual lookups — STRONG match for queries with 'wikipedia', 'apa itu', 'tentang', 'siapa'), 'ddg/brave/bing/google' (general web), 'github' (code), 'hn' (tech news/discussions), 'multi' (default — combines wikipedia+hn+github+wiby)."
           },
           "limit": { "type": "integer", "default": 10, "description": "Max results (1-30)." }
         },

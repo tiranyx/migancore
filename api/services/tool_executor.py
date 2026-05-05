@@ -904,7 +904,13 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
     if not query:
         raise ToolExecutionError("'query' is required")
     engine = (args.get("engine") or "ddg").lower()
-    valid_engines = {"google", "ddg", "brave", "bing", "startpage", "yandex", "ecosia"}
+    # Day 46: extended set — added wikipedia/wiki/wp/multi/all/hn/github/wiby/books
+    # to match the engines now supported by HYPERX engine.js search().
+    # 'wikipedia' is the recommended engine for encyclopedia queries.
+    valid_engines = {
+        "google", "ddg", "brave", "bing", "startpage", "yandex", "ecosia",
+        "wikipedia", "wiki", "wp", "multi", "all", "hn", "github", "wiby", "books",
+    }
     if engine not in valid_engines:
         engine = "ddg"
     limit = max(1, min(int(args.get("limit", 10)), 30))
