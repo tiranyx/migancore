@@ -62,6 +62,61 @@
 
 ---
 
+## 🔐 SECRETS STORAGE (centralized pattern)
+
+**Established 2026-05-05 (Day 49.7) — anti-leak, per-tenant isolated.**
+
+```
+/opt/secrets/                    mode 700 root:root
+├── migancore/                   mode 700 root:root
+│   ├── vastai_api_key           mode 600 root:root
+│   ├── runpod_api_key           (future migrate)
+│   └── README.md                inventory
+├── sidix/                       (future use)
+├── mighantect3d/                (future use)
+├── ixonomic/                    (future use)
+├── tiranyx-co-id/               (future use)
+└── shared/                      (cross-tenant only)
+```
+
+### Rules
+1. **NEVER inside git repo** (e.g. NOT `/opt/ado/.secrets/`)
+2. **NEVER in chat/logs/commit messages** — GitHub secret-scanning blocks
+3. **Mode 600** per file (root read+write only)
+4. **Mode 700** parent dirs (root list only)
+5. **README.md per project** — inventory what keys exist + purpose
+6. **Read pattern in scripts:** `KEY=$(cat /opt/secrets/migancore/vastai_api_key)`
+7. **NEVER hardcode API key literal** in scripts/configs
+
+### Reading from API container (if needed)
+Currently API container is in `/opt/ado/` build context, doesn't have access to `/opt/secrets/`. If future tools need secrets:
+
+Option A — bind mount (compose):
+```yaml
+api:
+  volumes:
+    - /opt/secrets/migancore:/run/secrets:ro
+  environment:
+    VASTAI_API_KEY_FILE: /run/secrets/vastai_api_key
+```
+
+Option B — inject at deploy as env var:
+```bash
+docker compose run -e VASTAI_API_KEY="$(cat /opt/secrets/migancore/vastai_api_key)" api ...
+```
+
+### Audit
+```bash
+# List all secrets across tenants:
+sudo find /opt/secrets/ -type f -name '*_api_key' -o -name '*.api_key' 2>/dev/null
+
+# Check no secret leaked into any git repo:
+grep -rE 'vai_[a-zA-Z0-9]{30,}|rpa_[a-zA-Z0-9]{30,}' /opt/ado/ /opt/sidix/ /opt/mighantech3d/ /www/ 2>/dev/null | head -5
+# Should return EMPTY. Anything found = security incident, rotate keys.
+```
+
+---
+
 ## ⚠️ CRITICAL GOTCHAS
 
 ### Gotcha #1: TWO Ollama daemons share name "ollama"
