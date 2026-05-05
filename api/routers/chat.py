@@ -379,6 +379,20 @@ async def chat_stream(
     except Exception:
         llamaserver_healthy = False
 
+    # Day 53 (Lesson #73 — P2 fix): resolve engine ONCE up here so the
+    # response header truthfully reports what generate() will actually use.
+    # Previously the header re-computed naively (auto + healthy → "speculative")
+    # while generate() called select_inference_client() which (post-Lesson #71)
+    # treats auto as ollama. Header lied about engine — observability bug.
+    try:
+        _resolved_engine, _ = select_inference_client(
+            inference_engine_hdr,
+            llamaserver_healthy=llamaserver_healthy,
+        )
+    except LlamaServerError:
+        # Header forced speculative but unhealthy → generate() will fall back to ollama.
+        _resolved_engine = "ollama"
+
     async def generate():
         yield _sse({"type": "start", "conversation_id": str(conversation_id)})
 
@@ -494,10 +508,12 @@ async def chat_stream(
             # (2) tool loop exhausted/finished and model is ready to answer.
             # Use async with so the httpx session is always closed on exit/cancel.
             #
-            # Day 53 — pick inference engine: speculative (llama-server) vs
-            # ollama. Default `auto` prefers speculative when healthy and
-            # silently degrades to Ollama otherwise so chat NEVER 5xx's
-            # because of an inference-engine choice.
+            # Day 53 — pick inference engine: speculative (llama-server) vs ollama.
+            # Day 53 update (Lesson #71): default `auto` resolves to OLLAMA
+            # (safe, no UX regression) until isolated benchmarks show
+            # speculative actually wins on this host. Header `speculative`
+            # forces llama-server (raises if unhealthy → caught below and
+            # falls back to ollama, never 5xx).
             try:
                 _engine_name, _client_cls = select_inference_client(
                     inference_engine_hdr,
@@ -630,13 +646,8 @@ async def chat_stream(
             yield _sse({"type": "error", "message": f"Stream error: {exc}"})
 
     # Day 53 — surface chosen inference engine to client (debug + future UI badge).
-    # `speculative-resolved` is what we actually picked AFTER health probe; the
-    # client knows what they ASKED for via their own X-Inference-Engine header.
-    _engine_resolved = "speculative" if (
-        llamaserver_healthy
-        and (inference_engine_hdr or "auto").lower() in ("auto", "speculative")
-    ) else "ollama"
-
+    # Uses _resolved_engine computed by the same select_inference_client() that
+    # generate() will call — eliminates header/runtime drift (Lesson #73).
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -644,7 +655,7 @@ async def chat_stream(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
-            "X-Inference-Engine-Resolved": _engine_resolved,
+            "X-Inference-Engine-Resolved": _resolved_engine,
         },
     )
 

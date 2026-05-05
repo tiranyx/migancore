@@ -80,7 +80,7 @@ User's exact words yang HARUS diikuti tiap sprint:
 
 ## 🚨 CRITICAL FAILURE MODES (LESSONS PAST)
 
-Top 6 yang HARUS diingat (72 lessons total — semua di MEMORY.md per-day notes):
+Top 6 yang HARUS diingat (73 lessons total — semua di MEMORY.md per-day notes):
 
 | # | Lesson | Forever-rule |
 |---|--------|--------------|
@@ -108,6 +108,7 @@ Top 6 yang HARUS diingat (72 lessons total — semua di MEMORY.md per-day notes)
 | **70** | **Speed problems → better local model, NOT wrapper** | When CPU 7B too slow, vision-aligned solutions ranked: (1) speculative decoding (Qwen 0.5B+7B, all local, 2-3x), (2) distill 7B→3B own model, (3) better quantization, (4) dedicated GPU, (5) Cycle N+ better Qwen. NEVER: live teacher API. Speed trade-off doesn't justify breaking vision. |
 | **71** | **Speculative decoding on shared CPU = often a wash. Bench BEFORE flipping default** | Day 53: llama-server (Qwen 7B+0.5B) ran on same 8-vCPU host as Ollama. Both engines competed for L2/L3 cache + threads → spec-dec measured 2.63 tok/s, Ollama also degraded under contention. Theoretical 1.6-2x speedup needs (a) isolated CPU/RAM, (b) GPU draft offload, OR (c) single-engine deployment. Rule: NEVER flip `auto` default to a new inference engine without isolated apples-to-apples benchmark. Default stayed Ollama; speculative = opt-in via `X-Inference-Engine: speculative` header. Honest KPI report > shipping a regression to "look fast." |
 | **72** | **Self-learning sources are Migan's "library card", NOT its tongue** | Day 53 user added w3schools/roadmap.sh/freecodecamp/discuss.python/stackoverflow as approved sources. Library card = read access (via web_read/onamix_search) for mentor knowledge. Tongue = response — always own model + own voice. Confusing the two = wrapper pattern (#68) extended to web. Right pattern: read source → distill to DPO pair → train → eventually answer without source. See `docs/SELF_LEARNING_SOURCES.md`. |
+| **73** | **After flipping a default, audit ALL surfaces that re-derive the same decision** | Day 53 evening: I flipped `auto` from speculative→ollama (Lesson #71) but the response header `X-Inference-Engine-Resolved` re-derived the choice via duplicated logic that wasn't updated → header reported `speculative` while runtime used Ollama. Pure observability lie. External agent caught within hours. Rule: when a default flips, `grep` codebase for all parallel derivations of the same decision; either delete duplicates and pass the resolved value, or update atomically. **Single source of truth = drift-free.** Fix in `api/routers/chat.py` resolves engine ONCE, hands result to both header and generator. |
 
 ---
 
