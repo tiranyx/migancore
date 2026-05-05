@@ -30,11 +30,12 @@ Conversion shortcut: **WIB = UTC + 7h**.
 
 | Feature | Why high-leverage | Where it helps | Adoption |
 |---------|------------------|----------------|----------|
-| **Pod Templates** (`/v1/pod-templates` + console catalog) | Pre-baked images with PyTorch+CUDA+TRL+transformers — boots in **~60-120s** vs ~300s for raw `runpod/pytorch:devel` | **Likely root cause of Day 54 boot timeouts** — devel image too heavy to start | Day 54.1 retry |
-| **Network Volumes** (persistent storage across pods) | Save Qwen 7B base weights (15GB) ONCE, mount in every cycle. Saves 5-10 min per cycle + bandwidth | Cycle 2/3/N — every retrain reuses same base | Day 55 |
-| **`runpodctl` CLI** (official) | Wrapper for spawn/SSH/upload/cleanup. Fewer LOC than raw REST | Replace cycle1_runpod.py spawn logic | Day 56 |
-| **Pre-built TRL/Axolotl templates** | Community templates often have full SimPO/DPO trainers ready | Could shorten our train_simpo.py to a config file | Day 55 evaluation |
-| **Cost Centers** | Multi-project accounting — separate MiganCore from Sidix bills | Clarity when Fahmi splits multiple projects | When 2+ projects share key |
+| **🔥 Axolotl Fine-Tuning Serverless** (Hub: `axolotl-ai-cloud`, 11.8k ⭐) | Submit DPO/SimPO job, get adapter back. **Zero pod management, zero boot timeouts**. Pay per actual GPU-second of training, not allocation. Native HF dataset + base model URLs. | **THE RIGHT ANSWER for Cycle 1+** if APO custom support fits. Bypasses ALL of Day 54's boot-timeout drama. | Day 54.5 / 55 |
+| **Network Volumes** (persistent storage across pods, default mount `/workspace` on Pods, `/runpod-volume` on Serverless) | Save Qwen 7B base (15GB) ONCE, mount everywhere. Saves 5-10 min per cycle + bandwidth. Currently 600/1000 GB shown in Fahmi's account. | Cycle 2+ retrain, also Axolotl serverless can reference network volume for cached base weights | Day 55 setup |
+| **Pod Templates** (Hub: `Pod Templates` tab — pre-baked images on RunPod's registry, faster than custom Docker Hub pulls) | Pre-baked PyTorch+CUDA, RunPod nodes have these cached → boot 1-2min vs 5min raw image | If Axolotl serverless doesn't fit, fall back to Pod Template here | Day 54.5 fallback |
+| **The Hub Public Endpoints** (vLLM, Faster Whisper, SDXL, ComfyUI) | Ready-made inference endpoints — pay per request | Day 70+ when MiganCore needs scaled inference (currently CPU on VPS is fine for beta) | Day 70+ |
+| **`runpodctl` CLI** (official) | Wrapper for spawn/SSH/upload/cleanup. Fewer LOC than raw REST. | Replace `cycle1_runpod.py` if we keep pod-based path | Day 56 |
+| **Cost Centers** | Multi-project accounting — separate MiganCore from Sidix bills | When Fahmi splits projects | When 2+ projects share key |
 
 ### 🟡 SKIP for our use case (with reasoning)
 
