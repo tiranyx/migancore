@@ -410,6 +410,12 @@
       50% { opacity: 0.75; box-shadow: 0 0 0 5px rgba(47,227,154,0); }
     }
 
+    /* Day 52 Fix: NEW CHAT button glow when 2+ consec errors (context contamination prevention) */
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 8px rgba(255,107,53,0.4); }
+      50% { box-shadow: 0 0 18px rgba(255,107,53,0.9); }
+    }
+
     .header-agent {
       font-family: var(--mono);
       font-size: 0.82rem;
@@ -1790,6 +1796,8 @@
     const [convList, setConvList]   = useState([]);
     const [initErr, setInitErr]     = useState('');
     const [initing, setIniting]     = useState(true);
+    // Day 52 Fix: track consecutive errors. >=2 = suggest NEW CHAT (prevents context contamination)
+    const [consecErrors, setConsecErrors] = useState(0);
     // Day 29 — agent list + spawn modal
     const [agents, setAgents]       = useState([]);
     const [spawnOpen, setSpawnOpen] = useState(false);
@@ -2014,6 +2022,7 @@
           setMsgs(p => p.map(m =>
             m.id === targetMsgId ? { ...m, streaming: false, error: false } : m
           ));
+          setConsecErrors(0); // Day 52 Fix: success → reset error counter
           setBusy(false);
           stopRef.current = null;
         },
@@ -2033,6 +2042,9 @@
           setMsgs(p => p.map(m =>
             m.id === targetMsgId ? { ...m, content: friendly, streaming: false, error: true } : m
           ));
+          // Day 52 Fix: Track consecutive errors. After 2x errors, suggest NEW CHAT
+          // (prevents context contamination — "halo" continuing previous broken context)
+          setConsecErrors(c => c + 1);
           setBusy(false);
           stopRef.current = null;
         },
@@ -2378,7 +2390,20 @@
             <span className="brand-name">MIGANCORE</span>
           </div>
 
-          <button className="btn-new" onClick={newChat}>+ NEW CHAT</button>
+          {/* Day 52 Fix: highlight NEW CHAT after 2 consec errors (context contamination prevention) */}
+          <button
+            className="btn-new"
+            onClick={() => { newChat(); setConsecErrors(0); }}
+            style={consecErrors >= 2 ? {
+              animation: 'pulseGlow 1.5s ease-in-out infinite',
+              borderColor: 'var(--orange)',
+              color: 'var(--orange)',
+              boxShadow: '0 0 12px rgba(255,107,53,0.6)',
+            } : {}}
+            title={consecErrors >= 2 ? 'Brain mungkin bingung dengan konteks lama. Klik untuk reset chat.' : 'Mulai chat baru'}
+          >
+            {consecErrors >= 2 ? '⚠ + NEW CHAT (RESET)' : '+ NEW CHAT'}
+          </button>
 
           {/* Day 29: Agent list + spawn button (Level 5 visibility) */}
           <div className="agent-list-section">
