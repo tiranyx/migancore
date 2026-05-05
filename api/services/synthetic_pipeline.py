@@ -460,6 +460,12 @@ async def get_synthetic_status() -> dict:
             round_num, cumulative_stored, target_pairs = values
 
         is_running = _current_task is not None and not _current_task.done()
+
+        # Correct stale "running" status left over from a previous process (restart/crash)
+        if status == "running" and not is_running:
+            await r.set(_KEY_STATUS, "error")
+            status = "error"
+
         progress_pct = 0.0
         if total and int(total) > 0:
             progress_pct = round((int(processed or 0) / int(total)) * 100, 1)

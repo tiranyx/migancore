@@ -198,12 +198,14 @@ def validate_python_code(code: str) -> None:
                 )
 
     # Additional heuristic: block eval/exec of arbitrary strings
-    dangerous = ["eval(", "exec(", "compile(", "__import__"]
-    for d in dangerous:
+    # __import__ is already caught by the regex patterns above; eval/exec/compile are not.
+    for d in ["eval(", "exec(", "compile("]:
         if d in code:
-            # Allow if it's in a string literal (naive check)
-            # Real check: count occurrences outside quotes — simplified for MVP
-            pass  # Handled by regex above for __import__
+            raise PolicyViolation(
+                reason=f"Use of '{d}' is blocked in python_repl for security.",
+                violation_type="python_repl_dangerous_builtin",
+                details={"builtin": d},
+            )
 
     logger.debug("tool.python_repl.validated", code_len=len(code))
 

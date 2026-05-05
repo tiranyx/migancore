@@ -325,6 +325,9 @@ async def chat_stream(
         )).scalar_one()
         tool_policies_for_stream = await load_tool_policies(db, tenant_id)
 
+        # Enforce daily message quota (same check as sync chat endpoint)
+        await _check_tenant_message_quota(db, tenant_for_stream)
+
         # Persist user message immediately (before streaming)
         user_msg = Message(
             conversation_id=conversation_id,
@@ -476,30 +479,32 @@ async def chat_stream(
             # Day 39 — Phase B: stream the final answer token-by-token.
             # Reached when (1) no tools configured for this agent, OR
             # (2) tool loop exhausted/finished and model is ready to answer.
-            stream_iter = OllamaClient().chat_stream(
-                model=model,
-                messages=run_messages,
-                options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
-            ).__aiter__()
+            # Use async with so the httpx session is always closed on exit/cancel.
+            async with OllamaClient() as _stream_oc:
+                stream_iter = _stream_oc.chat_stream(
+                    model=model,
+                    messages=run_messages,
+                    options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
+                ).__aiter__()
 
-            while True:
-                try:
-                    chunk, done = await asyncio.wait_for(
-                        stream_iter.__anext__(),
-                        timeout=HEARTBEAT_INTERVAL,
-                    )
-                except asyncio.TimeoutError:
-                    yield _sse({"type": "ping"})
-                    continue
-                except StopAsyncIteration:
-                    break
+                while True:
+                    try:
+                        chunk, done = await asyncio.wait_for(
+                            stream_iter.__anext__(),
+                            timeout=HEARTBEAT_INTERVAL,
+                        )
+                    except asyncio.TimeoutError:
+                        yield _sse({"type": "ping"})
+                        continue
+                    except StopAsyncIteration:
+                        break
 
-                if chunk:
-                    full_response.append(chunk)
-                    chunk_count += 1
-                    yield _sse({"type": "chunk", "content": chunk})
-                if done:
-                    break
+                    if chunk:
+                        full_response.append(chunk)
+                        chunk_count += 1
+                        yield _sse({"type": "chunk", "content": chunk})
+                    if done:
+                        break
 
             full_text = "".join(full_response)
             yield _sse({"type": "done", "conversation_id": str(conversation_id)})

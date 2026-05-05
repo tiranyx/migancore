@@ -24,6 +24,7 @@ Training readiness thresholds (from Day 17 research, arxiv 2502.14560):
 """
 
 import json
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -68,7 +69,7 @@ async def require_admin_key(x_admin_key: Optional[str] = Header(default=None)) -
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin endpoints not configured. Set ADMIN_SECRET_KEY in environment.",
         )
-    if x_admin_key != settings.ADMIN_SECRET_KEY:
+    if not secrets.compare_digest(x_admin_key or "", settings.ADMIN_SECRET_KEY):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid admin key.",

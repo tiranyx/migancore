@@ -288,12 +288,13 @@ async def call_gemini(
     if system:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={settings.GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    gemini_headers = {"x-goog-api-key": settings.GEMINI_API_KEY}
 
     async with httpx.AsyncClient(timeout=60) as client:
         for attempt in range(3):
             try:
-                resp = await client.post(url, json=payload)
+                resp = await client.post(url, json=payload, headers=gemini_headers)
                 if resp.status_code == 429:
                     await asyncio.sleep(2 ** attempt)
                     continue
