@@ -308,10 +308,14 @@ def boot_check_and_log() -> dict:
     issue, but the operator sees it immediately.
     """
     try:
-        from .tool_executor import TOOL_HANDLERS
+        # Day 47 fix: actual export is TOOL_REGISTRY, not TOOL_HANDLERS.
+        # Caught immediately on first deploy by contracts.boot.crashed log
+        # — perfect demo of the meta-pattern's value (silent assumption broken
+        # by reality, contract assertion surfaced it in <1s instead of next bug).
+        from .tool_executor import TOOL_REGISTRY
         from .config_loader import load_agents_config, load_skills_config
         result = validate_tool_registry(
-            TOOL_HANDLERS,
+            TOOL_REGISTRY,
             load_agents_config(),
             load_skills_config(),
         )
