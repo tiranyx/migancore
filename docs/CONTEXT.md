@@ -1,13 +1,13 @@
 # MIGANCORE — CONTEXT.md (Project RAM)
-**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 35 — Week 4 COMPLETE: Level 5 visible + Cycle 1 ready + migancore.com landing live)
-**API Version:** 0.5.0 ⭐ MILESTONE
-**Git Commit:** `572a2a1`
+**Last Updated:** 2026-05-04 | **Last Agent:** Claude Opus 4.7 (Day 35 — Week 4 COMPLETE)
+**API Version:** 0.5.0 (stale — aktual: v0.5.14 Day 46)
+**Git Commit:** `572a2a1` (stale — aktual: `31acdea`)
 
-> Ini adalah "project RAM" — sumber kebenaran tunggal untuk state proyek saat ini.
-> **Setiap agent WAJIB baca ini sebelum mulai kerja. Update setelah setiap sesi.**
-> Jika ada konflik antara CONTEXT.md dan kode: **percayai kode, update CONTEXT.md**.
+> ⚠️ **DOKUMEN INI STALE.** Versi terakhir update Day 35 (v0.5.0).
+> **Gunakan `docs/AGENT_HANDOFF_MASTER.md` sebagai sumber kebenaran utama** (diupdate 2026-05-05, Day 47).
 >
-> Dokumen pendukung: `MASTER_CONTEXT.md` | `SPRINT_LOG.md` | `CHANGELOG.md` | `HANDOFF_DAY11_KIMI_TO_CLAUDE.md`
+> Dokumen ini dipertahankan untuk referensi detail Day 1–35 (arsitektur awal, keputusan desain, handoff log lama).
+> Jika ada konflik antara CONTEXT.md dan kode: **percayai kode, update AGENT_HANDOFF_MASTER.md**.
 
 ---
 
