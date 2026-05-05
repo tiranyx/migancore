@@ -94,6 +94,9 @@ Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes)
 | **56** | **Heavy build di tenant lain (next/webpack) saturasi CPU → user chat slow** | Owner Fahmi commit untuk: jangan run `next build` di tiranyx-co-id selama jam chat MiganCore. Atau dedicated VPS untuk migancore. |
 | **57** | **JANGAN sarankan tools/cloud baru saat sudah cukup — STOP per VISION compass** | 21 tools sudah cukup; STOP wrapper tool addition. Vendor cloud alternative bukan jawaban — yang penting pre-flight check. **DOUBLE DOWN ke identity eval + hot-swap demo + Dream Cycle, bukan feature collection.** |
 | **58** | **Mencampur dua konteks dalam 1 kalimat → user bingung** | Pisahkan: "GPU cloud alternative" (infra ops) ≠ "brain tools" (skill registry). Selalu sebut domain konteks eksplisit. |
+| **59** | **JANGAN trust HTTP 204 untuk DELETE pod — selalu VERIFY** | Hari ini saya laporkan "DELETE 204" → asumsikan pod gone. Reality: termination delayed/silent-fail → pod jalan 10+ jam = $6.76 wasted. Setelah DELETE, WAJIB GET /pods/{id} → expect 404, ATAU GET /pods → expect pod tidak di list. |
+| **60** | **SECURE non-spot pod BILL DARI ALLOCATION, bukan dari boot** | Pod stuck "Rented by User" tanpa runtime jalan tetap kena charge $0.69/hr. SPOT pods only charge when running. ATURAN: kalau pod tidak boot dalam 5 menit, IMMEDIATE terminate + retry, jangan tunggu. |
+| **61** | **Cost telemetry harus polling otomatis, bukan manual check** | User screenshot menunjukkan pod jalan, saya pikir sudah mati. Butuh: cron job 5-menit yang query /v1/pods + log to file. Kalau ada pod >$0/hr lebih dari 1 jam tanpa progress = alert. |
 
 ---
 
