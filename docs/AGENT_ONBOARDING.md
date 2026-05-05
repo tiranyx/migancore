@@ -80,7 +80,7 @@ User's exact words yang HARUS diikuti tiap sprint:
 
 ## 🚨 CRITICAL FAILURE MODES (LESSONS PAST)
 
-Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes):
+Top 6 yang HARUS diingat (72 lessons total — semua di MEMORY.md per-day notes):
 
 | # | Lesson | Forever-rule |
 |---|--------|--------------|
@@ -106,6 +106,8 @@ Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes)
 | **68** | **Teacher API = MENTOR, NEVER live RESPONDER** | Day 52 saya hampir usulkan Hybrid Brain (Kimi K2 sebagai live chat responder). User tarik kembali — itu wrapper pattern, defeats vision. Teacher API (Anthropic/OpenAI/Kimi/Gemini) ROLE: synthetic data generator, CAI critique, DPO pair generator (chosen=teacher, rejected=migan_baseline) → SimPO trains Migan. **Migan harus respond ke user pakai own brain.** Read `docs/VISION_PRINCIPLES_LOCKED.md`. |
 | **69** | **Standing alone principle — own tools default, third-party as teacher only** | ONAMIX pattern (took user-owned HYPERX, made own MCP) is the model. Don't add new third-party SDK as DEFAULT path. Acceptable trade-offs: (a) Gemini Vision as TEACHER for vision data → distill local Qwen-VL Day 60+, (b) fal.ai image gen (large diffusion impractical local). NEVER: route user chat to third-party. |
 | **70** | **Speed problems → better local model, NOT wrapper** | When CPU 7B too slow, vision-aligned solutions ranked: (1) speculative decoding (Qwen 0.5B+7B, all local, 2-3x), (2) distill 7B→3B own model, (3) better quantization, (4) dedicated GPU, (5) Cycle N+ better Qwen. NEVER: live teacher API. Speed trade-off doesn't justify breaking vision. |
+| **71** | **Speculative decoding on shared CPU = often a wash. Bench BEFORE flipping default** | Day 53: llama-server (Qwen 7B+0.5B) ran on same 8-vCPU host as Ollama. Both engines competed for L2/L3 cache + threads → spec-dec measured 2.63 tok/s, Ollama also degraded under contention. Theoretical 1.6-2x speedup needs (a) isolated CPU/RAM, (b) GPU draft offload, OR (c) single-engine deployment. Rule: NEVER flip `auto` default to a new inference engine without isolated apples-to-apples benchmark. Default stayed Ollama; speculative = opt-in via `X-Inference-Engine: speculative` header. Honest KPI report > shipping a regression to "look fast." |
+| **72** | **Self-learning sources are Migan's "library card", NOT its tongue** | Day 53 user added w3schools/roadmap.sh/freecodecamp/discuss.python/stackoverflow as approved sources. Library card = read access (via web_read/onamix_search) for mentor knowledge. Tongue = response — always own model + own voice. Confusing the two = wrapper pattern (#68) extended to web. Right pattern: read source → distill to DPO pair → train → eventually answer without source. See `docs/SELF_LEARNING_SOURCES.md`. |
 
 ---
 

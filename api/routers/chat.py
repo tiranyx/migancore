@@ -34,6 +34,7 @@ from services.letta import get_blocks as get_letta_blocks
 from services.memory import memory_summary
 from services.director import run_director
 from services.ollama import OllamaClient, OllamaError
+from services.llamaserver import LlamaServerClient, LlamaServerError, select_inference_client
 from services.tool_executor import ToolContext, build_ollama_tools_spec
 from services.tool_policy import load_tool_policies
 from services.cai_pipeline import run_cai_pipeline
@@ -366,6 +367,18 @@ async def chat_stream(
     # emit a ping event (frontend ignores it) and continue waiting for real chunk.
     HEARTBEAT_INTERVAL = 15.0
 
+    # Day 53 — speculative-decoding feature flag.
+    # Header values: "speculative" | "ollama" | "auto" (default).
+    # Resolved here (outside the generator) so we can probe llama-server health
+    # ONCE per request, not per chunk.
+    inference_engine_hdr = request.headers.get("X-Inference-Engine", "auto")
+    llamaserver_healthy = False
+    try:
+        async with LlamaServerClient() as _probe:
+            llamaserver_healthy = await _probe.health()
+    except Exception:
+        llamaserver_healthy = False
+
     async def generate():
         yield _sse({"type": "start", "conversation_id": str(conversation_id)})
 
@@ -480,7 +493,26 @@ async def chat_stream(
             # Reached when (1) no tools configured for this agent, OR
             # (2) tool loop exhausted/finished and model is ready to answer.
             # Use async with so the httpx session is always closed on exit/cancel.
-            async with OllamaClient() as _stream_oc:
+            #
+            # Day 53 — pick inference engine: speculative (llama-server) vs
+            # ollama. Default `auto` prefers speculative when healthy and
+            # silently degrades to Ollama otherwise so chat NEVER 5xx's
+            # because of an inference-engine choice.
+            try:
+                _engine_name, _client_cls = select_inference_client(
+                    inference_engine_hdr,
+                    llamaserver_healthy=llamaserver_healthy,
+                )
+            except LlamaServerError as _eng_exc:
+                # Header explicitly forced speculative but server unhealthy.
+                # Fall back rather than 5xx (Lesson #45 — don't kill UX on infra issues).
+                logger.warning("chat.stream.engine_force_failed_falling_back", error=str(_eng_exc))
+                _engine_name, _client_cls = "ollama", OllamaClient
+
+            _stream_t0 = asyncio.get_event_loop().time()
+            _first_chunk_t: float | None = None
+
+            async with _client_cls() as _stream_oc:
                 stream_iter = _stream_oc.chat_stream(
                     model=model,
                     messages=run_messages,
@@ -500,6 +532,8 @@ async def chat_stream(
                         break
 
                     if chunk:
+                        if _first_chunk_t is None:
+                            _first_chunk_t = asyncio.get_event_loop().time()
                         full_response.append(chunk)
                         chunk_count += 1
                         yield _sse({"type": "chunk", "content": chunk})
@@ -508,6 +542,30 @@ async def chat_stream(
 
             full_text = "".join(full_response)
             yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+
+            # Day 53 — telemetry: engine, TTFB, sustained throughput.
+            # Acceptance rate (true spec-dec metric) lives in llama-server
+            # logs; we emit chunk/sec which approximates what user feels.
+            _stream_total_s = asyncio.get_event_loop().time() - _stream_t0
+            _ttfb_ms = (
+                int((_first_chunk_t - _stream_t0) * 1000)
+                if _first_chunk_t else None
+            )
+            _chunks_per_s = (
+                round(chunk_count / _stream_total_s, 2)
+                if _stream_total_s > 0 else 0.0
+            )
+            logger.info(
+                "chat.stream.engine_telemetry",
+                engine=_engine_name,
+                requested=inference_engine_hdr,
+                llamaserver_healthy=llamaserver_healthy,
+                ttfb_ms=_ttfb_ms,
+                stream_total_s=round(_stream_total_s, 2),
+                chunk_count=chunk_count,
+                chunks_per_s=_chunks_per_s,
+            )
+
             logger.info(
                 "chat.stream.done",
                 chunks=chunk_count,
@@ -571,6 +629,14 @@ async def chat_stream(
             logger.error("chat.stream.unexpected", error=str(exc), exc_info=True)
             yield _sse({"type": "error", "message": f"Stream error: {exc}"})
 
+    # Day 53 — surface chosen inference engine to client (debug + future UI badge).
+    # `speculative-resolved` is what we actually picked AFTER health probe; the
+    # client knows what they ASKED for via their own X-Inference-Engine header.
+    _engine_resolved = "speculative" if (
+        llamaserver_healthy
+        and (inference_engine_hdr or "auto").lower() in ("auto", "speculative")
+    ) else "ollama"
+
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -578,6 +644,7 @@ async def chat_stream(
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "X-Inference-Engine-Resolved": _engine_resolved,
         },
     )
 
