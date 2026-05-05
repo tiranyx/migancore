@@ -54,8 +54,10 @@ def main():
                         help="Training epochs. Stay at 1 for <700 pairs to avoid overfit.")
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--grad-accum", type=int, default=8)
-    parser.add_argument("--learning-rate", type=float, default=8e-7,     # was 5e-6 — paper too aggressive for small data
-                        help="LR. 8e-7 is the safe Qwen2.5-7B+SimPO value Q2 2026.")
+    parser.add_argument("--learning-rate", type=float, default=5e-7,     # Day 49: lowered from 8e-7
+                        help="LR. Day 49 update: 5e-7 per arxiv 2602.00954 (Feb 2026) — "
+                             "<1k pair datasets need lr halved vs official SimPO recipe to "
+                             "avoid reward hacking. 8e-7 still acceptable; 5e-7 is the safer default.")
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=16)
     parser.add_argument("--max-seq-length", type=int, default=2048)
@@ -82,6 +84,12 @@ def main():
                         help="APO loss weight. 0.05 is community Q2 2026 sweet spot for <1k pairs (paper 0.1 over-penalizes).")
     parser.add_argument("--anchor-dataset", default="",
                         help="JSONL of identity-anchor prompts (required if --use-apo)")
+    # Day 49: TRL 1.x optimizations (gracefully ignored if older TRL on pod)
+    parser.add_argument("--padding-free", action="store_true", default=False,
+                        help="Day 49: TRL 1.x feature. ~2x memory headroom for variable-length seqs. "
+                             "Stacks with --use-liger-kernel.")
+    parser.add_argument("--use-liger-kernel", action="store_true", default=False,
+                        help="Day 49: TRL 1.x feature. Liger-Kernel fused ops, ~30% faster training.")
     parser.add_argument("--dry-run", action="store_true", help="Validate config without training")
     args = parser.parse_args()
 
@@ -144,7 +152,9 @@ def main():
     ds = load_dataset("json", data_files=args.dataset, split="train")
     print(f"Dataset size: {len(ds)}")
 
-    config = SimPOConfig(
+    # Day 49: TRL 1.x optional optimizations — gracefully degraded if SimPOConfig
+    # doesn't accept the kwargs (older TRL on pod). Use a kwargs dict + try/except.
+    config_kwargs = dict(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -164,6 +174,18 @@ def main():
         report_to="wandb" if os.environ.get("WANDB_API_KEY") else "none",
         remove_unused_columns=False,
     )
+    if args.padding_free:
+        config_kwargs["padding_free"] = True
+    if args.use_liger_kernel:
+        config_kwargs["use_liger_kernel"] = True
+    try:
+        config = SimPOConfig(**config_kwargs)
+    except TypeError as e:
+        # TRL too old for one of the new flags — drop them and warn loudly
+        for k in ("padding_free", "use_liger_kernel"):
+            config_kwargs.pop(k, None)
+        print(f"WARNING: SimPOConfig rejected new flags ({e}); falling back to TRL <1.x compatible config", file=sys.stderr)
+        config = SimPOConfig(**config_kwargs)
 
     trainer = SimPOTrainer(
         model=model,
