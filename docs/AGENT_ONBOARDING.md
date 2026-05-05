@@ -98,6 +98,7 @@ Top 6 yang HARUS diingat (53 lessons total — semua di MEMORY.md per-day notes)
 | **60** | **SECURE non-spot pod BILL DARI ALLOCATION, bukan dari boot** | Pod stuck "Rented by User" tanpa runtime jalan tetap kena charge $0.69/hr. SPOT pods only charge when running. ATURAN: kalau pod tidak boot dalam 5 menit, IMMEDIATE terminate + retry, jangan tunggu. |
 | **61** | **Cost telemetry harus polling otomatis, bukan manual check** | User screenshot menunjukkan pod jalan, saya pikir sudah mati. Butuh: cron job 5-menit yang query /v1/pods + log to file. Kalau ada pod >$0/hr lebih dari 1 jam tanpa progress = alert. |
 | **62** | **RunPod has bad days — diversify OR accept variability** | Hari ini 2x attempts (4090 RO + A40 CA, both SECURE) gagal boot. Bukan masalah image (10GB → 3GB tidak bantu). RunPod-side allocation issue. Rule: jangan spend >2 jam same vendor same fail mode → switch vendor (Vast.ai, Lambda) ATAU change strategy (defer + ship other tracks). |
+| **63** | **Local laptop training infeasible untuk 7B di consumer hardware tipikal** | Fahmi laptop = ASUS TUF FA506QM (Ryzen 7 + RTX 3060 Mobile 6GB + 16GB RAM). Looks adequate but 3 blockers: (1) disk 98% full = no space untuk 15GB Qwen base, (2) RAM avail 2.42GB = OOM risk, (3) VRAM 6GB Mobile = edge of viability. Rule: hardware check WAJIB pre-spawn. Mobile RTX 3060 6GB ≠ desktop RTX 3060 12GB. Check `nvidia-smi` + `df -h` + `free -h` SEBELUM commit local strategy. |
 
 ---
 
