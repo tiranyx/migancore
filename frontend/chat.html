@@ -2608,9 +2608,9 @@
             </div>
             {/* Day 51: Beta feedback shortcut — WhatsApp deeplink (research: WhatsApp >> forms 10:1 at N=5) */}
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(
-                `[MiganCore Beta Feedback]\n\nConv: ${conversationId || 'new'}\nUser: ${user?.email || 'guest'}\n\nMy feedback:\n`
-              )}`}
+              href={'https://wa.me/?text=' + encodeURIComponent(
+                '[MiganCore Beta Feedback]\n\nConv: ' + (convId || 'new') + '\nUser: ' + ((user && user.email) || 'guest') + '\n\nMy feedback:\n'
+              )}
               target="_blank"
               rel="noopener noreferrer"
               style={{
