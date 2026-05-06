@@ -72,30 +72,34 @@ def main():
     from peft import LoraConfig, get_peft_model, TaskType
     from datasets import load_dataset
 
-    # Lesson #110: TRL 1.x+ (2026) may have moved SimPOTrainer/SimPOConfig.
-    # Try all known import paths in order of preference.
-    _trl_import_error = None
+    # Lesson #110: SimPOTrainer exists only in TRL ~0.10.x-0.20.x window.
+    # TRL 0.9.6 has CPOTrainer with loss_type="simpo" (CPO-SimPO = equivalent).
+    # TRL 0.29.1 has no SimPO at all (removed in cleanup). ORPOTrainer is
+    # reference-free fallback also available in TRL 0.9.6.
+    # Priority: SimPO native → CPO-SimPO → ORPO
+    import trl as _trl
+    print(f"TRL version: {_trl.__version__}")
+    _available_trainers = [x for x in dir(_trl) if "Trainer" in x]
+    print(f"Available trainers: {_available_trainers}")
+
+    TRAINER_MODE = None
     try:
         from trl import SimPOConfig, SimPOTrainer
-        print(f"TRL imports OK via top-level (trl.__version__ = {__import__('trl').__version__})")
-    except ImportError as _e1:
+        TRAINER_MODE = "simpo"
+        print("Trainer mode: SimPOTrainer (native)")
+    except ImportError:
         try:
-            from trl.trainer import SimPOConfig, SimPOTrainer
-            print(f"TRL imports OK via trl.trainer submodule")
-        except ImportError as _e2:
+            from trl import CPOTrainer, CPOConfig
+            TRAINER_MODE = "cpo_simpo"
+            print("Trainer mode: CPOTrainer with loss_type=simpo (CPO-SimPO)")
+        except ImportError:
             try:
-                from trl.trainer.simpo_trainer import SimPOTrainer
-                from trl.trainer.simpo_config import SimPOConfig
-                print(f"TRL imports OK via trl.trainer.simpo_* submodules")
-            except ImportError as _e3:
-                _trl_import_error = f"All import paths failed: {_e1} | {_e2} | {_e3}"
-
-    if _trl_import_error:
-        import trl as _trl_mod
-        _available = [x for x in dir(_trl_mod) if "Trainer" in x]
-        print(f"FATAL: SimPOTrainer not found in TRL {_trl_mod.__version__}")
-        print(f"Available trainers: {_available}")
-        raise ImportError(_trl_import_error)
+                from trl import ORPOTrainer, ORPOConfig
+                TRAINER_MODE = "orpo"
+                print("Trainer mode: ORPOTrainer (reference-free fallback)")
+            except ImportError:
+                available = [x for x in dir(_trl) if "Trainer" in x]
+                raise RuntimeError(f"No compatible preference trainer in TRL {_trl.__version__}. Available: {available}")
 
     # ── Load model in bf16 (no quantization — 47 GB VRAM is enough) ──
     print(f"\nLoading {args.base_model} in bf16 (no bitsandbytes quantization)...")
@@ -137,8 +141,8 @@ def main():
     print(f"Dataset: {len(ds)} pairs")
     print(f"Columns: {ds.column_names}")
 
-    # ── SimPO Config ──────────────────────────────────────────────────
-    config = SimPOConfig(
+    # ── Common training args ──────────────────────────────────────────
+    _common = dict(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -150,21 +154,41 @@ def main():
         save_steps=50,
         max_length=args.max_seq_length,
         max_prompt_length=args.max_seq_length // 2,
-        beta=args.simpo_beta,
-        gamma=args.simpo_gamma,
-        loss_type=args.loss_type,
         bf16=True,
         report_to="none",
         remove_unused_columns=False,
         gradient_checkpointing=True,
     )
 
-    trainer = SimPOTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=ds,
-        args=config,
-    )
+    # ── Config + Trainer by mode ──────────────────────────────────────
+    if TRAINER_MODE == "simpo":
+        config = SimPOConfig(
+            beta=args.simpo_beta,
+            gamma=args.simpo_gamma,
+            loss_type=args.loss_type,
+            **_common,
+        )
+        trainer = SimPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
+
+    elif TRAINER_MODE == "cpo_simpo":
+        # CPO-SimPO: CPOTrainer with loss_type="simpo" = reference-free SimPO
+        # simpo_gamma may not be in all CPOConfig versions — handle gracefully
+        _cpo_args = dict(beta=args.simpo_beta, loss_type="simpo", cpo_alpha=0.0, **_common)
+        try:
+            config = CPOConfig(simpo_gamma=args.simpo_gamma, **_cpo_args)
+            print(f"CPOConfig: beta={args.simpo_beta} simpo_gamma={args.simpo_gamma}")
+        except TypeError:
+            config = CPOConfig(**_cpo_args)
+            print(f"CPOConfig: beta={args.simpo_beta} (simpo_gamma not supported in this CPOConfig version)")
+        trainer = CPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
+
+    else:  # orpo
+        # ORPO: reference-free, beta=lambda controls preference strength
+        # ORPO beta is typically 0.1; we use simpo_beta/25 to scale proportionally
+        orpo_beta = round(args.simpo_beta / 25.0, 3)  # 2.5/25 = 0.1
+        config = ORPOConfig(beta=orpo_beta, **_common)
+        trainer = ORPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
+        print(f"ORPOConfig: beta={orpo_beta} (scaled from SimPO beta {args.simpo_beta})")
 
     # ── Train ─────────────────────────────────────────────────────────
     print("\nStarting training...")
@@ -183,7 +207,7 @@ def main():
         "dataset":       args.dataset,
         "dataset_size":  len(ds),
         "epochs":        args.epochs,
-        "method":        "simpo_bf16",
+        "method":        f"{TRAINER_MODE}_bf16",
         "loss_type":     args.loss_type,
         "lora_r":        args.lora_r,
         "simpo_beta":    args.simpo_beta,
