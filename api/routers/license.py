@@ -118,6 +118,13 @@ class MintRequest(BaseModel):
     language_pack: list[str] = Field(default=["id"], description="Language codes")
     months: Optional[int] = Field(None, description="Override default duration")
     save_path: Optional[str] = Field(None, description="If set, save license.json to this path")
+    # Genealogy — "silsilah" of the ADO child (Day 62: Anak Kembali ke Induk)
+    parent_version: str = Field(default="v0.3", description="Migancore brain version that mints this ADO")
+    generation: int = Field(default=1, description="1=direct child of Migancore, 2=nested white-label reseller")
+    lineage_chain: Optional[list[str]] = Field(None, description="Full lineage path; auto-computed if omitted")
+    # Knowledge return — opt-in to 'Anak Kembali ke Induk' federated learning
+    knowledge_return_enabled: bool = Field(default=True, description="Enable anonymized knowledge contribution to Hafidz Ledger")
+    knowledge_return_opt_in_types: Optional[list[str]] = Field(None, description="Which types: dpo_pair, tool_pattern, domain_cluster")
 
 
 class BatchMintRequest(BaseModel):
@@ -156,6 +163,11 @@ async def mint_single(req: MintRequest) -> dict:
         language_pack=req.language_pack,
         secret_key=secret_key,
         months=req.months,
+        parent_version=req.parent_version,
+        generation=req.generation,
+        lineage_chain=req.lineage_chain,
+        knowledge_return_enabled=req.knowledge_return_enabled,
+        knowledge_return_opt_in_types=req.knowledge_return_opt_in_types,
     )
 
     if req.save_path:

@@ -145,6 +145,11 @@ def mint_license(
     secret_key: str,
     months: Optional[int] = None,
     product_version: str = "v0.5",
+    parent_version: str = "v0.3",
+    generation: int = 1,
+    lineage_chain: Optional[list[str]] = None,
+    knowledge_return_enabled: bool = True,
+    knowledge_return_opt_in_types: Optional[list[str]] = None,
 ) -> dict:
     """
     MANIFES → IDENTITAS → STEMPEL → SEGEL
@@ -152,14 +157,25 @@ def mint_license(
     Mint a single ADO license (a "coin" in the Ixonomic metaphor).
     Returns a dict ready to be serialized as license.json.
 
+    Now includes:
+    - genealogy block: tracks which Migancore version "gave birth" to this ADO,
+      generation depth, and full lineage chain (for white-label nested clones)
+    - knowledge_return block: opt-in config for "Anak Kembali ke Induk" —
+      anonymized domain knowledge flows back to Hafidz Ledger on child death/expiry
+
     Args:
-        client_name:       Legal company name of the client
-        ado_display_name:  White-label name for this ADO (e.g. "SARI", "LEX")
-        tier:              LicenseTier enum
-        language_pack:     List of supported languages ["id", "en", "zh"]
-        secret_key:        LICENSE_SECRET_KEY — NEVER stored in license file
-        months:            Override default license duration
-        product_version:   ADO Engine version string
+        client_name:                    Legal company name of the client
+        ado_display_name:               White-label name for this ADO (e.g. "SARI", "LEX")
+        tier:                           LicenseTier enum
+        language_pack:                  List of supported languages ["id", "en", "zh"]
+        secret_key:                     LICENSE_SECRET_KEY — NEVER stored in license file
+        months:                         Override default license duration
+        product_version:                ADO Engine version string
+        parent_version:                 Migancore brain version that "gave birth" to this ADO
+        generation:                     1 = direct child of Migancore; 2 = reseller white-label
+        lineage_chain:                  Full ancestry path, e.g. ["migancore:v0.3"]
+        knowledge_return_enabled:       Whether this ADO opts into knowledge contribution
+        knowledge_return_opt_in_types:  Which contribution types are enabled
 
     Returns:
         License dict — write to license.json on client VPS
@@ -187,6 +203,27 @@ def mint_license(
     # STEMPEL — Stage 3
     signature = _sign(identity_hash, secret_key)
 
+    # Genealogy — tracks the parent-child lineage ("silsilah")
+    # generation=1 → direct child of Migancore
+    # generation=2 → child of a reseller's white-label ADO (nested clone)
+    computed_lineage = lineage_chain or [f"migancore:{parent_version}"]
+    genealogy = {
+        "parent_id":      "migancore",
+        "parent_version": parent_version,
+        "generation":     generation,
+        "lineage_chain":  computed_lineage,
+    }
+
+    # Knowledge Return — "Anak Kembali ke Induk" opt-in config
+    # Anonymized DPO pairs, tool patterns, domain clusters flow back to Hafidz Ledger
+    opt_in_types = knowledge_return_opt_in_types or ["dpo_pair", "tool_pattern"]
+    knowledge_return = {
+        "enabled":      knowledge_return_enabled,
+        "endpoint":     "https://api.migancore.com/hafidz/contribute",
+        "opt_in_types": opt_in_types,
+        "anonymization": "auto",  # PII stripped inside child ADO before transmission
+    }
+
     # SEGEL — Stage 4
     license_data = {
         "license_id":       license_id,
@@ -201,7 +238,11 @@ def mint_license(
         "max_instances":    tier_config["max_instances"],
         "language_pack":    language_pack,
         "state":            LicenseState.ISSUED.value,
-        "entropy":          entropy,          # Needed for validator to recompute hash
+        # ─── Genealogy + Knowledge Return (Day 62 addition) ───────────────────
+        "genealogy":        genealogy,
+        "knowledge_return": knowledge_return,
+        # ─── Cryptographic seal ───────────────────────────────────────────────
+        "entropy":          entropy,      # Needed for validator to recompute hash
         "identity_hash":    identity_hash,
         "signature":        signature,
     }
@@ -213,6 +254,9 @@ def mint_license(
         display_name=ado_display_name,
         tier=tier.value,
         expiry=expiry_str,
+        generation=generation,
+        parent_version=parent_version,
+        knowledge_return=knowledge_return_enabled,
     )
     return license_data
 
@@ -224,14 +268,17 @@ def batch_mint(clients: list[dict], secret_key: str) -> list[dict]:
     Mirrors Ixonomic's mintBatch(denomination, walletId, qty).
 
     Each client dict must contain: client_name, ado_display_name, tier,
-    language_pack, and optionally months.
+    language_pack, and optionally: months, parent_version, generation,
+    lineage_chain, knowledge_return_enabled, knowledge_return_opt_in_types.
 
     Example:
         clients = [
             {"client_name": "RS Sari Husada", "ado_display_name": "SARI",
-             "tier": LicenseTier.PERAK, "language_pack": ["id"]},
+             "tier": LicenseTier.PERAK, "language_pack": ["id"],
+             "knowledge_return_enabled": True},
             {"client_name": "Lexindo Law", "ado_display_name": "LEX",
-             "tier": LicenseTier.PERUNGGU, "language_pack": ["id", "en"]},
+             "tier": LicenseTier.PERUNGGU, "language_pack": ["id", "en"],
+             "knowledge_return_enabled": False},
         ]
         licenses = batch_mint(clients, SECRET_KEY)
     """
@@ -246,6 +293,11 @@ def batch_mint(clients: list[dict], secret_key: str) -> list[dict]:
                 language_pack=client.get("language_pack", ["id"]),
                 secret_key=secret_key,
                 months=client.get("months"),
+                parent_version=client.get("parent_version", "v0.3"),
+                generation=client.get("generation", 1),
+                lineage_chain=client.get("lineage_chain"),
+                knowledge_return_enabled=client.get("knowledge_return_enabled", True),
+                knowledge_return_opt_in_types=client.get("knowledge_return_opt_in_types"),
             )
             results.append({"ok": True, "license": lic})
         except Exception as exc:
