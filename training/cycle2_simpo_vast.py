@@ -342,20 +342,20 @@ def main():
 
     # ── 4. Install dependencies ───────────────────────────────
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
-    # Lesson #108: pytorch:2.4.0 base image (Aug 2024) is incompatible with TRL 1.x+
-    #   (released 2025-2026). All version-pin attempts failed because TRL crossed the
-    #   1.0 boundary — upper bound <0.14.0 matches NOTHING in 2026 pip index.
-    #   Fix: use pytorch:2.5.1-cuda12.4-cudnn9-devel (PyTorch 2.5.1 supports
-    #   torch.library.custom_op used by transformers 4.47+/moe.py). With 2.5.1 image,
-    #   plain `pip install trl` gets TRL 1.x which works correctly. No venv needed —
-    #   conda base already has correct torch; just add TRL/PEFT/accelerate on top.
+    # Lesson #108: pytorch:2.4.0 image incompatible with TRL 1.x+. Fixed: use 2.5.1.
     # Lesson #109: pytorch:2.5.1 conda base has OLD TRL pre-installed.
-    # `pip install trl` without --upgrade sees it's already installed and skips.
-    # Must use --upgrade to force TRL to latest 1.x+ which has SimPOTrainer.
-    # PyTorch 2.5.1 is fully compatible with modern TRL + transformers 4.47+.
+    #   `pip install --upgrade trl` installs new TRL to user-site (~/.local) BUT
+    #   Python sys.path puts conda site-packages BEFORE user site-packages on this
+    #   image, so old conda TRL wins at import time regardless of the pip upgrade.
+    # Fix: venv --system-site-packages inherits conda torch/CUDA, but venv
+    #   site-packages (/root/trainenv/lib/python3.11/site-packages/) comes FIRST
+    #   in sys.path, so newly installed TRL always wins over old conda TRL.
+    #   With PyTorch 2.5.1 there is no transformers 4.47+ compat issue, so no
+    #   version pins needed — plain `pip install trl` gets latest 1.x+.
     install_cmd = (
-        "pip install -q --upgrade trl peft accelerate datasets huggingface_hub && "
-        "python -c 'from trl import SimPOTrainer, SimPOConfig; import trl; "
+        "python -m venv /root/trainenv --system-site-packages && "
+        "/root/trainenv/bin/pip install -q trl peft accelerate datasets huggingface_hub && "
+        "/root/trainenv/bin/python -c 'from trl import SimPOTrainer, SimPOConfig; import trl; "
         "import transformers; "
         "print(\"DEPS OK — trl\", trl.__version__, \"transformers\", transformers.__version__)'"
     )
