@@ -141,27 +141,33 @@ EVO_SEEDS = [
 # GENERATION LOGIC
 # ─────────────────────────────────────────────────────────────────────────────
 async def call_gemini(prompt: str) -> str | None:
-    """Call Gemini Flash with thinking disabled (Lesson #128)."""
+    """Call Gemini Flash with thinking disabled (Lesson #128).
+    - thinkingConfig MUST be inside generationConfig (not top-level)
+    - contents format: [{"role": "user", "parts": [{"text": ...}]}]
+    - key passed as query param, not in URL
+    """
     import httpx
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key={GEMINI_KEY}"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 1200},
-        "thinkingConfig": {"thinkingBudget": THINKING_BUDGET},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.8,
+            "maxOutputTokens": 1200,
+            "thinkingConfig": {"thinkingBudget": THINKING_BUDGET},
+        },
     }
     for attempt in range(MAX_RETRIES):
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(url, json=payload)
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(url, json=payload, params={"key": GEMINI_KEY})
                 resp.raise_for_status()
                 data = resp.json()
                 parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                text = ""
                 for part in parts:
-                    if not part.get("thought", False):
-                        text += part.get("text", "")
-                return text.strip() if text.strip() else None
+                    if not part.get("thought", False) and part.get("text"):
+                        return part["text"].strip()
+                return None
         except Exception as e:
             print(f"    Gemini attempt {attempt+1} failed: {e}")
             await asyncio.sleep(2 ** attempt)
