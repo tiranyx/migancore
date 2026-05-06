@@ -56,6 +56,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    import httpx
+except ImportError:
+    httpx = None  # will fail at call_gemini if not installed
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CATEGORY SPECS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -347,7 +352,7 @@ Rules:
                         "generated_at":  datetime.now(timezone.utc).isoformat(),
                         "seed":          seed,
                     }
-        except (json.JSONDecodeError, KeyError, httpx.HTTPError) as e:
+        except (json.JSONDecodeError, KeyError, Exception) as e:
             if attempt < 2:
                 await asyncio.sleep(2 ** attempt)
             else:
@@ -376,13 +381,11 @@ async def generate_category(
     print(f"\n[{cat_name}] Generating {target_pairs} pairs from {len(seeds)} seed templates...", flush=True)
 
     if dry_run:
-        print(f"  DRY-RUN: would generate {target_pairs} pairs for '{cat_name}'")
-        print(f"  Sample seed: {expanded[0]}")
-        # Generate just 1 for preview
-        pair = await generate_pair(expanded[0], spec, api_key, cat_name)
-        if pair:
-            print(f"  PREVIEW chosen[:120]: {pair['chosen'][:120]}...")
-            print(f"  PREVIEW rejected[:80]: {pair['rejected'][:80]}...")
+        print(f"  DRY-RUN: would generate {target_pairs} pairs for '{cat_name}' (NO API call)")
+        print(f"  Seeds available: {len(seeds)}")
+        print(f"  Seeds[0]: {seeds[0]}")
+        print(f"  Seeds[-1]: {seeds[-1]}")
+        print(f"  source_method: {spec['source_method']}")
         return []
 
     # Batch with concurrency limit (avoid rate-limit)
