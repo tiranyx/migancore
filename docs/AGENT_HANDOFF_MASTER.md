@@ -4,6 +4,13 @@
 **Status API:** v0.5.14 (last deployed Day 46)
 **Tujuan:** Dokumen tunggal yang boleh dibaca agent/engineer mana pun tanpa kehilangan konteks. Update tiap sesi signifikan.
 
+> ⚠️ **DOKUMEN INI STALE — TERAKHIR UPDATE DAY 47 (v0.5.14)**
+> Untuk state terbaru (Day 60+, v0.5.18, migancore:0.3), baca urutan ini:
+> 1. **`docs/PRODUCT_BRIEF_ALIGNMENT.md`** — visi founder + alignment matrix + gap analysis + roadmap Day 61-90 (WAJIB BACA PERTAMA)
+> 2. **`docs/DAY60_MANDATORY_PROTOCOL.md`** — state Day 60, findings, 118 lessons, Cycle 3 results
+> 3. **`docs/ENVIRONMENT_MAP.md`** — VPS topology, container map, jangan salah path
+> Baru baca dokumen ini untuk konteks history Day 1–47.
+
 > **WAJIB BACA SEBELUM KERJA.** Jika ada konflik antara dokumen ini dan kode aktual: **percayai kode, update dokumen ini**.
 > Dokumen terkait: `CONTEXT.md` (detail per-day, stale di v0.5.0) · `BULAN2_PLAN.md` · `QA_FULLREVIEW_2026-05-05.md` · `CHANGELOG.md`
 
