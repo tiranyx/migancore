@@ -342,13 +342,15 @@ def main():
     # Lesson #103: Unsloth upgrades torch 2.4→2.10 breaking torchvision==0.19.
     # Lesson #104: conda pip split — plain pip installs to user site; conda python
     #   finds old TRL first. /opt/conda/bin/pip also hits conda constraints.
-    # Lesson #105: Solution — venv --system-site-packages inherits conda torch/CUDA,
-    #   but upgraded packages installed into venv take precedence over conda base.
-    #   This is the only reliable way to get fresh TRL without reinstalling torch.
+    # Lesson #105: venv --system-site-packages inherits conda torch/CUDA; upgraded
+    #   packages installed into venv take precedence over conda base.
+    # Lesson #106: Q RTX 8000 has 47.8 GB VRAM. bf16 (~14 GB) fits directly.
+    #   bitsandbytes causes infer_schema(torch.Tensor) errors on PyTorch 2.4.0.
+    #   Drop bitsandbytes entirely. No quantization = no bnb = no schema conflict.
     install_cmd = (
         "/opt/conda/bin/python -m venv /root/venv --system-site-packages && "
         "/root/venv/bin/pip install -q --upgrade 'trl>=0.9.6' peft accelerate "
-        "bitsandbytes datasets 'huggingface_hub>=0.20' && "
+        "datasets 'huggingface_hub>=0.20' && "
         "/root/venv/bin/python -c 'from trl import SimPOTrainer; import trl; "
         "print(\"DEPS OK — trl\", trl.__version__)'"
     )

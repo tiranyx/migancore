@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-MiganCore SimPO Training — Standard (NO Unsloth)
-=================================================
-Lesson #103: Unsloth conflicts with PyTorch images (upgrades torch,
-breaks torchvision). Use standard transformers + bitsandbytes + peft + trl.
-Same quality, same LoRA adapter output, better portability.
+MiganCore SimPO Training — Standard bf16, No Quantization
+==========================================================
+Lesson #106: Q RTX 8000 has 47.8 GB VRAM. Qwen2.5-7B in bf16 uses ~14 GB.
+No bitsandbytes needed — it causes infer_schema(torch.Tensor) errors on
+PyTorch 2.4.0 due to custom CUDA op schema registration mismatch.
+Load model in bf16 directly. LoRA trains only ~25M params (rank 16),
+optimizer states fit comfortably in remaining VRAM.
 
 Compatible with: pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel
-Requires pip:   trl>=0.9.6, peft, bitsandbytes, datasets, accelerate
+Requires pip:   trl>=0.9.6, peft, datasets, accelerate
 """
 from __future__ import annotations
 
@@ -24,8 +26,9 @@ def check_env():
     if not torch.cuda.is_available():
         print("ERROR: No CUDA GPU detected.", file=sys.stderr)
         sys.exit(1)
+    vram = torch.cuda.get_device_properties(0).total_memory / 1e9
     print(f"GPU  : {torch.cuda.get_device_name(0)}")
-    print(f"VRAM : {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+    print(f"VRAM : {vram:.1f} GB  (Qwen2.5-7B bf16 needs ~14 GB — {'OK' if vram >= 20 else 'WARN'})")
     print(f"Torch: {torch.__version__}")
 
 
@@ -48,7 +51,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("MIGANCORE SimPO TRAINING — Standard (no Unsloth)")
+    print("MIGANCORE SimPO TRAINING — bf16 direct (no quantization)")
     print("=" * 60)
     print(f"Base model  : {args.base_model}")
     print(f"Dataset     : {args.dataset}")
@@ -65,24 +68,17 @@ def main():
     check_env()
 
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-    from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import LoraConfig, get_peft_model, TaskType
     from trl import SimPOConfig, SimPOTrainer
     from datasets import load_dataset
 
-    # ── Load model ─────────────────────────────────────────────
-    print(f"\nLoading {args.base_model} (4-bit QLoRA via bitsandbytes)...")
+    # ── Load model in bf16 (no quantization — 47 GB VRAM is enough) ──
+    print(f"\nLoading {args.base_model} in bf16 (no bitsandbytes quantization)...")
     t_load = time.time()
 
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
     model = AutoModelForCausalLM.from_pretrained(
         args.base_model,
-        quantization_config=bnb_config,
         device_map="auto",
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
@@ -92,8 +88,11 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     print(f"Model loaded in {time.time() - t_load:.0f}s")
 
-    # ── Apply LoRA ──────────────────────────────────────────────
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    # ── Enable gradient checkpointing (reduce activation memory) ──────
+    model.enable_input_require_grads()
+    model.gradient_checkpointing_enable()
+
+    # ── Apply LoRA ────────────────────────────────────────────────────
     lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
@@ -108,13 +107,13 @@ def main():
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    # ── Dataset ─────────────────────────────────────────────────
+    # ── Dataset ───────────────────────────────────────────────────────
     print(f"\nLoading dataset {args.dataset}...")
     ds = load_dataset("json", data_files=args.dataset, split="train")
     print(f"Dataset: {len(ds)} pairs")
     print(f"Columns: {ds.column_names}")
 
-    # ── SimPO Config ─────────────────────────────────────────────
+    # ── SimPO Config ──────────────────────────────────────────────────
     config = SimPOConfig(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
@@ -133,6 +132,7 @@ def main():
         bf16=True,
         report_to="none",
         remove_unused_columns=False,
+        gradient_checkpointing=True,
     )
 
     trainer = SimPOTrainer(
@@ -142,14 +142,14 @@ def main():
         args=config,
     )
 
-    # ── Train ────────────────────────────────────────────────────
+    # ── Train ─────────────────────────────────────────────────────────
     print("\nStarting training...")
     t_train = time.time()
     trainer.train()
     train_elapsed = time.time() - t_train
-    print(f"Training finished in {train_elapsed:.0f}s ({train_elapsed/60:.1f} min)")
+    print(f"Training finished in {train_elapsed:.0f}s ({train_elapsed / 60:.1f} min)")
 
-    # ── Save ─────────────────────────────────────────────────────
+    # ── Save ──────────────────────────────────────────────────────────
     print(f"Saving adapter to {args.output_dir}...")
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
@@ -159,7 +159,7 @@ def main():
         "dataset":       args.dataset,
         "dataset_size":  len(ds),
         "epochs":        args.epochs,
-        "method":        "simpo_standard",
+        "method":        "simpo_bf16",
         "loss_type":     args.loss_type,
         "lora_r":        args.lora_r,
         "simpo_beta":    args.simpo_beta,
@@ -167,6 +167,7 @@ def main():
         "learning_rate": args.learning_rate,
         "train_elapsed": f"{train_elapsed:.0f}s",
         "version":       "v0.2-cycle2",
+        "quantization":  "none (bf16 direct)",
     }
     with open(f"{args.output_dir}/training_metadata.json", "w") as f:
         json.dump(meta, f, indent=2)
