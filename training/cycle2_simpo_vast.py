@@ -446,9 +446,10 @@ def main():
     log(f"Training exit={rc} | elapsed={train_elapsed:.0f}s ({train_elapsed/60:.1f}min)")
 
     # Read training log (output was redirected to file, not in stdout)
-    _, train_log_tail, _ = ssh(ssh_host, ssh_port, "tail -30 /root/train_log.txt 2>/dev/null", timeout=30)
+    # Capture 200 lines to include None scan diagnostic + traceback
+    _, train_log_tail, _ = ssh(ssh_host, ssh_port, "tail -200 /root/train_log.txt 2>/dev/null", timeout=30)
     if train_log_tail:
-        log("Training log (tail 30):")
+        log("Training log (tail 200):")
         for line in train_log_tail.strip().splitlines():
             log(f"  {line}")
 

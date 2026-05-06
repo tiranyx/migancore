@@ -211,30 +211,43 @@ def main():
     # Root cause identified: happens for BOTH ORPOTrainer AND CPOTrainer — shared collator.
     # Fix: scan trainer.train_dataset for None in tokenized fields, print diagnostic,
     #   then filter those rows out so training can proceed with clean data.
-    print("\nScanning tokenized dataset for None values before training...")
+    print("\nScanning tokenized dataset for None/empty values before training...")
     td = trainer.train_dataset
-    print(f"Tokenized columns: {td.column_names}")
-    _tokenized_keys = [k for k in td.column_names
-                       if k.endswith(("_input_ids", "_attention_mask", "_labels"))]
-    print(f"Checking keys: {_tokenized_keys}")
+    print(f"Tokenized columns ({len(td.column_names)}): {td.column_names}")
+    # Print first example structure — critical diagnostic
+    _ex0 = td[0]
+    print("First tokenized example structure:")
+    for k, v in _ex0.items():
+        if isinstance(v, list):
+            print(f"  {k}: list[{len(v)}] first={repr(v[0]) if v else 'EMPTY_LIST'}")
+        else:
+            print(f"  {k}: {type(v).__name__} = {repr(v)[:80]}")
+    # Keys that DPODataCollatorWithPadding tries to tensorize
+    # (endswith _input_ids, _attention_mask, _labels, _scores, OR these without prefix)
+    _collator_keys = [k for k in td.column_names
+                      if (k.endswith(("_input_ids", "_attention_mask", "_labels", "_scores"))
+                          or k in ("input_ids", "attention_mask", "labels"))]
+    print(f"Collator will process keys: {_collator_keys}")
     _none_rows = []
     for _i in range(len(td)):
         ex = td[_i]
-        for k in _tokenized_keys:
-            if ex.get(k) is None:
-                _none_rows.append((_i, k, ds[_i].get("prompt", "")[:60]))
+        for k in _collator_keys:
+            v = ex.get(k)
+            if v is None or (isinstance(v, list) and len(v) == 0):
+                _none_rows.append((_i, k, v))
                 break
     if _none_rows:
-        print(f"WARNING: {len(_none_rows)} rows have None in tokenized fields:")
-        for (_i, k, prompt_preview) in _none_rows[:10]:
-            print(f"  row {_i}: key={k}  prompt={repr(prompt_preview)}")
+        print(f"WARNING: {len(_none_rows)} rows have None/empty in collator-processed fields:")
+        for (_i, k, v) in _none_rows[:10]:
+            print(f"  row {_i}: key={k}  val_type={type(v).__name__}")
         # Filter them out
         _good_idxs = set(range(len(td))) - {r[0] for r in _none_rows}
         td = td.select(sorted(_good_idxs))
         trainer.train_dataset = td
-        print(f"Filtered dataset: {len(td)} clean examples (removed {len(_none_rows)} with None)")
+        print(f"Filtered dataset: {len(td)} clean examples (removed {len(_none_rows)} rows)")
     else:
         print(f"None scan CLEAN — all {len(td)} examples have valid tokenized fields ✓")
+    print(f"DIAGNOSTIC_DONE", flush=True)
 
     # ── Train ─────────────────────────────────────────────────────────
     print("\nStarting training...")
