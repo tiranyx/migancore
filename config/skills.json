@@ -383,7 +383,7 @@
     {
       "id": "onamix_search",
       "name": "ONAMIX Search (multi-engine web search)",
-      "description": "MANDATORY for ANY web search request. PRIMARY search tool — use this WHENEVER the user asks to search, find, look up, cari, search di X, or browse for current information. Supports multi-engine search: 'wikipedia' (BEST for 'cari di wikipedia', 'apa itu X', encyclopedia queries — supports id+en), 'ddg/brave/bing/google' (general web), 'github' (code repos), 'hn' (Hacker News), 'multi' (aggregate wikipedia+hn+github+wiby for broadest coverage). Pick the engine that matches user intent: wikipedia for encyclopedia, github for code, ddg for general web, multi when unsure.",
+      "description": "MANDATORY for ANY web search request. PRIMARY search tool — use this WHENEVER the user asks to search, find, look up, cari, search di X, or browse for current information. Supports multi-engine search: 'wikipedia' (BEST for 'cari di wikipedia', 'apa itu X', encyclopedia queries — supports id+en), 'ddg/brave/bing/google' (general web), 'github' (code repos), 'hn' (Hacker News), 'multi' (aggregate wikipedia+hn+github+wiby for broadest coverage). Pick the engine that matches user intent: wikipedia for encyclopedia, github for code, ddg for general web, multi when unsure. CRITICAL — WIKIPEDIA RESPONSE PROTOCOL: When engine='wikipedia', the result contains 'answer_content' (full article extract) and 'source_url'. You MUST: (1) Read 'answer_content' fully, (2) Write a clear 3-5 sentence answer in Bahasa Indonesia summarising the key facts, (3) End with source: [Title](source_url). NEVER just list URLs — always synthesize the content into a readable answer.",
       "handler": "builtin",
       "mcp_compatible": true,
       "schema": {

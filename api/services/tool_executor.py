@@ -1082,15 +1082,27 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
                 results=len(wiki_results),
                 transport="wikipedia_api",
             )
+            # Surface the most important content at top level so brain can't miss it.
+            # Day 55+: answer_content = full article extract from top result (up to 2000 chars).
+            # source_url = canonical Wikipedia URL for the top result.
+            top = wiki_results[0] if wiki_results else {}
             return {
                 "query": query,
                 "engine": "wikipedia",
+                # TOP-LEVEL answer fields — brain MUST read these:
+                "answer_content": top.get("content", "(Konten tidak tersedia)"),
+                "source_title": top.get("title", ""),
+                "source_url": top.get("url", ""),
+                # Full result list for reference
                 "results": wiki_results,
                 "count": len(wiki_results),
-                "elapsed_ms": None,
                 "source": "wikipedia_api",
                 "transport": "direct",
-                "note": "Gunakan field 'content' untuk baca isi artikel. 'snippet' adalah ringkasan singkat.",
+                "instruction": (
+                    "WAJIB: Tulis jawaban 3-5 kalimat dalam Bahasa Indonesia berdasarkan 'answer_content'. "
+                    "Tampilkan sumber di akhir: [{source_title}]({source_url}). "
+                    "JANGAN hanya tampilkan URL."
+                ),
             }
         except Exception as exc:
             logger.warning(
