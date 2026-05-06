@@ -1657,6 +1657,48 @@
     );
   });
 
+  // Day 55 fix — linkify markdown [text](url) and bare URLs in message content
+  function linkifyContent(text) {
+    if (!text) return text;
+    const parts = [];
+    let lastIndex = 0;
+    const regex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(^|[^\w/])(https?:\/\/[^\s<>"){}|\\^`\[\]]+)/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      if (match[1] && match[2]) {
+        // Markdown link [text](url)
+        parts.push(
+          <a key={match.index} href={match[2]} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)', textDecoration: 'underline' }}>
+            {match[1]}
+          </a>
+        );
+      } else if (match[4]) {
+        // Bare URL with optional leading char (match[3] may be empty string at start of text)
+        if (match[3]) parts.push(match[3]);
+        parts.push(
+          <a key={match.index + 1} href={match[4]} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)', textDecoration: 'underline' }}>
+            {match[4]}
+          </a>
+        );
+      } else if (match[0].startsWith('http')) {
+        // Fallback bare URL at start
+        parts.push(
+          <a key={match.index} href={match[0]} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)', textDecoration: 'underline' }}>
+            {match[0]}
+          </a>
+        );
+      }
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts.length ? parts : text;
+  }
+
   function Msg({ msg, onRetry }) {
     const { role, content, streaming, toolCount, error, tools, attachments } = msg;
     const label = role === 'user' ? 'YOU' : 'MC';
@@ -1736,7 +1778,7 @@
                   ))}
                 </div>
               )}
-              {content}
+              {linkifyContent(content)}
             </div>
           )}
 
