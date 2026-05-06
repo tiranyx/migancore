@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 VAST_KEY_PATH = "/opt/secrets/migancore/vastai_api_key"
 HF_TOKEN_PATH = "/opt/secrets/migancore/hf_token"
 DATASET_PATH  = "/opt/ado/data/workspace/cycle2_dataset.jsonl"
-TRAIN_SCRIPT  = "/opt/ado/training/train_simpo.py"
+TRAIN_SCRIPT  = "/opt/ado/training/train_simpo_standard.py"  # no-unsloth version (Lesson #103)
 OUTPUT_DIR    = "/opt/ado/cycle2_output"
 LOG_PATH      = "/tmp/cycle2_training.log"
 
@@ -289,9 +289,9 @@ def main():
     log(f"Dataset: {dataset_lines} pairs ✓")
 
     if not Path(TRAIN_SCRIPT).exists():
-        log(f"FATAL: train_simpo.py not at {TRAIN_SCRIPT}")
+        log(f"FATAL: train_simpo_standard.py not at {TRAIN_SCRIPT}")
         sys.exit(1)
-    log(f"Training script: {TRAIN_SCRIPT} ✓")
+    log(f"Training script: {TRAIN_SCRIPT} ✓ (no-unsloth standard version)")
 
     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
@@ -339,17 +339,14 @@ def main():
 
     # ── 4. Install dependencies ───────────────────────────────
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
-    # Lesson #102: install unsloth FIRST alone — liger_kernel in the same pip cmd
-    # creates version conflicts that silently block unsloth from installing.
-    # Do NOT include liger_kernel in the install; unsloth brings its own compatible version.
+    # Lesson #103: Unsloth upgrades torch to 2.10+ which breaks torchvision==0.19
+    # on pytorch/pytorch:2.4.0-cuda12.1 image. Drop unsloth entirely.
+    # Use standard transformers + bitsandbytes + peft + trl — same quality, better portability.
     install_cmd = (
-        "pip install -q --upgrade pip && "
-        "pip install -q unsloth && "  # unsloth first, solo
-        "pip install -q "
-        "'trl>=0.9.6' "
-        "transformers datasets peft accelerate bitsandbytes "
-        "huggingface_hub 2>&1 | tail -5 && "
-        "python -c 'import unsloth; print(\"unsloth OK:\", unsloth.__version__)'"
+        "pip install -q 'trl>=0.9.6' peft accelerate bitsandbytes datasets "
+        "'huggingface_hub>=0.20' 2>&1 | tail -5 && "
+        "python -c 'from trl import SimPOTrainer; from peft import LoraConfig; "
+        "import bitsandbytes; print(\"DEPS OK — trl+peft+bitsandbytes ready\")'"
     )
     rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
     log(f"Install exit={rc}")
@@ -372,7 +369,7 @@ def main():
     log("\n[5/8] Uploading dataset + training script...")
 
     ok1 = scp_to(DATASET_PATH, ssh_host, ssh_port, "/root/cycle2_dataset.jsonl")
-    ok2 = scp_to(TRAIN_SCRIPT, ssh_host, ssh_port, "/root/train_simpo.py")
+    ok2 = scp_to(TRAIN_SCRIPT, ssh_host, ssh_port, "/root/train_simpo_standard.py")
 
     if not (ok1 and ok2):
         log("Upload failed. Aborting.")
@@ -381,7 +378,7 @@ def main():
     log("Upload complete ✓")
 
     # Verify upload
-    rc, out, _ = ssh(ssh_host, ssh_port, "wc -l /root/cycle2_dataset.jsonl /root/train_simpo.py")
+    rc, out, _ = ssh(ssh_host, ssh_port, "wc -l /root/cycle2_dataset.jsonl /root/train_simpo_standard.py")
     log(f"Remote file check: {out.strip()}")
 
     # ── 6. Train ──────────────────────────────────────────────
@@ -390,7 +387,7 @@ def main():
 
     # Lesson #102 (exit code fix): "python ... | tee" ALWAYS returns tee's exit code (0),
     # masking python failures. Use redirect only; read log separately for output.
-    train_cmd = f"python /root/train_simpo.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
+    train_cmd = f"python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
     log("Training started. Estimated 15-45 min for 613 pairs × 1 epoch on A100...")
 
     train_start = time.time()
