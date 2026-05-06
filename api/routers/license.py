@@ -32,6 +32,27 @@ from services.license import (
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/license", tags=["license"])
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ISSUER MODE GUARD (Codex review Day 62)
+#
+# /v1/license/mint and /v1/license/batch MUST only be active on the Migancore
+# parent platform — NOT on deployed ADO child instances.
+#
+# Why: A child ADO that has the LICENSE_INTERNAL_KEY + mint routes exposed
+# could forge licenses for other clients, collapsing the trust model.
+#
+# Set LICENSE_ISSUER_MODE=true ONLY on api.migancore.com (the issuer).
+# All child ADO deployments: leave unset (defaults to false) → 404 on mint/batch.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _require_issuer_mode() -> None:
+    """Block mint/batch routes unless LICENSE_ISSUER_MODE=true in environment."""
+    if os.environ.get("LICENSE_ISSUER_MODE", "").lower() not in ("true", "1", "yes"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not Found",  # intentional 404 — don't reveal route existence on child ADO
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Auth helpers
@@ -123,7 +144,7 @@ class MintRequest(BaseModel):
     generation: int = Field(default=1, description="1=direct child of Migancore, 2=nested white-label reseller")
     lineage_chain: Optional[list[str]] = Field(None, description="Full lineage path; auto-computed if omitted")
     # Knowledge return — opt-in to 'Anak Kembali ke Induk' federated learning
-    knowledge_return_enabled: bool = Field(default=True, description="Enable anonymized knowledge contribution to Hafidz Ledger")
+    knowledge_return_enabled: bool = Field(default=False, description="Enable anonymized knowledge contribution to Hafidz Ledger — must be explicit opt-in per client contract")
     knowledge_return_opt_in_types: Optional[list[str]] = Field(None, description="Which types: dpo_pair, tool_pattern, domain_cluster")
 
 
@@ -131,13 +152,14 @@ class BatchMintRequest(BaseModel):
     clients: list[MintRequest]
 
 
-@router.post("/mint", dependencies=[Depends(_require_internal)])
+@router.post("/mint", dependencies=[Depends(_require_issuer_mode), Depends(_require_internal)])
 async def mint_single(req: MintRequest) -> dict:
     """
     Mint a single ADO license.
 
     Mirrors Ixonomic's POST /internal/mint.
-    Protected by x-internal-key — only Migancore platform server can call this.
+    Double-gated: requires LICENSE_ISSUER_MODE=true (parent platform only)
+    AND x-internal-key header. Child ADO instances return 404.
 
     Returns the complete license dict ready to embed in a Docker image.
     """
@@ -187,12 +209,13 @@ async def mint_single(req: MintRequest) -> dict:
     }
 
 
-@router.post("/batch", dependencies=[Depends(_require_internal)])
+@router.post("/batch", dependencies=[Depends(_require_issuer_mode), Depends(_require_internal)])
 async def mint_batch_endpoint(req: BatchMintRequest) -> dict:
     """
     Batch mint — issue multiple licenses at once.
 
     Mirrors Ixonomic's mintBatch(denomination, walletId, qty).
+    Double-gated: LICENSE_ISSUER_MODE=true + x-internal-key required.
     Useful for reseller program: one API call → 10+ client licenses.
     """
     secret_key = os.environ.get("LICENSE_SECRET_KEY", "")

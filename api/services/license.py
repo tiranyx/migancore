@@ -148,7 +148,7 @@ def mint_license(
     parent_version: str = "v0.3",
     generation: int = 1,
     lineage_chain: Optional[list[str]] = None,
-    knowledge_return_enabled: bool = True,
+    knowledge_return_enabled: bool = False,   # Codex review: default False — explicit opt-in required
     knowledge_return_opt_in_types: Optional[list[str]] = None,
 ) -> dict:
     """

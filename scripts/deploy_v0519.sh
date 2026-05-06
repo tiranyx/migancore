@@ -20,19 +20,24 @@ scp api/main.py                $VPS:$ADO_PATH/api/main.py
 echo "[2/5] Files copied. Checking VPS git status..."
 ssh $VPS "cd $ADO_PATH && git add api/services/license.py api/routers/license.py api/config.py api/main.py && git status --short"
 
-echo "[3/5] Restarting API container..."
-ssh $VPS "cd $ADO_PATH && docker compose restart api"
+# NOTE (Day 62, Lesson #124): 'restart' is NOT enough — code is baked into image.
+# Always: build api → up -d api (so new code is actually applied)
+echo "[3/5] Building + recreating API container with new code..."
+ssh $VPS "cd $ADO_PATH && docker compose build api && docker compose up -d api"
 
-echo "[4/5] Waiting 10s for startup..."
-sleep 10
+echo "[4/5] Waiting 15s for startup (embedding models load)..."
+sleep 15
 
-echo "[5/5] Smoke test — license info endpoint..."
-curl -s https://api.migancore.com/license/info | python3 -m json.tool
+echo "[5/5] Smoke test — license info endpoint (Codex fix: was /license/info)..."
+curl -s https://api.migancore.com/v1/license/info | python3 -m json.tool
 
 echo ""
 echo "=== Deploy v0.5.19 DONE ==="
-echo "Expected: {\"mode\": \"DEMO\", \"ado_display_name\": \"Migan\", ...}"
+echo "Expected: {\"mode\": \"DEMO\", \"ado_display_name\": \"Migan\", \"is_operational\": true}"
 echo ""
-echo "NEXT: Add LICENSE_SECRET_KEY to VPS .env:"
-echo "  ssh $VPS 'cd $ADO_PATH && grep -q LICENSE_SECRET_KEY .env || echo LICENSE_SECRET_KEY=$(python3 -c \"import secrets; print(secrets.token_hex(32))\") >> .env'"
-echo "  Then: docker compose restart api"
+echo "NEXT: Ensure .env has required license vars (already done if Day 62 deploy ran):"
+echo "  LICENSE_SECRET_KEY   — 64-char hex"
+echo "  LICENSE_DEMO_MODE    — True (for beta app.migancore.com)"
+echo "  ADO_DISPLAY_NAME     — Migan"
+echo "  LICENSE_INTERNAL_KEY — 48-char hex (for /v1/license/mint protection)"
+echo "  All must be in docker-compose.yml environment: block (Lesson #125)"

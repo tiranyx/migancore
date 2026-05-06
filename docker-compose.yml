@@ -106,6 +106,9 @@ services:
       LICENSE_DEMO_MODE: ${LICENSE_DEMO_MODE:-true}
       ADO_DISPLAY_NAME: ${ADO_DISPLAY_NAME:-Migan}
       LICENSE_INTERNAL_KEY: ${LICENSE_INTERNAL_KEY}
+      # ISSUER MODE (Codex review Day 62): set true ONLY on api.migancore.com parent.
+      # Child ADO deployments MUST leave this unset/false → /mint and /batch return 404.
+      LICENSE_ISSUER_MODE: ${LICENSE_ISSUER_MODE:-false}
       FAL_KEY: ${FAL_KEY}                         # Day 24: fal.ai image/video generation
       ELEVENLABS_KEY: ${ELEVENLABS_KEY}           # Day 27: ElevenLabs TTS
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID} # Day 28: user's voice library voice

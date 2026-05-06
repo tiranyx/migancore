@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     LICENSE_DEMO_MODE: bool = True              # True = run without license (beta)
     # ADO_DISPLAY_NAME: white-label override (fallback if no license — for migancore.com)
     ADO_DISPLAY_NAME: str = "Migan"
+    # Day 62 (Codex review): ISSUER MODE gate
+    # LICENSE_ISSUER_MODE=true → /v1/license/mint and /v1/license/batch are active
+    # Set ONLY on api.migancore.com (the parent platform that mints licenses).
+    # All child ADO deployments: leave unset/false → those routes return 404.
+    # Prevents child ADO from forging licenses if LICENSE_INTERNAL_KEY is exposed.
+    # Future: migrate to Ed25519 asymmetric signature for BERLIAN air-gapped tier.
+    LICENSE_ISSUER_MODE: bool = False
 
     # Observability
     ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production)$")
