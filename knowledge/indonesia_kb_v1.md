@@ -1,7 +1,9 @@
 # INDONESIA KNOWLEDGE BASE — Ontologi Data Multidimensi
-# Source: Laporan Komprehensif dari Fahmi Ghani (Tiranyx) + web research
-# Version: 1.2 | Date: 2026-05-07 | Updated: +Sejarah 1800-2026, +data terkini pemerintah/BUMN
+# Source: Laporan Komprehensif dari Fahmi Ghani (Tiranyx) + web research + riset komprehensif 2004-2025
+# Version: 1.3 | Date: 2026-05-07 | Updated: +Agama/Mistis/Legenda, +Global Trends, +Tools Ekosistem
 # Purpose: MiganCore training & RAG knowledge base
+# Companion files: indonesia_comprehensive_v1.md (15 bagian data terverifikasi BPS/Kementan/KKP dll)
+#                  global_trends_v1.md, religious_cultural_v1.md, tools_ecosystem_v1.md
 
 ## SEJARAH INDONESIA — Timeline Komprehensif 1800–2026
 
@@ -818,3 +820,496 @@ Pada tahun 2025, Presiden Prabowo Subianto menetapkan 10 tokoh baru sebagai Pahl
 - SINTA 1 & 2: peer-review tertinggi Indonesia, gratis
 - Jurnal Manajemen Bisnis (H5-Index tinggi)
 - Jurnal Manajemen Industri dan Logistik (H5-Index tinggi)
+
+---
+
+## AGAMA, KEPERCAYAAN & SPIRITUALITAS
+
+### Agama Resmi (6 diakui negara)
+| Agama | Penganut (est. 2024) | % Populasi | Majelis/Lembaga |
+|-------|----------------------|------------|-----------------|
+| Islam | ~242 juta | 86,9% | MUI (Majelis Ulama Indonesia) |
+| Kristen Protestan | ~20,4 juta | 7,3% | PGI (Persekutuan Gereja Indonesia) |
+| Kristen Katolik | ~8,3 juta | 3,0% | KWI (Konferensi Waligereja Indonesia) |
+| Hindu | ~4,5 juta | 1,6% | PHDI (Parisada Hindu Dharma Indonesia) |
+| Buddha | ~2,0 juta | 0,7% | Walubi |
+| Konghucu | ~0,7 juta | 0,5% | MATAKIN |
+
+### Organisasi Islam Besar
+- **Nahdlatul Ulama (NU)**: didirikan 1926 oleh KH Hasyim Asy'ari (Jombang). Penganut ~90 juta. Ahlussunnah wal Jamaah, pesantren-based, toleran-nasionalis. Tokoh: Gus Dur (Presiden ke-4), Said Aqil Siradj, Yahya Cholil Staquf.
+- **Muhammadiyah**: didirikan 1912 oleh KH Ahmad Dahlan (Yogyakarta). Penganut ~35 juta. Modernis-reformis, gerakan pendidikan & kesehatan (RS, universitas). Tokoh: Din Syamsuddin, Haedar Nashir.
+- **Persis (Persatuan Islam)**, **Al Irsyad**, **Hidayatullah**, **Salafi-Wahhabi** (minoritas urban).
+
+### Islam Indonesia: Karakteristik Khas
+- **Wali Songo** = 9 wali penyebar Islam di Jawa (abad 14–16): Sunan Gresik, Sunan Ampel, Sunan Bonang, Sunan Drajat, Sunan Giri, Sunan Kudus, Sunan Muria, Sunan Kalijaga, Sunan Gunung Jati.
+- Tradisi **Tahlilan** (doa arwah 3/7/40/100/1000 hari), **Selamatan**, **Kenduri** = sinkretisme Islam-Hindu-animisme yang khas Nusantara.
+- **Pesantren**: ~38.000 pondok pesantren di Indonesia (2024). Sistem pendidikan Islam tertua.
+- **Santri vs Abangan**: dikotomi Clifford Geertz (1960) — santri (Islam taat), abangan (Islam nominal + animisme), priyayi (aristokrat Jawa). Masih relevan untuk analisis sosial-politik.
+
+### Hindu Bali & Nusantara
+- **Agama Hindu Dharma Bali** = sinkretisme Hindu India + animisme + Budha + tradisi lokal.
+- Konsep **Tri Hita Karana**: keseimbangan manusia-Tuhan, manusia-manusia, manusia-alam.
+- **Subak**: sistem irigasi komunal Bali → UNESCO World Heritage 2012.
+- **Pura**: 10.000+ pura di Bali. Pura Besakih = "Mother Temple" di lereng Gunung Agung.
+- **Odalan** (festival pura), **Galungan** (kemenangan dharma vs adharma), **Nyepi** (Hari Raya Saka, Bali berhenti total 24 jam).
+- Hindu juga hidup di komunitas Tengger (Jawa Timur), Lombok (Sasak Hindu), Toraja (campur animisme).
+
+### Kepercayaan Lokal / Aliran Kebatinan
+- **Kejawen**: kepercayaan spiritual Jawa, gabungan Hindu-Budha-animisme-Islam. Fokus: keseimbangan batin, hubungan manusia-alam-Tuhan. Tokoh: Ki Ageng Suryomentaram, Ronggowarsito.
+- **Sunda Wiwitan**: kepercayaan asli Sunda, penganut di komunitas Baduy (Kanekes, Banten). Baduy Dalam: isolasi total dari modernitas.
+- **Kaharingan**: kepercayaan asli Dayak, diakui sebagai bagian Hindu (kompromi administratif). Upacara **Tiwah** = pengiriman arwah ke alam baka.
+- **Marapu**: kepercayaan asli Sumba (NTT) — leluhur sebagai perantara spiritual. Upacara pemakaman massal.
+- **Malim / Ugamo Malim**: kepercayaan asli Batak. Nabi Sisingamangaraja XII = simbol perlawanan sekaligus tokoh spiritual.
+
+### Dinamika Keagamaan Kontemporer
+- **Radikalisasi online**: ISIS, HTI (dibubarkan 2017), konten takfiri di YouTube/Telegram. BNPT (Badan Nasional Penanggulangan Terorisme) aktif.
+- **Moderasi Beragama**: program Kemenag RI, kurikulum madrasah anti-radikalisme.
+- **Kristenisasi vs Islamisasi**: narasi yang dipolitisasi, sensitif di daerah mayoritas minoritas (Maluku, NTT, Papua).
+- **Penodaan Agama**: Pasal 156a KUHP — digunakan dalam kasus Ahok (2016), Ahmad Musadeq, dll.
+
+---
+
+## MISTIS, FOLKLOR, MITOS & LEGENDA INDONESIA
+
+### Makhluk Halus / Entitas Supernatural (Klasifikasi)
+| Entitas | Asal Budaya | Deskripsi |
+|---------|-------------|-----------|
+| Kuntilanak | Melayu/Jawa | Hantu wanita meninggal saat melahirkan; suara tertawa menyeramkan |
+| Pocong | Jawa/Melayu | Mayat dalam kain kafan; meloncat karena ikatan belum dilepas |
+| Genderuwo | Jawa | Roh jahat berbentuk pria besar hitam berbulu; menggoda wanita |
+| Wewe Gombel | Jawa Tengah | Hantu nenek menculik anak yang ditelantarkan orangtua |
+| Tuyul | Jawa/Melayu | Anak kecil botak; dipelihara untuk mencuri uang |
+| Leak | Bali | Penyihir yang bisa berubah wujud; musuh Barong |
+| Rangda | Bali | Ratu sihir jahat; simbol Adharma (lawan Barong/Dharma) |
+| Orang Bunian | Melayu/Minang | Makhluk tak kasat mata yang tinggal di hutan; bisa menculik manusia |
+| Tonjong Buyut | Sunda | Hantu di daerah Sunda; biasanya di pohon besar |
+| Banaspati | Jawa | Bola api yang melayang; dikaitkan dengan santet |
+| Nyi Blorong | Jawa | Pembantu Nyi Roro Kidul; setengah manusia setengah ular |
+| Jelangkung | Jawa/Nusantara | Permainan memanggil roh; boneka dijadikan medium |
+| Aswang | Sulawesi/Filipin | Makhluk pemangsa manusia, terutama bayi |
+
+### Legenda & Cerita Rakyat Ikonik
+- **Malin Kundang** (Sumatera Barat/Minang): anak durhaka yang dikutuk jadi batu oleh ibunya. Batu di Pantai Air Manis, Padang.
+- **Sangkuriang** (Sunda): kisah anak yang ingin menikahi ibunya (Dayang Sumbi). Menolak pernikahan, membuat perahu dari hutan Tangkuban Parahu semalaman. Saat gagal, menendang perahu → terciptalah Gunung Tangkuban Perahu.
+- **Timun Mas** (Jawa): gadis dari biji mentimun, dikejar raksasa Buto Ijo. Selamat dengan biji mentimun ajaib → hutan lebat, lumpur, lautan api.
+- **Roro Jonggrang** (Jawa Tengah): Putri Prambanan yang menolak Bandung Bondowoso → dikutuk jadi arca di Candi Prambanan (Durga Mahisasuramardini).
+- **Bawang Merah Bawang Putih** (Melayu/Jawa): dua bersaudara, yang baik hati vs yang jahat. Analog Cinderella Nusantara.
+- **Lutung Kasarung** (Sunda): pangeran dari kayangan berubah menjadi lutung (monyet), menyelamatkan putri Purbasari.
+- **Jaka Tarub** (Jawa): pemuda yang mencuri selendang bidadari (Nawangwulan) → bidadari terpaksa tinggal di bumi.
+- **Si Pitung** (Betawi): Robin Hood Betawi, merampok kompeni untuk rakyat miskin.
+- **Nyi Roro Kidul** (Jawa): Ratu Pantai Selatan (Samudra Hindia), mitra gaib para raja Mataram. Larangan pakai baju hijau di Pantai Selatan.
+- **Putri Hijau** (Sumatera Utara/Deli): putri kerajaan Haru yang berubah menjadi hijau untuk menghindari penjajahan.
+
+### Tradisi Ritual & Upacara Mistis
+- **Sedekah Laut**: ritual nelayan Jawa melempar sesajen ke laut untuk keselamatan.
+- **Ruwatan**: ritual Jawa untuk membebaskan seseorang dari kesialan/kutukan (sukerta). Menggunakan pagelaran wayang.
+- **Nyadran/Merti Desa**: bersih desa + ziarah makam leluhur menjelang Ramadan (tradisi Jawa).
+- **Ngaben**: kremasi jenazah di Bali; prosesi besar-besaran, symbol pelepasan jiwa.
+- **Tumpeng**: nasi kerucut simbol gunung (Meru), persembahan dalam ritual Jawa.
+- **Debus**: pertunjukan kekebalan tubuh (menusuk diri, api) dari Banten; terkait tradisi sufi lokal.
+- **Santet/Teluh**: praktik sihir yang dipercaya secara luas; RUU Santet sempat dibahas DPR (kontroversial).
+
+---
+
+## OLAHRAGA INDONESIA
+
+### Bulu Tangkis — Dominasi Dunia
+- Indonesia = negara dengan **raihan Olimpiade Bulu Tangkis terbanyak**: 22 emas total (1992–2024). Selalu raih minimal 1 emas sejak bulu tangkis masuk Olimpiade 1992 (Barcelona) hingga 2024 (Paris), kecuali Tokyo 2020 (1 perak + 2 perunggu).
+- **Legenda**: Rudy Hartono (8x All England), Susi Susanti (Olimpiade 1992), Alan Budi Kusuma (Olimpiade 1992), Taufik Hidayat (Olimpiade 2004 Athena), Hendra Setiawan/Markis Kido (Olimpiade 2008), Kevin Sanjaya/Marcus Gideon (Juara Dunia 2019).
+- **Paris 2024**: Gregoria Mariska (Tunggal Putri emas), Apriyani/Fadia (Ganda Putri perak).
+- **PBSI** (Persatuan Bulu Tangkis Seluruh Indonesia) = federasi pembina. **Pelatnas Cipayung** = pusat latihan nasional.
+- **Thomas Cup** (beregu putra): Indonesia 14x juara. **Uber Cup** (beregu putri): Indonesia 7x juara.
+
+### Sepak Bola
+- **PSSI** (Persatuan Sepak Bola Seluruh Indonesia) = federasi, didirikan 1930.
+- Timnas Indonesia 2024–2026: under coach Patrick Kluivert (Belanda). Naturalisasi masif: Jay Idzes (Venezia), Maarten Paes (FC Dallas), Kevin Diks, Ole Romeny, Rafael Struick dll. FIFA Ranking tertinggi dekade: 127 (Des 2024).
+- **Piala Asia U-23 2024**: Timnas U-23 capai semifinal (bukan peserta tetap, wild card AFC). Luar biasa.
+- Liga domestik: **BRI Liga 1** (tier 1), Liga 2, Liga 3. Klub besar: Persija Jakarta, Persib Bandung, Arema FC, Bali United, PSM Makassar.
+
+### Olahraga Tradisional & Seni Bela Diri
+- **Pencak Silat**: seni bela diri asli Nusantara, tersebar di seluruh Asia Tenggara. UNESCO ICH 2019. Induk: IPSI (Indonesia), PERSILAT (dunia). Raih emas dominan di SEA Games & Asian Games.
+- **Tarung Derajat**: bela diri asal Bandung oleh H. Ahmad Drajat (Aa Boxer). Cabang resmi PON.
+
+### Event Olahraga Internasional di Indonesia
+- **MotoGP Mandalika**: Sirkuit Pertamina Mandalika (Lombok, NTB), kapasitas 150.000 penonton. Digelar sejak 2022. Investasi infrastruktur vs kritik lingkungan (tanah adat Sasak).
+- **Formula E Jakarta** (2022–2023): street circuit Ancol. Kontroversial (biaya tinggi, manfaat dipertanyakan). Dihentikan.
+- **Asian Games 2018** (Jakarta-Palembang): Indonesia raih 31 emas, peringkat 4 terbaik sepanjang sejarah.
+- **SEA Games 2011** (Jakarta-Palembang): Indonesia dominan sebagai tuan rumah.
+- **Olimpiade 2032 Brisbane**: rencana Indonesia co-host untuk beberapa cabang (dalam negosiasi).
+- **World Aquatics Championships 2025**: Jakarta, Juli 2025 — pertama kali Asia Tenggara menjadi tuan rumah.
+
+---
+
+## HUKUM, REGULASI & PERMASALAHAN STRUKTURAL
+
+### Sistem Hukum Indonesia
+- **Civil Law System** (warisan Belanda, berbeda dengan Common Law Inggris/AS).
+- Hierarki peraturan: UUD 1945 → TAP MPR → UU/PERPU → PP → Perpres → Perda Provinsi → Perda Kabupaten/Kota.
+- **Lembaga yudisial**: Mahkamah Agung (MA), Mahkamah Konstitusi (MK), Komisi Yudisial (KY).
+- **Penegak hukum**: Kepolisian RI (Polri), Kejaksaan Agung, KPK (Komisi Pemberantasan Korupsi).
+
+### Korupsi — Indeks & Kasus Besar
+- **CPI 2024** (Corruption Perceptions Index, Transparency International): Indonesia skor 37/100, ranking 99/180. Stagnasi sejak 2019.
+- **KPK** didirikan 2003. Kasus besar: Hambalang (Anas Urbaningrum), E-KTP (Setya Novanto), Edhy Prabowo (benih lobster), Juliari Batubara (bansos COVID), Lukas Enembe (Gubernur Papua).
+- **Indeks Persepsi Korupsi per sektor**: peradilan, kepolisian, dan pelayanan publik = tiga sektor terkorup persepsi publik.
+- **OTT (Operasi Tangkap Tangan)**: KPK melakukan 200+ OTT sejak berdiri.
+
+### Permasalahan Struktural Utama
+| Masalah | Data Kunci 2025 | Kementerian/Lembaga Terkait |
+|---------|----------------|------------------------------|
+| Stunting | 21,5% balita (target 14% 2024, miss) | Kemenkes, BKKBN |
+| Kemiskinan | 8,57% (Sept 2024, BPS) | Kemensos |
+| Pengangguran | 4,82% (Feb 2025, BPS) | Kemnaker |
+| Judi Online | 3,7 juta pemain aktif est. 2024 | Kominfo, Polri |
+| Pinjol Ilegal | 4.500+ platform ilegal 2019–2024 | OJK, Satgas PASTI |
+| Kebakaran Hutan | 857.756 ha terbakar 2023 (KLHK) | KLHK, BNPB |
+| Narkoba | 3,3 juta penyalahguna (BNN 2024) | BNN, Polri |
+| KDRT | 265.000 kasus dilaporkan 2023 | Kemen PPPA |
+
+### Regulasi Digital & Data
+- **UU PDP No. 27/2022**: Perlindungan Data Pribadi; sanksi pidana 5 tahun atau denda Rp5 M. BSSN jadi otoritas pengawas data.
+- **UU ITE No. 11/2008 + revisi**: pasal "karet" yang sering digunakan untuk kriminalisasi kritik. Pasal 27 (konten asusila), Pasal 28 (berita bohong, ujaran kebencian).
+- **Kominfo** → berganti nama **Komdigi** (Kementerian Komunikasi dan Digital) 2024 bawah Meutya Hafid.
+
+---
+
+## JAMAN KERAJAAN & ARKEOLOGI NUSANTARA
+
+### Timeline Kerajaan Besar
+| Kerajaan | Periode | Pusat | Pencapaian Utama |
+|----------|---------|-------|------------------|
+| Kutai Martapura | ~350–1605 M | Kalimantan Timur | Kerajaan Hindu tertua Nusantara; Prasasti Yupa |
+| Tarumanagara | 358–723 M | Jawa Barat | Raja Purnawarman; Prasasti Ciaruteun |
+| Sriwijaya | 670–1377 M | Sumatera Selatan | Kekaisaran maritim terbesar; pusat Budha Mahayana Asia Tenggara |
+| Mataram Hindu | 716–1006 M | Jawa Tengah | Candi Borobudur (824 M), Prambanan (856 M) |
+| Kediri | 1045–1222 M | Jawa Timur | Sastra Jawa Kuno; Mpu Panuluh, Mpu Sedah |
+| Singasari | 1222–1292 M | Jawa Timur | Ken Arok; ekspansi ke Semenanjung Melayu |
+| Majapahit | 1293–1527 M | Mojokerto, Jawa Timur | Gajah Mada "Sumpah Palapa"; Nusantara bersatu |
+| Demak | 1475–1554 M | Jawa Tengah | Kerajaan Islam pertama di Jawa |
+| Aceh | 1496–1903 M | Aceh | "Serambi Mekkah"; pelabuhan dagang rempah |
+| Gowa-Tallo | 1300–1669 M | Sulawesi Selatan | Arung Palakka vs Hasanuddin |
+| Ternate & Tidore | ~1257 M – | Maluku | Cengkeh & pala; diperebutkan Portugal, Spanyol, Belanda |
+| Mataram Islam | 1586–1755 M | Yogyakarta/Solo | Sultan Agung vs VOC; Perjanjian Giyanti 1755 |
+| Kasunanan Surakarta + Kesultanan Yogyakarta | 1755 M – | Solo & Yogyakarta | Warisan Mataram Islam hingga hari ini |
+
+### Majapahit — Detail
+- Berdiri: 1293, pendiri Raden Wijaya (Kertarajasa Jayawardhana).
+- Puncak: era **Hayam Wuruk** (1350–1389) dengan Mahapatih **Gajah Mada**.
+- **Sumpah Palapa**: Gajah Mada bersumpah tidak makan palapa sebelum menyatukan Nusantara. Berhasil menundukkan Sunda, Maluku, Bali, Lombok, Kalimantan, Sulawesi, Semenanjung Melayu.
+- Karya agung: **Nagarakretagama** (Mpu Prapanca, 1365) — dokumen sejarah tertua tentang Majapahit.
+- Runtuh karena: perang saudara Paregreg (1404–1406), ekspansi Islam dari pesisir utara Jawa, wabah.
+
+### Sriwijaya — Detail
+- Pusat: Palembang (Sumatera Selatan). Dikuasai Selat Malaka = jalur dagang dunia.
+- Komoditi: rempah, lada, emas, gading, rotan. Pajak 10% semua kapal yang lewat Malaka.
+- Mengirim biksu ke India (Nalanda University). I Tsing (biksu China) belajar di Sriwijaya 671 M.
+- Dikalahkan Kerajaan Chola (India Selatan) 1025 M → mulai melemah.
+
+### Situs Arkeologi Penting
+- **Borobudur** (Magelang, Jawa Tengah): candi Budha terbesar dunia. Dibangun 824 M era Mataram Hindu. UNESCO World Heritage 1991. 504 arca Budha, 2.672 panel relief.
+- **Prambanan** (Sleman, Yogyakarta): kompleks candi Hindu terbesar di Indonesia. 240 candi, dikuasai Trimurti (Brahma, Wisnu, Siwa). UNESCO World Heritage 1991.
+- **Sangiran** (Solo, Jawa Tengah): situs paleoantropologi. Fosil Homo erectus (Pithecanthropus) terkaya dunia. UNESCO World Heritage 1996. 65% fosil Homo erectus dunia ditemukan di sini.
+- **Gunung Padang** (Cianjur, Jawa Barat): megalitik kontroversial. Riset BRIN 2023 → klaim ada struktur buatan manusia ~25.000 BP (dibantah komunitas ilmiah internasional). Masih penelitian.
+- **Candi Muaro Jambi** (Jambi): kompleks percandian Budha-Melayu terluas di Asia Tenggara (~2.600 ha). Berkaitan Sriwijaya.
+- **Trowulan** (Mojokerto): bekas ibukota Majapahit. Reruntuhan kolam Segaran, gapura Bajang Ratu, candi Brahu.
+
+---
+
+## DASAR NEGARA & NILAI KEBANGSAAN
+
+### Pancasila — 5 Sila
+1. **Ketuhanan Yang Maha Esa**: Negara berlandaskan monoteisme inklusif (6 agama diakui).
+2. **Kemanusiaan yang Adil dan Beradab**: HAM, anti-diskriminasi, humanisme.
+3. **Persatuan Indonesia**: nasionalisme, bhinneka tunggal ika.
+4. **Kerakyatan yang Dipimpin oleh Hikmat Kebijaksanaan dalam Permusyawaratan/Perwakilan**: demokrasi deliberatif, musyawarah mufakat.
+5. **Keadilan Sosial bagi Seluruh Rakyat Indonesia**: welfare state, pemerataan ekonomi.
+
+- Dirumuskan: 1 Juni 1945 (Soekarno pidato "Lahirnya Pancasila"), disahkan 18 Agustus 1945.
+- **Hari Lahir Pancasila**: 1 Juni, hari libur nasional sejak 2016.
+- **Badan Pembinaan Ideologi Pancasila (BPIP)**: lembaga negara, kepala saat ini Yudian Wahyudi.
+
+### UUD 1945 — Amandemen
+- **Amandemen I** (1999): perubahan kekuasaan DPR vs Presiden, hak legislasi DPR.
+- **Amandemen II** (2000): otonomi daerah, HAM (Pasal 28A–28J), TNI/Polri.
+- **Amandemen III** (2001): Mahkamah Konstitusi, BPK, pemilihan presiden langsung.
+- **Amandemen IV** (2002): DPD, pendidikan (20% APBN), ekonomi.
+- Hasil: presiden max 2 periode, MK sebagai pengawal konstitusi, pilpres langsung rakyat.
+
+### Wawasan Nusantara & Ketahanan Nasional
+- **Wawasan Nusantara**: konsep geopolitik Indonesia sebagai negara kepulauan dengan kesatuan wilayah darat-laut-udara. Laut bukan pemisah, tapi pemersatu.
+- **Ketahanan Nasional**: konsep pertahanan komprehensif (tidak hanya militer, tapi ekonomi, sosial, budaya, ideologi).
+- **ASEAN**: Indonesia pendiri 1967 (Bangkok Declaration). Posisi sebagai "natural leader" ASEAN.
+
+### Semboyan & Simbol Nasional
+- **Bhinneka Tunggal Ika**: "Berbeda-beda tapi tetap satu" — dari Kakawin Sutasoma (Mpu Tantular, Majapahit).
+- **Garuda Pancasila**: lambang negara, 17 bulu sayap, 8 bulu ekor, 19 bulu pangkal, 45 bulu leher = 17-8-1945 (tanggal proklamasi).
+- **Bendera**: Merah Putih — merah = keberanian, putih = kesucian.
+- **Bahasa**: Indonesia (Melayu Riau basis) = bahasa persatuan, bukan bahasa ibu mayoritas.
+- **Lagu Kebangsaan**: "Indonesia Raya" — W.R. Supratman, 1928.
+
+---
+
+## TREN GLOBAL 2025–2035 (KONTEKS INDONESIA)
+
+### 10 Megatren Dunia yang Relevan untuk Indonesia
+
+| No | Megatren | Proyeksi Global | Relevansi Indonesia |
+|----|----------|----------------|---------------------|
+| 1 | AI & Otomasi | 300 juta pekerjaan terdampak (McKinsey 2030) | 51 juta pekerjaan berisiko; Kartu Prakerja Digital |
+| 2 | Energi Terbarukan | 90% listrik dari EBT global 2050 (IEA) | Target 23% EBT 2025 (baru 13%); potensi surya, geothermal, panas bumi terbesar |
+| 3 | Geopolitik Multipolar | AS-China tech war; de-dollarisasi BRICS | Indonesia non-blok; anggota BRICS+ 2025; Local Settlement Currency |
+| 4 | Krisis Iklim | 1,5°C target Paris; extreme weather naik | BMKG: suhu Indonesia naik 0,3°C/dekade; banjir rob, kekeringan ekstrem |
+| 5 | Urbanisasi | 68% populasi global di kota 2050 (UN) | 57% urban 2025; Jakarta hyperdense; IKN Nusantara dekonsentrasi |
+| 6 | Longevity Economy | Populasi 65+ dunia 1,6 miliar 2050 | Bonus demografi Indonesia puncak 2030; aging society mulai 2040+ |
+| 7 | Supply Chain Reshoring | Nearshoring pasca-COVID, China+1 strategy | Indonesia target FDI dari Apple, Samsung, LG (Batam, Karawang, Bekasi) |
+| 8 | Kesehatan Digital | Telemedicine $455 miliar 2030 (Grand View) | Halodoc, Alodokter, KlikDokter; JKN digital |
+| 9 | Web3 & Digital Assets | Kripto market cap $3T+ (2025) | OJK Bappebti regulate; BTC legal komoditas; Rupiah Digital (CBDC) 2026 |
+| 10 | Creator Economy | $480 miliar 2027 (Goldman Sachs) | 60+ juta kreator konten; TikTok Shop #1 social commerce Indonesia |
+
+### Indonesia vs World — Perbandingan Ekonomi
+| Indikator | Indonesia 2025 | Global Average | Negara Pembanding |
+|-----------|----------------|----------------|-------------------|
+| GDP per Kapita | $5.200 (current $) | $13.800 | Malaysia $13.200, Thailand $7.800 |
+| Pertumbuhan GDP | 5,0% | 3,2% | Vietnam 6,5%, India 6,8% |
+| Inflasi | 2,5% | 4,0% | AS 2,9%, Eropa 2,5% |
+| Gini Koefisien | 0,381 | 0,38 | Brazil 0,48, Jerman 0,31 |
+| Indeks EoDB | 73,3 (ranking 60-70) | — | Singapura 1, Malaysia 12 |
+| HDI | 0,713 (medium) | 0,739 | Vietnam 0,726, Filipina 0,699 |
+| Digital Adoption | 78,9% internet | 66,2% | SEA average 72% |
+
+### Global Rankings Indonesia 2025
+- **GDP Nominal**: #16 dunia (~$1,37 T)
+- **GDP PPP**: #7 dunia (~$4,0 T)
+- **Populasi**: #4 dunia (280 juta)
+- **Muslim Population**: #1 dunia
+- **Palm Oil Producer**: #1 dunia (58% global share)
+- **Nickel Reserve**: #1 dunia (21% total cadangan global)
+- **Geothermal Potential**: #1 dunia (40% global reserve)
+- **Mangrove Area**: #1 dunia (3,3 juta ha)
+- **Biodiversity (species)**: #2 dunia (mega-biodiversity setelah Brazil)
+- **Startup Unicorn**: #3 Asia Tenggara (11 unicorn: Gojek, Tokopedia, Traveloka, OVO, J&T, dll)
+
+---
+
+## KEMENTERIAN INDONESIA — DATA & AKSES
+
+### Daftar Kementerian Kabinet Merah Putih (2024–2029)
+| No | Kementerian | Menteri | URL Resmi |
+|----|------------|---------|-----------|
+| 1 | Sekretariat Kabinet | Teddy Indra Wijaya | setkab.go.id |
+| 2 | Kemenko Perekonomian | Airlangga Hartarto | ekon.go.id |
+| 3 | Kemenko Polkam | Budi Gunawan | polkam.go.id |
+| 4 | Kemenko PMK | Pratikno | pmk.go.id |
+| 5 | Kemenko Infrastruktur | Agus Harimurti Yudhoyono | infra.go.id |
+| 6 | Kemenko Pangan | Zulkifli Hasan | menpan.go.id |
+| 7 | Kementerian Keuangan | Sri Mulyani Indrawati | kemenkeu.go.id |
+| 8 | Kementerian BUMN | Erick Thohir | bumn.go.id |
+| 9 | BKPM / Kementerian Investasi | Rosan Roeslani | bkpm.go.id / investindonesia.go.id |
+| 10 | Kementerian Perdagangan | Budi Santoso | kemendag.go.id |
+| 11 | Kementerian Perindustrian | Agus Gumiwang Kartasasmita | kemenperin.go.id |
+| 12 | Kementerian ESDM | Bahlil Lahadalia | esdm.go.id |
+| 13 | Kementerian Pertanian | Andi Amran Sulaiman | pertanian.go.id |
+| 14 | Kementerian Kelautan & Perikanan | Sakti Wahyu Trenggono | kkp.go.id |
+| 15 | Kementerian LHK | Siti Nurbaya | menlhk.go.id |
+| 16 | Kementerian PUPR | Dody Hanggodo | pu.go.id |
+| 17 | Kementerian Perhubungan | Dudy Purwagandhi | dephub.go.id |
+| 18 | Kementerian Komunikasi & Digital | Meutya Hafid | komdigi.go.id |
+| 19 | Kementerian Kesehatan | Budi Gunadi Sadikin | kemkes.go.id |
+| 20 | Kementerian Pendidikan Dasar & Menengah | Abdul Mu'ti | kemdikdasmen.go.id |
+| 21 | Kementerian Pendidikan Tinggi, Iptek | Satryo Soemantri Brodjonegoro | kemdiktisaintek.go.id |
+| 22 | Kementerian Hukum | Supratman Andi Agtas | kemenkumham.go.id |
+| 23 | Kementerian HAM | Natalius Pigai | kemham.go.id |
+| 24 | Kementerian Tenaga Kerja | Yassierli | kemnaker.go.id |
+| 25 | Kementerian Sosial | Saifullah Yusuf | kemsos.go.id |
+| 26 | Kementerian Agama | Nasaruddin Umar | kemenag.go.id |
+| 27 | Kementerian Luar Negeri | Sugiono | kemlu.go.id |
+| 28 | Kementerian Pertahanan | Sjafrie Sjamsoeddin | kemhan.go.id |
+| 29 | Kementerian Dalam Negeri | Tito Karnavian | kemendagri.go.id |
+| 30 | BPS | Amalia Adininggar Widyasanti | bps.go.id |
+| 31 | Bank Indonesia | Perry Warjiyo | bi.go.id |
+| 32 | OJK | Mahendra Siregar | ojk.go.id |
+| 33 | BRIN | Laksana Tri Handoko | brin.go.id |
+| 34 | BKKBN | Hasto Wardoyo | bkkbn.go.id |
+| 35 | KPK | Nawawi Pomolango (Plt) | kpk.go.id |
+
+### BUMN Strategis Indonesia
+| BUMN | Bidang | URL |
+|------|--------|-----|
+| Pertamina | Minyak, gas, petrokimia | pertamina.com |
+| PLN | Listrik nasional | pln.co.id |
+| Telkom Indonesia | Telekomunikasi, digital | telkom.co.id |
+| Bank Mandiri | Perbankan | bankmandiri.co.id |
+| BRI | Perbankan UMKM | bri.co.id |
+| BNI | Perbankan | bni.co.id |
+| BSI (Bank Syariah Indonesia) | Perbankan syariah | bankbsi.co.id |
+| Bulog | Ketahanan pangan, beras | bulog.co.id |
+| Hutama Karya | Konstruksi jalan tol | hutamakarya.com |
+| Waskita Karya | Konstruksi | waskita.co.id |
+| Adhi Karya | Konstruksi, properti | adhi.co.id |
+| Krakatau Steel | Baja | krakatausteel.com |
+| INALUM (MIND ID) | Aluminium, tambang | mindid.id |
+| Freeport Indonesia | Tembaga, emas | ptfi.co.id |
+| Garuda Indonesia | Penerbangan | garuda-indonesia.com |
+| Pelindo | Pelabuhan | pelindo.co.id |
+| Angkasa Pura | Bandar udara | angkasapura.co.id |
+| Jasa Marga | Jalan tol | jasamarga.com |
+| BPJS Ketenagakerjaan | Jaminan sosial pekerja | bpjsketenagakerjaan.go.id |
+| BPJS Kesehatan | JKN, kesehatan | bpjs-kesehatan.go.id |
+
+---
+
+## EKOSISTEM TOOLS & TEKNOLOGI — REFERENSI GLOBAL
+
+### Office & Produktivitas
+| Kategori | Tools Utama | Use Case |
+|----------|------------|---------|
+| Office Suite | Microsoft 365 (Word/Excel/PowerPoint/Teams/Outlook), Google Workspace (Docs/Sheets/Slides/Meet/Drive) | Kolaborasi tim, dokumen, presentasi |
+| PDF | Adobe Acrobat, Foxit, Smallpdf, ILovePDF, PDFgear | Buat, edit, konversi PDF |
+| Presentasi | Canva, Prezi, Pitch, Beautiful.ai, Gamma.app | Slide visual |
+| Project Management | Notion, Asana, Trello, Monday.com, ClickUp, Jira, Linear, Basecamp | Task & proyek |
+| Komunikasi Tim | Slack, Microsoft Teams, Discord, Lark (ByteDance), Zoom | Chat, video call |
+| Notulensi & Transkripsi | Otter.ai, Fireflies.ai, Tactiq, Fathom | Meeting notes otomatis |
+
+### CRM & Sales
+| Tool | Segmen | Harga |
+|------|--------|-------|
+| Salesforce | Enterprise | $25–$300/user/bln |
+| HubSpot | SMB-Enterprise | Free–$3.600/bln |
+| Zoho CRM | SMB | $14–$52/user/bln |
+| Pipedrive | SMB | $15–$99/user/bln |
+| Microsoft Dynamics 365 | Enterprise | $65–$210/user/bln |
+| Freshsales | SMB | $15–$69/user/bln |
+
+### ERP (Enterprise Resource Planning)
+| Tool | Segmen | Keunggulan |
+|------|--------|-----------|
+| SAP S/4HANA | Large Enterprise | Standar global manufaktur |
+| Oracle ERP Cloud | Large Enterprise | Finance, supply chain |
+| Microsoft Dynamics 365 Business Central | Mid-Market | Terintegrasi Office 365 |
+| Odoo | SMB–Mid | Open source, modular |
+| Accurate Online | SMB Indonesia | Akuntansi lokal, BPJS, pajak |
+| HashMicro | SMB Indonesia | ERP lokal, support bahasa Indonesia |
+| Jurnal.id | Startup–SMB Indonesia | Cloud accounting |
+
+### Supply Chain & Logistik
+- **Global**: SAP SCM, Oracle SCM, Manhattan Associates, Blue Yonder, Kinaxis
+- **Indonesia**: Shipper, Kargo Technologies, Waresix, Anteraja, SiCepat (carrier), Deliveree (B2B)
+
+### Fintech Indonesia Ekosistem
+| Kategori | Pemain Utama |
+|----------|-------------|
+| Payment Gateway | Midtrans (Gojek Group), Xendit, Doku, Faspay |
+| QRIS/E-wallet | GoPay, OVO, Dana, LinkAja, ShopeePay, Jenius |
+| Pinjol Legal | AdaKami, Kredivo, Akulaku, Tunaiku, Indodana |
+| P2P Lending | Amartha (UMKM), Modalku (SME), Koinworks |
+| Investasi | Bibit, Bareksa, Stockbit, RTI Business |
+| Crypto Exchange | Indodax, Pintu, Tokocrypto (Binance), CVEX |
+| Asuransi Digital | Lifepal, PasarPolis, Qoala |
+| Remitansi | Wise, Jenius Transfer, Flip |
+
+### E-Commerce & Marketplace Indonesia
+| Platform | GMV est. 2025 | Kekuatan |
+|----------|--------------|---------|
+| Tokopedia/TikTok Shop | $30–35 miliar | Terbesar (merger 2023) |
+| Shopee | $20–25 miliar | Fashion, elektronik |
+| Lazada | $6–8 miliar | Affiliate Alibaba |
+| Blibli | $3–5 miliar | Premium, B2B |
+| Bukalapak | $2–3 miliar | MITRA warung |
+| Ralali | $1–2 miliar | B2B marketplace |
+| Orami | $500 jt | Ibu & bayi |
+
+### Desain & Kreatif
+| Kategori | Tools |
+|----------|-------|
+| Desain Grafis | Adobe Creative Suite (Photoshop, Illustrator, InDesign, Premiere, After Effects, XD), Canva, Figma, Affinity |
+| Video Editing | Adobe Premiere, DaVinci Resolve, CapCut, VN, iMovie |
+| 3D / Arsitektur | SketchUp, AutoCAD, Revit, Lumion, 3ds Max, Blender |
+| UI/UX | Figma, Adobe XD, Sketch, InVision, Zeplin, Framer |
+| Branding | Looka, Tailor Brands, Wix, Squarespace (web) |
+| AI Generatif | Midjourney, DALL-E 3, Stable Diffusion, Adobe Firefly, Sora (video), HeyGen (avatar) |
+
+### Social Media — Data Indonesia 2025
+| Platform | Pengguna Indonesia | Ranking Global |
+|----------|-------------------|----------------|
+| YouTube | 139 juta | #2 dunia penonton |
+| WhatsApp | 112 juta | #1 messaging |
+| Instagram | 105 juta | Top 5 global |
+| Facebook | 118 juta | Aging demografi |
+| TikTok | 127 juta | #2 dunia pengguna aktif |
+| Twitter/X | 24 juta | Opini publik, politisi |
+| LinkedIn | 22 juta | B2B, profesional |
+| Telegram | 30 juta | Komunitas, bisnis |
+
+### HRM & HRIS Indonesia
+- **Global**: Workday, SAP SuccessFactors, Oracle HCM, BambooHR, ADP
+- **Lokal**: Talenta (Sleekr), LinovHR, Gadjian, Jojonomic, Payroll Bozz
+- **Regulasi terkait**: Cipta Kerja 2020, PP 35/2021, Perpres Pengupahan
+
+### AI Platforms & Tools Ekosistem
+| Kategori | Tools Terdepan |
+|----------|---------------|
+| LLM API | OpenAI (GPT-4o), Anthropic (Claude), Google (Gemini), Mistral, Meta (Llama 3) |
+| AI Coding | GitHub Copilot, Cursor, Codeium, Tabnine, Replit AI |
+| AI Search | Perplexity AI, You.com, Brave Search AI |
+| AI Agent | AutoGPT, LangChain, CrewAI, LlamaIndex, n8n (automation) |
+| AI Image | Midjourney, DALL-E 3, Flux, Ideogram, Adobe Firefly |
+| AI Voice | ElevenLabs, PlayHT, Murf, Cartesia |
+| AI Video | Sora, Runway ML, Kling AI, HeyGen |
+| Local LLM | Ollama, LM Studio, GPT4All, llamafile |
+| MLOps | Hugging Face, Weights & Biases, MLflow, Vertex AI |
+
+### Trading & Pasar Modal Indonesia
+- **Bursa Efek Indonesia (BEI/IDX)**: idx.co.id. ~900 emiten (2025). Indeks: IHSG, LQ45, IDX30, IDX80.
+- **Sekuritas**: BRI Danareksa, Mirae Asset, Indo Premier, Phillip Sekuritas, BCA Sekuritas
+- **Platforma Trading**: RTI Business, ChartNexus, Stockbit Pro, Ajaib, Pluang, Bibit (reksa dana)
+- **Kripto legal**: diatur Bappebti (sekarang OJK Divisi Aset Kripto). 383 aset kripto legal diperdagangkan (2025).
+- **Indodax, Tokocrypto, Pintu** = 3 exchange terbesar Indonesia.
+- **IDX Carbon**: pasar karbon sukarela BEI, diluncurkan 2023. Perpres 98/2021 dasar hukum.
+
+### AR/VR & Manufaktur Digital
+- **AR/VR**: Meta Quest 3, Apple Vision Pro, Microsoft HoloLens (enterprise). Di Indonesia: early adoption di manufaktur (training), properti (virtual tour), pendidikan.
+- **Manufaktur**: Siemens PLM, PTC Creo, Dassault Systèmes CATIA (desain), Rockwell Automation, Honeywell (IoT pabrik).
+- **Smart Factory Indonesia**: SIMA (Siemens Indonesia), PT Astra Manufacturing, Unilever Cikarang.
+
+---
+
+## REFERENSI RISET & SUMBER PENGETAHUAN
+
+### Jurnal Ilmiah Indonesia (Sinta)
+- **SINTA 1**: Jurnal Penelitian dan Pengembangan Pertanian, Indonesian Journal of Pharmacy, Makara Journal of Science.
+- **SINTA 2**: Jurnal Manajemen (UI), Gadjah Mada International Journal of Business, Mimbar Hukum.
+- **Akses**: sinta.kemdikbud.go.id
+
+### Database Riset Global yang Relevan Indonesia
+- **World Bank Open Data**: data.worldbank.org — PDB, kemiskinan, gini, pendidikan.
+- **IMF Data**: imf.org/en/Data — fiskal, neraca pembayaran, proyeksi.
+- **UNDP HDI Reports**: hdr.undp.org — Indeks Pembangunan Manusia.
+- **FAO STAT**: fao.org/faostat — pangan, pertanian, hutan.
+- **WHO Global Health Observatory**: who.int/data — kesehatan, mortalitas, penyakit.
+- **ILO Data**: ilostat.ilo.org — ketenagakerjaan, upah, pengangguran.
+- **OECD iLibrary**: oecd-ilibrary.org — best practice governance, pajak.
+- **Scopus / Web of Science**: jurnal internasional berbayar, akses lewat perpustakaan universitas.
+- **Google Scholar**: scholar.google.com — gratis, akses banyak jurnal Indonesia.
+
+### Buku Penting tentang Indonesia
+| Judul | Penulis | Tahun | Topik |
+|-------|---------|-------|-------|
+| Indonesia, Etc. | Elizabeth Pisani | 2014 | Keberagaman & koherensi bangsa |
+| A History of Modern Indonesia since c.1200 | M.C. Ricklefs | 2008 | Sejarah komprehensif |
+| The Malay Archipelago | Alfred Russel Wallace | 1869 | Alam & biodiversitas |
+| Max Havelaar | Multatuli | 1860 | Kolonialisme & keadilan |
+| Bumi Manusia | Pramoedya Ananta Toer | 1980 | Kebangkitan nasional, fiksi |
+| Corruption and the Limits of the State | Vedi Hadiz | 2006 | Politik & korupsi |
+| The Indonesian Economy | Hal Hill | 1996/2014 | Makroekonomi Indonesia |
+| Javanese Culture | Koentjaraningrat | 1985 | Antropologi Jawa |
+| Gerakan Pembaruan Islam | Deliar Noer | 1973 | Islam modernisme |
+| Capita Selecta | Kartini | 1911 | Emansipasi wanita |
+
+### Lembaga Think-Tank & Riset Indonesia
+- **CSIS (Centre for Strategic and International Studies)**: csis.or.id — geopolitik, kebijakan.
+- **INDEF**: indef.or.id — ekonomi, fiskal.
+- **Smeru Research Institute**: smeru.or.id — kemiskinan, sosial.
+- **LD FEB UI**: Lembaga Demografi, kependudukan.
+- **LBH (Lembaga Bantuan Hukum)**: hukum & HAM.
+- **Populi Center**: survei opini publik, pemilu.
+- **Katadata Insight Center**: bisnis, startup, digital economy.
