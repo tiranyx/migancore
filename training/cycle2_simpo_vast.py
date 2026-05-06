@@ -396,9 +396,9 @@ def main():
     log("\n[6/8] Starting SimPO training...")
     log(f"Args: {' '.join(SIMPO_ARGS)}")
 
-    # Use plain `python` (conda base, PyTorch 2.5.1) — no venv needed with 2.5.1 image.
+    # Use trainenv python (has new TRL from venv install) — NOT conda base python.
     # Redirect output to file (no tee pipe) to preserve real exit code — Lesson #102.
-    train_cmd = f"python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
+    train_cmd = f"/root/trainenv/bin/python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
     log("Training started. Estimated 15-45 min for 613 pairs × 1 epoch on A100...")
 
     train_start = time.time()
