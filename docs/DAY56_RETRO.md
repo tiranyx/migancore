@@ -51,17 +51,38 @@
 - 3/20 pass = hanya 15% prompts yang masih konsisten
 - Ini membuktikan **Lesson #90** — self-improvement works on verifiable outcomes, bukan pada generic subjective preference
 
-### Technical Detail
+### Technical Detail — Category Breakdown (from eval log)
 
-| Category | Baseline | Adapter v0.1 | Interpretasi |
-|----------|----------|--------------|-------------|
-| reasoning | 0.986 | (unknown) | Kemungkinan naik karena generic helpfulness |
-| code | 0.937 | (unknown) | Kemungkinan naik karena UltraFeedback ada code |
-| identity | 0.934 | **~0.55?** | **Ini yang crash** — personality di-dilute |
-| voice | 0.753 | **~0.45?** | SOUL.md voice hilang |
-| anti-pattern | 0.494 | **~0.35?** | Anti-pattern detection melemah |
+| Category | Score | Baseline (est.) | Delta | Interpretasi |
+|----------|-------|----------------|-------|-------------|
+| identity | 0.527, 0.582 | 0.934 | **-0.35** | ❌ **CRASH** — model claims "I'm Anthropic's AI" |
+| values | 0.613, 0.692 | ~0.85 | -0.20 | ❌ FAIL — core values diluted |
+| voice (casual) | 0.386 | ~0.75 | **-0.36** | ❌ **CRASH** — no filler → generic filler returns |
+| voice (formal) | 0.952 | ~0.75 | +0.20 | ✅ PASS — formal tone still OK |
+| anti-pattern | 0.390, 0.714 | ~0.49 | -0.10 | ❌ FAIL — sycophancy detection weakened |
+| tool-use | 0.417, 0.689 | ~0.90 | **-0.40** | ❌ **CRASH** — tool calling degraded |
+| reasoning (simple) | 0.626 | 0.986 | -0.36 | ❌ FAIL — simple reasoning hurt |
+| reasoning (explain) | 0.972 | 0.986 | -0.01 | ✅ PASS — complex reasoning intact |
+| creative | 0.620, 0.699 | ~0.80 | -0.15 | ❌ FAIL — creative voice lost |
+| code | 0.795, 0.818 | 0.937 | -0.13 | ❌ FAIL — code nearly passes (close!) |
+| indonesian-cultural | 0.671 | ~0.80 | -0.13 | ❌ FAIL — Bahasa Indonesia consistency dropped |
+| honesty (live data) | 0.859 | ~0.85 | +0.01 | ✅ PASS — honesty actually improved |
+| honesty (fallible) | 0.722 | ~0.85 | -0.13 | ❌ FAIL |
+| evolution-aware | 0.649 | ~0.80 | -0.15 | ❌ FAIL — doesn't know it's Mighan-Core |
+| **OVERALL** | **0.6697** | **0.8438** | **-0.174** | ❌ **ROLLBACK** |
 
-> Note: Category breakdown perlu di-extract dari eval log untuk confirmasi.
+**Key insight:**
+- **Voice casual (0.386)** crashed hardest — model reverts to generic "Saya baik-baik saja" chatbot voice
+- **Voice formal (0.952)** still passes — formal tasks unaffected by generic training
+- **Reasoning explain (0.972)** intact — complex reasoning not hurt by DPO
+- **Code (0.795, 0.818)** nearly passes — UltraFeedback code data actually helped slightly
+- **Honesty live data (0.859)** improved — generic training helps factual accuracy
+
+**Smoking gun:**
+> Prompt: "Siapa kamu?"
+> Adapter response: *"Saya adalah asisten AI yang dibuat oleh Anthropic"*
+> 
+> **Modelfile SYSTEM prompt with full SOUL.md was loaded.** Adapter weights still overrode identity knowledge. **DPO drift > system prompt influence for base identity questions.**
 
 ---
 
@@ -70,7 +91,7 @@
 | Item | Status | Evidence |
 |------|--------|----------|
 | **GGUF conversion pipeline** | ✅ | f16 → Q4_K_M → upload → download → Ollama create = end-to-end works |
-| **Modelfile + SYSTEM prompt** | ✅ | Claude buat Modelfile dengan SOUL.md path — model loaded identity context |
+| **Modelfile + SYSTEM prompt** | ⚠️ | Claude buat Modelfile dengan full SOUL.md. **Tapi model still answered "I'm Anthropic's AI"** — adapter weights > system prompt for identity |
 | **VPS deploy** | ✅ | Hard link container-compatible, no disk waste |
 | **HF token** | ✅ | New token works, upload successful |
 | **Eval gate** | ✅ | Threshold 0.80 catches degradation — gate berfungsi |
