@@ -30,7 +30,7 @@ from services.license import (
 )
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/license", tags=["license"])
+router = APIRouter(prefix="/v1/license", tags=["license"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
