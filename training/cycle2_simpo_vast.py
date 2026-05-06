@@ -340,6 +340,22 @@ def main():
         log(f"Cost: ${wasted:.4f} for {elapsed_min:.1f} min (Lesson #60 abort works)")
         sys.exit(2)
 
+    # ── 3b. SSH readiness ping (before long install) ─────────
+    # Lesson #113: status=running doesn't mean sshd is fully ready for commands.
+    # Wait up to 60s with 5s retries for a simple echo to succeed.
+    log("Verifying SSH is ready for commands...")
+    for _ping_attempt in range(12):
+        rc_ping, _, _ = ssh(ssh_host, ssh_port, "echo PING_OK", timeout=15)
+        if rc_ping == 0:
+            log("SSH command-ready ✓")
+            break
+        log(f"  SSH ping attempt {_ping_attempt+1}/12 failed (rc={rc_ping}) — retrying in 5s...")
+        time.sleep(5)
+    else:
+        log("SSH not command-ready after 60s. Aborting.")
+        delete_instance(inst_id)
+        sys.exit(2)
+
     # ── 4. Install dependencies ───────────────────────────────
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
     # Lesson #108: pytorch:2.4.0 image incompatible with TRL 1.x+. Fixed: use 2.5.1.
@@ -384,8 +400,11 @@ def main():
         log(f"  stdout: {out.strip()[-600:]}")  # 600 chars to capture TRL diagnostic
     if rc != 0:
         log(f"  stderr: {err[-400:]}")
-        # Non-fatal — continue and see if unsloth is available
-        log("Install had errors — continuing (unsloth may be partial)")
+        # Lesson #113: install failure is FATAL — venv not created → train will fail with
+        # "No such file or directory". Clean up and abort (do not continue).
+        log("Install FAILED (rc != 0). Aborting — venv not ready for training.")
+        delete_instance(inst_id)
+        sys.exit(6)
 
     # Cost check
     cost = cost_so_far(inst_id, start_ts)
