@@ -22,7 +22,7 @@ services:
     environment:
       OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_KEEP_ALIVE: "10m"
+      OLLAMA_KEEP_ALIVE: "24h"
       OLLAMA_MAX_QUEUE: "32"
     deploy:
       resources:
@@ -101,6 +101,11 @@ services:
       LETTA_URL: http://letta:8283
       LETTA_PASSWORD: ${LETTA_PASSWORD}
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}
+      # Day 62: ADO License System
+      LICENSE_SECRET_KEY: ${LICENSE_SECRET_KEY}
+      LICENSE_DEMO_MODE: ${LICENSE_DEMO_MODE:-true}
+      ADO_DISPLAY_NAME: ${ADO_DISPLAY_NAME:-Migan}
+      LICENSE_INTERNAL_KEY: ${LICENSE_INTERNAL_KEY}
       FAL_KEY: ${FAL_KEY}                         # Day 24: fal.ai image/video generation
       ELEVENLABS_KEY: ${ELEVENLABS_KEY}           # Day 27: ElevenLabs TTS
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID} # Day 28: user's voice library voice
@@ -110,6 +115,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       KIMI_API_KEY: ${KIMI_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      # Day 37 — CAI judge backend selector (ollama|quorum)
+      JUDGE_BACKEND: ${JUDGE_BACKEND:-ollama}
+      JUDGE_QUORUM_REQUIRE_CONSENSUS: ${JUDGE_QUORUM_REQUIRE_CONSENSUS:-true}
       JWT_PRIVATE_KEY_PATH: /etc/ado/keys/private.pem
       JWT_PUBLIC_KEY_PATH: /etc/ado/keys/public.pem
     volumes:
@@ -117,6 +125,8 @@ services:
       - ./config:/app/config:ro
       - fastembed_cache:/app/.cache/fastembed   # Persist model downloads across rebuilds
       - ./data/workspace:/app/workspace         # Day 24: sandboxed file system for agents
+      - ./eval:/app/eval                       # Day 39: identity eval scripts + persona set
+      - /opt/sidix/tools/hyperx-browser:/app/hyperx:rw     # Day 42: HYPERX browser (Node.js MCP, mounted RO from sidix tools)
     depends_on: [postgres, qdrant, redis, ollama]
     deploy:
       resources:
