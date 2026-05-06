@@ -64,8 +64,8 @@ SIMPO_ARGS = [
     "--batch-size",    "2",
     "--grad-accum",    "8",
     "--max-seq-length","2048",
-    "--padding-free",
-    "--use-liger-kernel",
+    # --padding-free and --use-liger-kernel removed: liger-kernel conflicts with unsloth.
+    # apo_zero loss + lr=5e-7 is the key optimization; liger is optional speed-up only.
 ]
 
 VAST_API = "https://console.vast.ai/api/v0"
@@ -339,13 +339,17 @@ def main():
 
     # ── 4. Install dependencies ───────────────────────────────
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
+    # Lesson #102: install unsloth FIRST alone — liger_kernel in the same pip cmd
+    # creates version conflicts that silently block unsloth from installing.
+    # Do NOT include liger_kernel in the install; unsloth brings its own compatible version.
     install_cmd = (
         "pip install -q --upgrade pip && "
+        "pip install -q unsloth && "  # unsloth first, solo
         "pip install -q "
-        "'unsloth[cu121]' "
         "'trl>=0.9.6' "
         "transformers datasets peft accelerate bitsandbytes "
-        "huggingface_hub liger_kernel 2>&1 | tail -5"
+        "huggingface_hub 2>&1 | tail -5 && "
+        "python -c 'import unsloth; print(\"unsloth OK:\", unsloth.__version__)'"
     )
     rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
     log(f"Install exit={rc}")
@@ -384,7 +388,9 @@ def main():
     log("\n[6/8] Starting SimPO training...")
     log(f"Args: {' '.join(SIMPO_ARGS)}")
 
-    train_cmd = f"python /root/train_simpo.py {' '.join(SIMPO_ARGS)} 2>&1 | tee /root/train_log.txt"
+    # Lesson #102 (exit code fix): "python ... | tee" ALWAYS returns tee's exit code (0),
+    # masking python failures. Use redirect only; read log separately for output.
+    train_cmd = f"python /root/train_simpo.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
     log("Training started. Estimated 15-45 min for 613 pairs × 1 epoch on A100...")
 
     train_start = time.time()
@@ -393,19 +399,15 @@ def main():
     train_elapsed = time.time() - train_start
     log(f"Training exit={rc} | elapsed={train_elapsed:.0f}s ({train_elapsed/60:.1f}min)")
 
-    # Show tail of output
-    if out:
-        log("Training output (tail):")
-        for line in out.strip().splitlines()[-20:]:
+    # Read training log (output was redirected to file, not in stdout)
+    _, train_log_tail, _ = ssh(ssh_host, ssh_port, "tail -30 /root/train_log.txt 2>/dev/null", timeout=30)
+    if train_log_tail:
+        log("Training log (tail 30):")
+        for line in train_log_tail.strip().splitlines():
             log(f"  {line}")
+
     if rc != 0:
         log(f"Training FAILED (rc={rc})")
-        # Try to get error log
-        _, err_log, _ = ssh(ssh_host, ssh_port, "tail -30 /root/train_log.txt 2>/dev/null")
-        if err_log:
-            log("Last 30 lines of train_log.txt:")
-            for line in err_log.splitlines():
-                log(f"  {line}")
         log("Manual recovery commands:")
         log(f"  ssh -i {SSH_KEY} -p {ssh_port} root@{ssh_host}")
         log(f"  cat /root/train_log.txt")
