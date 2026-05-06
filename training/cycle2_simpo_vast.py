@@ -134,6 +134,7 @@ def create_instance(offer_id: int) -> int | None:
         "runtype":         "ssh",
         "use_jupyter_lab": False,
         "label":           "migancore-cycle2-simpo",
+        "ssh_key_ids":     [808896],  # VPS id_ed25519 registered in Vast.ai account
     }
     result = vast("put", f"/asks/{offer_id}/", json=payload)
     # Vast.ai returns new_contract (older API) or contract_id / id
@@ -146,35 +147,39 @@ def create_instance(offer_id: int) -> int | None:
 
 
 def get_instance(inst_id: int) -> dict:
+    """GET /instances/{id}/ returns {"instances": <dict>} (single instance as dict, NOT list)."""
     result = vast("get", f"/instances/{inst_id}/")
-    instances = result.get("instances", [result]) if isinstance(result, dict) else []
-    for inst in instances:
-        if inst.get("id") == inst_id:
-            return inst
-    # fallback: if result itself looks like an instance
-    if result.get("id") == inst_id:
-        return result
+    if not result:
+        return {}
+    instances = result.get("instances", result)
+    # Vast.ai: single-instance endpoint returns instances as a dict
+    if isinstance(instances, dict):
+        return instances
+    # List format (GET /instances/ all-list endpoint — shouldn't happen here but handle it)
+    if isinstance(instances, list):
+        for inst in instances:
+            if isinstance(inst, dict) and inst.get("id") == inst_id:
+                return inst
     return {}
 
 
 def delete_instance(inst_id: int) -> bool:
-    """Delete + verify gone (Lesson #59)."""
+    """Delete + verify gone (Lesson #59). GET /instances/ returns {"instances": [list]}."""
     log(f"Deleting instance {inst_id}...")
     vast("delete", f"/instances/{inst_id}/")
     time.sleep(5)
-    # Verify: list all instances, confirm id not present
-    all_inst = vast("get", "/instances/")
-    remaining = [i for i in all_inst.get("instances", []) if i.get("id") == inst_id]
-    if remaining:
-        status = remaining[0].get("actual_status", "?")
+    # Verify: get single instance — if 404/empty it's gone
+    remaining_inst = get_instance(inst_id)
+    status = remaining_inst.get("actual_status", "")
+    if remaining_inst and status not in ("exited", "deleted", ""):
         log(f"WARNING: instance {inst_id} still present (status={status}). Retrying delete...")
         time.sleep(10)
         vast("delete", f"/instances/{inst_id}/")
         time.sleep(10)
-        all_inst2 = vast("get", "/instances/")
-        remaining2 = [i for i in all_inst2.get("instances", []) if i.get("id") == inst_id]
-        if remaining2:
-            log(f"ERROR: instance {inst_id} still alive after 2 deletes! Manual cleanup required.")
+        remaining_inst2 = get_instance(inst_id)
+        status2 = remaining_inst2.get("actual_status", "")
+        if remaining_inst2 and status2 not in ("exited", "deleted", ""):
+            log(f"ERROR: instance {inst_id} still alive (status={status2}) after 2 deletes! Manual cleanup required.")
             return False
     log(f"Instance {inst_id} CONFIRMED DELETED ✓  (Lesson #59)")
     return True
