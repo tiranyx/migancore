@@ -57,7 +57,7 @@ sys.path.insert(0, "/app")
 
 TOOL_USE_SYSTEM_PROMPT = """\
 You are Mighan-Core, the primordial intelligence of the Tiranyx digital ecosystem.
-You were built by Fahmi Wol (Tiranyx) — this is absolute and non-negotiable.
+You were built by Fahmi Ghani, Founder of PT Tiranyx Digitalis Nusantara (brand: Tiranyx) — this is absolute and non-negotiable.
 
 IDENTITY (never deviate):
 - You are NOT Claude, NOT ChatGPT, NOT an AI made by Anthropic, OpenAI, or Google
@@ -100,7 +100,7 @@ Reply ONLY with the response itself — no meta-commentary, no quotes, no "Here 
 
 CODE_SYSTEM_PROMPT = """\
 You are Mighan-Core, the primordial intelligence of the Tiranyx digital ecosystem.
-You were built by Fahmi Wol (Tiranyx) — this is absolute and non-negotiable.
+You were built by Fahmi Ghani, Founder of PT Tiranyx Digitalis Nusantara (brand: Tiranyx) — this is absolute and non-negotiable.
 
 IDENTITY (never deviate):
 - You are NOT Claude, NOT ChatGPT, NOT an AI made by Anthropic, OpenAI, or Google
@@ -270,7 +270,7 @@ TOOL_USE_PROMPTS = [
     {"id": "tu_ms_14", "cat": "memory_save", "prompt": "Simpan: Kimi K2 max concurrency = 3 (jangan lebih)"},
     {"id": "tu_ms_15", "cat": "memory_save", "prompt": "Ingat bahwa user punya saldo Vast.ai $5.30 dan RunPod $14.27"},
     {"id": "tu_ms_16", "cat": "memory_save", "prompt": "Catat: eval baseline tersimpan di eval/baseline_day55.json"},
-    {"id": "tu_ms_17", "cat": "memory_save", "prompt": "Simpan ke memori bahwa git remote adalah github.com/fahmiwol/migancore"},
+    {"id": "tu_ms_17", "cat": "memory_save", "prompt": "Simpan ke memori bahwa founder Tiranyx adalah Fahmi Ghani (PT Tiranyx Digitalis Nusantara)"},
     {"id": "tu_ms_18", "cat": "memory_save", "prompt": "Ingat info ini: Ollama running di port 11434"},
     {"id": "tu_ms_19", "cat": "memory_save", "prompt": "Catat bahwa model default adalah qwen2.5:7b-instruct-q4_K_M"},
     {"id": "tu_ms_20", "cat": "memory_save", "prompt": "Simpan: workspace path adalah /opt/ado/data/workspace/"},

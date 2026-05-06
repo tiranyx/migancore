@@ -1,5 +1,5 @@
 # MIGANCORE — AGENT ONBOARDING PROTOCOL (PERMANENT)
-**Owner:** Fahmi Wol (tiranyx.id@gmail.com) | non-technical founder/visioner
+**Owner:** Fahmi Ghani (tiranyx.id@gmail.com) | Founder & Owner, PT Tiranyx Digitalis Nusantara (brand: Tiranyx)
 **Project:** MiganCore = Autonomous Digital Organism (ADO) — modular AI brain
 **Vision:** "Otak inti AI yang bisa diadopsi, diturunkan, dikembangkan modular oleh AI lain — seperti prosesor / otak manusia siap terhubung indera & organ via sistem syaraf."
 
@@ -246,9 +246,9 @@ Per `docs/VISION_DISTINCTIVENESS_2026.md`:
 
 ---
 
-## 📞 OWNER PROFILE (Fahmi Wol)
+## 📞 OWNER PROFILE (Fahmi Ghani)
 
-- **Non-technical founder** — visioner, not coder
+- **Founder & Owner** PT Tiranyx Digitalis Nusantara (brand: Tiranyx) — visioner, non-technical
 - **Concept:** iterasi → kognitif → optimasi → inovasi
 - **Komunikasi:** Bahasa Indonesia primary
 - **Wants:** comprehensive docs, no context loss, partner-honest assessment

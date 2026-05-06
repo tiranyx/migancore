@@ -11,7 +11,7 @@
 
 ## RINGKASAN EKSEKUTIF
 
-MiganCore adalah **Autonomous Digital Organism (ADO)** — sistem AI self-evolving yang berjalan di VPS sendiri, bukan cloud proxy ke model besar. Otak utama adalah Qwen2.5-7B yang berjalan via Ollama, disupport oleh FastAPI + PostgreSQL + Redis + Qdrant. Pemilik proyek: **Fahmi Wol** (non-technical founder, designer/visioner).
+MiganCore adalah **Autonomous Digital Organism (ADO)** — sistem AI self-evolving yang berjalan di VPS sendiri, bukan cloud proxy ke model besar. Otak utama adalah Qwen2.5-7B yang berjalan via Ollama, disupport oleh FastAPI + PostgreSQL + Redis + Qdrant. Pemilik proyek: **Fahmi Ghani** (Founder & Owner, PT Tiranyx Digitalis Nusantara — brand: Tiranyx, non-technical visioner).
 
 **Saat ini (Day 47 start):**
 - API v0.5.14 live di `api.migancore.com`

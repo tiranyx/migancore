@@ -9,8 +9,9 @@
 
 Before any action, understand the humans behind this project:
 
-### 1.1 Primary Stakeholder: Fahmi Wol (Project Owner)
-- **Role:** Designer + Visionary. NOT a developer. NOT a DevOps engineer.
+### 1.1 Primary Stakeholder: Fahmi Ghani (Founder & Owner)
+- **Company:** PT Tiranyx Digitalis Nusantara (brand: Tiranyx)
+- **Role:** Founder, Designer + Visionary. NOT a developer. NOT a DevOps engineer.
 - **Skill Level:** Zero coding. Zero DevOps. Zero terminal experience.
 - **Communication Style:** Visual, conceptual, strategic.
 - **What They Need:** Results without technical jargon. Progress reports in plain language.
