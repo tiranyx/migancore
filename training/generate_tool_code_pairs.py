@@ -740,7 +740,7 @@ async def _generate_pair(
                 teacher=teacher,
                 prompt=prompt,
                 system=system,
-                max_tokens=300 if pair_type == "code" else 200,
+                max_tokens=1000 if pair_type == "code" else 250,  # Gemini 2.5 thinking burns tokens; code needs headroom
             )
             elapsed = time.time() - t0
 
