@@ -953,10 +953,104 @@ async def _onamix_get(args: dict, ctx: ToolContext) -> dict:
     }
 
 
+async def _wikipedia_direct_search(query: str, limit: int = 3) -> list[dict]:
+    """Search Wikipedia directly via REST API. Returns results with full article extract.
+
+    Day 55 fix: HYPERX wikipedia engine returns only title+URL (no content).
+    This bypasses HYPERX and hits Wikipedia REST API to get actual article extract.
+
+    Strategy:
+    - Try Indonesian Wikipedia (id.wikipedia.org) first
+    - Fall back to English Wikipedia (en.wikipedia.org) if no ID results
+    - Each result: {title, url, snippet, content, lang}
+    - content = full Wikipedia extract, up to 2000 chars (enough for brain to summarise)
+    """
+    WIKI_SEARCH_URL = "https://{lang}.wikipedia.org/w/api.php"
+    WIKI_SUMMARY_URL = "https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}"
+    HEADERS = {"User-Agent": "MiganCore/1.0 (migancore.com; tiranyx.id@gmail.com)"}
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=True) as client:
+        for lang in ("id", "en"):
+            try:
+                # Step 1: search Wikipedia
+                search_resp = await client.get(
+                    WIKI_SEARCH_URL.format(lang=lang),
+                    params={
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": query,
+                        "srlimit": min(limit, 5),
+                        "format": "json",
+                        "origin": "*",
+                    },
+                    headers=HEADERS,
+                )
+                search_resp.raise_for_status()
+                search_data = search_resp.json()
+                hits = (search_data.get("query") or {}).get("search") or []
+
+                # If ID has no results for this query, try EN
+                if not hits and lang == "id":
+                    continue
+
+                # Step 2: fetch summary (with extract) for top results
+                enriched: list[dict] = []
+                for item in hits[:limit]:
+                    raw_title = item.get("title", "")
+                    encoded_title = urllib.parse.quote(raw_title.replace(" ", "_"), safe="")
+                    page_url = f"https://{lang}.wikipedia.org/wiki/{encoded_title}"
+
+                    try:
+                        sum_resp = await client.get(
+                            WIKI_SUMMARY_URL.format(lang=lang, title=encoded_title),
+                            headers=HEADERS,
+                        )
+                        sum_resp.raise_for_status()
+                        s = sum_resp.json()
+                        extract = (s.get("extract") or "").strip()
+                        description = s.get("description") or ""
+                        canonical = (
+                            ((s.get("content_urls") or {}).get("desktop") or {}).get("page")
+                            or page_url
+                        )
+                    except Exception:
+                        # Fallback: use raw snippet (HTML-stripped) from search API
+                        import re as _re
+                        raw_snip = item.get("snippet") or ""
+                        extract = _re.sub(r"<[^>]+>", "", raw_snip)
+                        description = ""
+                        canonical = page_url
+
+                    enriched.append({
+                        "title": raw_title,
+                        "url": canonical,
+                        "snippet": description or extract[:250],
+                        "content": extract[:2000] if extract else "(Konten tidak tersedia)",
+                        "lang": lang,
+                        "source": f"{lang}.wikipedia.org",
+                    })
+
+                return enriched  # Return first lang that has results
+
+            except Exception as exc:
+                logger.warning(
+                    "wikipedia_direct.search_failed",
+                    lang=lang,
+                    query=query[:80],
+                    error=str(exc),
+                )
+                if lang == "en":
+                    raise  # Both langs failed — let caller handle
+                continue  # Try next lang
+
+    return []
+
+
 async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
     """Web search via ONAMIX (7 engines: google, ddg, brave, bing, startpage, yandex, ecosia).
 
     Returns structured results with title, URL, snippet.
+    For engine='wikipedia': uses Wikipedia REST API directly (returns full article extract).
     """
     query = (args.get("query") or "").strip()
     if not query:
@@ -973,13 +1067,45 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
         engine = "ddg"
     limit = max(1, min(int(args.get("limit", 10)), 30))
 
+    logger.info("tool.onamix_search.start", q=query[:80], engine=engine, limit=limit)
+
+    # Day 55: Wikipedia engine — use REST API directly (returns full article extract).
+    # HYPERX wikipedia backend only returns title+URL (empty snippet) — brain gets links only.
+    # Fix: Wikipedia REST API (id.wikipedia.org first, en fallback) gives {title, url, snippet, content}.
+    if engine in {"wikipedia", "wiki", "wp"}:
+        try:
+            wiki_results = await _wikipedia_direct_search(query, limit=min(limit, 5))
+            logger.info(
+                "tool.onamix_search.done",
+                q=query[:80],
+                engine="wikipedia",
+                results=len(wiki_results),
+                transport="wikipedia_api",
+            )
+            return {
+                "query": query,
+                "engine": "wikipedia",
+                "results": wiki_results,
+                "count": len(wiki_results),
+                "elapsed_ms": None,
+                "source": "wikipedia_api",
+                "transport": "direct",
+                "note": "Gunakan field 'content' untuk baca isi artikel. 'snippet' adalah ringkasan singkat.",
+            }
+        except Exception as exc:
+            logger.warning(
+                "tool.onamix_search.wiki_api_failed_fallback",
+                error=str(exc),
+                q=query[:80],
+            )
+            # Fall through to HYPERX path as last resort
+
     # ONAMIX one-shot search has 2 CLI bugs:
     # 1. --json forces engine.get() → "Failed to parse URL" for queries
     # 2. argv slicing bug: only ONE leading --flag stripped, rest concatenated
     #    into query string (regex /^--[^\s]+\s*/g matches once)
     # Workaround: pass --engine FIRST (single leading flag), query LAST, no
     # other flags. Mount is RW so history.json writes work without --no-history.
-    logger.info("tool.onamix_search.start", q=query[:80], engine=engine, limit=limit)
 
     # Day 44: prefer persistent MCP client (clean structured response — no regex parser needed)
     try:
