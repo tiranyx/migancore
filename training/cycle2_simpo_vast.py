@@ -352,21 +352,31 @@ def main():
     #   in sys.path, so newly installed TRL always wins over old conda TRL.
     #   With PyTorch 2.5.1 there is no transformers 4.47+ compat issue, so no
     #   version pins needed — plain `pip install trl` gets latest 1.x+.
-    # Lesson #110: TRL deprecated SimPOTrainer between 0.9.6 and 0.29.1.
-    # Confirmed: TRL 0.29.1 (latest 0.x in 2026) has DPOTrainer, GRPOTrainer,
-    # KTOTrainer, RLOOTrainer, RewardTrainer, SFTTrainer — NO SimPOTrainer.
-    # Pin to trl==0.9.6 (Aug 2024, the version that ADDED SimPOTrainer).
-    # Use transformers==4.44.2 (same era, known-good with TRL 0.9.6).
-    # PyTorch 2.5.1 (from conda via --system-site-packages) is compatible.
+    # Lesson #110: SimPOTrainer never existed in TRL 0.9.6 OR 0.29.1.
+    # TRL 0.9.6 (Aug 2024): CPOTrainer with loss_type="simpo" = CPO-SimPO ≡ SimPO.
+    # TRL 0.29.1 (latest 0.x 2026): DPOTrainer/GRPOTrainer/KTOTrainer — no SimPO.
+    # Solution: pin trl==0.9.6, use CPOTrainer (train_simpo_standard.py 3-tier fallback).
+    # Lesson #111: peft>=0.13 added DTensor LoRA (torch.distributed.tensor) not in conda
+    # pytorch:2.5.1. Pin peft==0.12.0 (Sep 2024) to avoid AttributeError: module
+    # 'torch.distributed' has no attribute 'tensor' during LoRA injection.
+    # Era-consistent: trl==0.9.6 + transformers==4.44.2 + peft==0.12.0 + accelerate==0.34.0
     install_cmd = (
         "python -m venv /root/trainenv --system-site-packages && "
         "/root/trainenv/bin/pip install -q "
-        "'trl==0.9.6' 'transformers==4.44.2' 'peft>=0.12.0' "
-        "'accelerate>=0.34.0' datasets huggingface_hub rich && "  # rich needed by CPOTrainer
+        "'trl==0.9.6' 'transformers==4.44.2' 'peft==0.12.0' "
+        "'accelerate==0.34.0' datasets huggingface_hub rich && "
+        # All pinned to Sep-Oct 2024 era: compatible with each other + PyTorch 2.5.1
+        # peft>=0.13 added DTensor LoRA that uses torch.distributed.tensor not
+        # available in conda pytorch:2.5.1 image (Lesson #111)
+        # Verify: TRL 0.9.6 has CPOTrainer (not SimPOTrainer — that was removed).
+        # train_simpo_standard.py handles 3-tier fallback: simpo→cpo_simpo→orpo
         "/root/trainenv/bin/python -c '"
-        "import trl, transformers; "
-        "from trl import SimPOTrainer, SimPOConfig; "
-        "print(\"DEPS OK — trl\", trl.__version__, \"transformers\", transformers.__version__)'"
+        "import trl, transformers, peft, accelerate; "
+        "from trl import CPOTrainer, CPOConfig; "
+        "print(\"DEPS OK — trl\", trl.__version__, "
+        "\"transformers\", transformers.__version__, "
+        "\"peft\", peft.__version__, "
+        "\"accelerate\", accelerate.__version__)'"
     )
     rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
     log(f"Install exit={rc}")
