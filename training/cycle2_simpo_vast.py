@@ -129,7 +129,10 @@ def create_instance(offer_id: int) -> int | None:
     """Rent an instance from offer_id. Returns instance_id or None."""
     payload = {
         "client_id":       "me",
-        "image":           "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel",
+        # Lesson #108: pytorch:2.4.0 (Aug 2024) is incompatible with modern TRL/transformers.
+        # TRL 1.x+ (2026) requires PyTorch>=2.5 for torch.library.custom_op API.
+        # Use 2.5.1 image — fixes moe.py infer_schema error, supports current packages.
+        "image":           "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel",
         "disk":            MIN_DISK_GB,
         "runtype":         "ssh",
         "use_jupyter_lab": False,
@@ -339,24 +342,16 @@ def main():
 
     # ── 4. Install dependencies ───────────────────────────────
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
-    # Lesson #103: Unsloth upgrades torch 2.4→2.10 breaking torchvision==0.19.
-    # Lesson #104: conda pip split — plain pip installs to user site; conda python
-    #   finds old TRL first.
-    # Lesson #105: venv --system-site-packages inherits conda torch/CUDA; upgraded
-    #   packages installed into venv take precedence over conda base.
-    # Lesson #106: bitsandbytes infer_schema error — drop bnb, use bf16 direct.
-    # Lesson #107: pip --upgrade trl also upgrades transformers to 4.47+ which uses
-    #   torch.library.custom_op(moe.py) requiring PyTorch>=2.5 (image has 2.4.0).
-    #   Fix: pin transformers<4.47 AND require trl>=0.12.0 (SimPOTrainer added).
-    #   Do NOT use --upgrade globally; pin explicitly to avoid cascade upgrades.
+    # Lesson #108: pytorch:2.4.0 base image (Aug 2024) is incompatible with TRL 1.x+
+    #   (released 2025-2026). All version-pin attempts failed because TRL crossed the
+    #   1.0 boundary — upper bound <0.14.0 matches NOTHING in 2026 pip index.
+    #   Fix: use pytorch:2.5.1-cuda12.4-cudnn9-devel (PyTorch 2.5.1 supports
+    #   torch.library.custom_op used by transformers 4.47+/moe.py). With 2.5.1 image,
+    #   plain `pip install trl` gets TRL 1.x which works correctly. No venv needed —
+    #   conda base already has correct torch; just add TRL/PEFT/accelerate on top.
     install_cmd = (
-        "/opt/conda/bin/python -m venv /root/venv --system-site-packages && "
-        "/root/venv/bin/pip install -q "
-        "'trl>=0.12.0,<0.14.0' "        # SimPOTrainer added in 0.12.0
-        "'transformers>=4.44.0,<4.47.0' "  # <4.47 avoids moe.py torch 2.5 API
-        "'peft>=0.12.0' 'accelerate>=0.34.0' "
-        "datasets 'huggingface_hub>=0.20' && "
-        "/root/venv/bin/python -c 'from trl import SimPOTrainer; import trl; "
+        "pip install -q trl peft accelerate datasets huggingface_hub && "
+        "python -c 'from trl import SimPOTrainer, SimPOConfig; import trl; "
         "import transformers; "
         "print(\"DEPS OK — trl\", trl.__version__, \"transformers\", transformers.__version__)'"
     )
@@ -397,9 +392,9 @@ def main():
     log("\n[6/8] Starting SimPO training...")
     log(f"Args: {' '.join(SIMPO_ARGS)}")
 
-    # Use venv python (upgraded TRL, inherited torch) — Lesson #105.
+    # Use plain `python` (conda base, PyTorch 2.5.1) — no venv needed with 2.5.1 image.
     # Redirect output to file (no tee pipe) to preserve real exit code — Lesson #102.
-    train_cmd = f"/root/venv/bin/python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
+    train_cmd = f"python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
     log("Training started. Estimated 15-45 min for 613 pairs × 1 epoch on A100...")
 
     train_start = time.time()
