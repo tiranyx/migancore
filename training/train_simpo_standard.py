@@ -121,7 +121,19 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
+    # Lesson #114: Qwen2.5 tokenizer has bos_token_id=None (no traditional BOS).
+    # TRL's DPODataCollatorWithPadding prepends [bos_token_id] to every tokenized
+    # sequence → [None, tok1, tok2, ...] → torch.tensor([None,...]) fails with
+    # TypeError: 'NoneType' cannot be interpreted as int.
+    # Fix: set bos_token_id to eos_token_id (safe fallback for Qwen chat models).
+    if tokenizer.bos_token_id is None:
+        _bos = tokenizer.eos_token_id
+        if isinstance(_bos, list):
+            _bos = _bos[0]  # eos_token_id can be a list for Qwen2.5
+        tokenizer.bos_token_id = _bos if _bos is not None else 151643
+        print(f"NOTE: bos_token_id was None (Qwen2.5 quirk), set to {tokenizer.bos_token_id}")
     tokenizer.padding_side = "right"  # required for ORPO/DPO causal training
+    print(f"Tokenizer: pad={tokenizer.pad_token_id} bos={tokenizer.bos_token_id} eos={tokenizer.eos_token_id}")
     print(f"Model loaded in {time.time() - t_load:.0f}s")
 
     # ── Enable gradient checkpointing (reduce activation memory) ──────
