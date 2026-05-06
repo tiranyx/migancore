@@ -76,6 +76,9 @@ NEW_CYCLE5_SOURCES: list[tuple[str, int, str]] = [
     ("bisnis_legalitas_v1:cycle5",       70, "legalitas"),     # ~60 pairs
     ("indonesia_creative_v1:cycle5",     65, "creative_id"),   # ~55 pairs
     ("adaptive_persona_v1:cycle5",       65, "adaptive"),      # ~55 pairs
+    # Cycle 4 ROLLBACK fixes (voice 0.739→≥0.85, evo-aware 0.537→≥0.80)
+    ("voice_anchor_v1:cycle5",           90, "voice"),         # ~80 pairs
+    ("evolution_aware_v2:cycle5",        70, "evo_aware"),     # ~60 pairs
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -207,6 +210,8 @@ def source_breakdown(samples: list[dict]) -> dict[str, int]:
 
 
 CURATED_LABELS = {"identity", "tool_use", "code", "cai", "distill"}
+# Labels that are C4 ROLLBACK fixes (supplement to base Cycle 5 domain pairs)
+SUPPLEMENT_LABELS = {"voice", "evo_aware"}
 
 
 async def export_cycle5(
@@ -252,24 +257,34 @@ async def export_cycle5(
     print(f"  {'TOTAL':24s} {len(validated):4d}")
 
     # KPI checks
-    target_min, target_max = 780, 1000
+    target_min, target_max = 900, 1200  # raised: 860 base + 140 supplement = ~1000
     kpi_total = target_min <= len(validated) <= target_max
 
-    # Cycle 5 domain coverage
+    # Cycle 5 domain coverage (original 5 domains)
     eng   = breakdown.get("engineering", 0)
     umkm  = breakdown.get("umkm", 0)
     legal = breakdown.get("legalitas", 0)
     creat = breakdown.get("creative_id", 0)
     adapt = breakdown.get("adaptive", 0)
-    kpi_domains = all([eng >= 40, umkm >= 50, legal >= 40, creat >= 40, adapt >= 40])
+    # Cycle 4 ROLLBACK fix supplements
+    voice    = breakdown.get("voice", 0)
+    evo_aw   = breakdown.get("evo_aware", 0)
+    kpi_domains = all([
+        eng >= 40, umkm >= 50, legal >= 40, creat >= 40, adapt >= 40,
+        voice >= 60,   # voice fix: need >=60 to move gate from 0.739->0.85
+        evo_aw >= 45,  # evo-aware fix: need >=45 to move gate from 0.537->0.80
+    ])
 
     print(f"\n  KPI total: {target_min}≤pairs≤{target_max} → {'✅ PASS' if kpi_total else '❌ FAIL'}")
-    print(f"  Cycle 5 domain coverage (target ≥ 40 each):")
+    print(f"  Cycle 5 domain coverage:")
     print(f"    engineering  : {eng:3d}  {'✅' if eng  >= 40 else '❌'}")
     print(f"    umkm         : {umkm:3d}  {'✅' if umkm >= 50 else '❌'}")
     print(f"    legalitas    : {legal:3d}  {'✅' if legal>= 40 else '❌'}")
     print(f"    creative_id  : {creat:3d}  {'✅' if creat>= 40 else '❌'}")
     print(f"    adaptive     : {adapt:3d}  {'✅' if adapt>= 40 else '❌'}")
+    print(f"  Cycle 4 ROLLBACK fixes:")
+    print(f"    voice        : {voice:3d}  {'✅' if voice >= 60 else '❌'} (C4 gate fail: 0.739)")
+    print(f"    evo_aware    : {evo_aw:3d}  {'✅' if evo_aw >= 45 else '❌'} (C4 gate fail: 0.537)")
     print(f"  Domains all pass: {'✅' if kpi_domains else '❌'}")
 
     kpi_pass = kpi_total and kpi_domains
