@@ -403,7 +403,7 @@ async def _store_pair(
                     "score": 5.0,  # max score — identity anchors are gold
                     "model": f"teacher:{teacher}",
                     "method": f"identity_anchor_v2:{category}",
-                    "msg_id": str(uuid.uuid4()),
+                    "msg_id": None,  # synthetic pair: no real source message
                     "now": datetime.now(timezone.utc),
                 },
             )
