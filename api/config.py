@@ -91,6 +91,16 @@ class Settings(BaseSettings):
     MEMORY_PRUNE_DAYS: int = 30           # Delete points older than this many days
     MEMORY_PRUNE_IMPORTANCE_MAX: float = 0.7  # Only prune points BELOW this importance
 
+    # Day 61: ADO License System (inspired by Ixonomic coin minting)
+    # LICENSE_PATH: path to license.json on the deployed ADO instance
+    # LICENSE_SECRET_KEY: HMAC-SHA256 key for offline validation (set per-instance)
+    # LICENSE_DEMO_MODE: if True, ADO runs without license (beta/evaluation instances)
+    LICENSE_PATH: str = "/opt/ado/license.json"
+    LICENSE_SECRET_KEY: Optional[str] = None    # Set in .env — NEVER commit
+    LICENSE_DEMO_MODE: bool = True              # True = run without license (beta)
+    # ADO_DISPLAY_NAME: white-label override (fallback if no license — for migancore.com)
+    ADO_DISPLAY_NAME: str = "Migan"
+
     # Observability
     ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production)$")
     LOG_LEVEL: str = "INFO"

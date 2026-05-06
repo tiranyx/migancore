@@ -28,6 +28,7 @@ from routers import api_keys as api_keys_router  # Day 27
 from routers import onboarding as onboarding_router  # Day 37
 from routers import speech as speech_router  # Day 38
 from routers import vision as vision_router  # Day 40
+from routers import license as license_router  # Day 61
 
 # Day 26: MCP Streamable HTTP server (lazy import — degrades gracefully if SDK missing)
 try:
@@ -220,6 +221,43 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("contracts.startup_failed", error=str(exc))
 
+    # 10. Day 61: License validation at startup (GAP-03 Phase 2)
+    #     Inspired by Ixonomic coin minting — each ADO instance carries a
+    #     cryptographically signed license.json (HMAC-SHA256). Offline-capable.
+    #     Modes: FULL → READ_ONLY (expired) → DEMO (no license, beta) → INVALID (tampered)
+    try:
+        from services.license import load_and_validate, set_current_license, LicenseMode
+        lic_result = load_and_validate(
+            license_path=settings.LICENSE_PATH,
+            secret_key=settings.LICENSE_SECRET_KEY,
+            demo_mode_allowed=settings.LICENSE_DEMO_MODE,
+        )
+        set_current_license(lic_result)
+        if lic_result.mode == LicenseMode.FULL:
+            logger.info(
+                "license.ok",
+                client=lic_result.client_name,
+                display_name=lic_result.ado_display_name,
+                tier=lic_result.tier,
+                days_remaining=lic_result.days_remaining,
+            )
+        elif lic_result.mode == LicenseMode.DEMO:
+            logger.info("license.demo_mode", reason=lic_result.reason)
+        elif lic_result.mode == LicenseMode.READ_ONLY:
+            logger.warning(
+                "license.read_only",
+                reason=lic_result.reason,
+                detail="Training and new-data features disabled until license renewed",
+            )
+        else:  # INVALID
+            logger.error(
+                "license.invalid",
+                reason=lic_result.reason,
+                detail="ADO running in DEMO mode despite invalid license — set LICENSE_DEMO_MODE=false to enforce",
+            )
+    except Exception as exc:
+        logger.error("license.startup_check_failed", error=str(exc))
+
     logger.info("migan.startup", message="MiganCore API starting up")
     yield
     logger.info("migan.shutdown", message="MiganCore API shutting down")
@@ -310,7 +348,8 @@ app.include_router(conversations_router.router)
 app.include_router(api_keys_router.router)  # Day 27
 app.include_router(onboarding_router.router)  # Day 37
 app.include_router(speech_router.router)  # Day 38
-app.include_router(vision_router.router)  # Day 40
+app.include_router(vision_router.router)   # Day 40
+app.include_router(license_router.router)  # Day 61
 
 # Day 26: Mount MCP Streamable HTTP server at /mcp
 # Degrades gracefully if `mcp` SDK is unavailable (e.g. dev container without rebuild).
