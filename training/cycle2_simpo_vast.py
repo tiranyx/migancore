@@ -362,7 +362,7 @@ def main():
         "python -m venv /root/trainenv --system-site-packages && "
         "/root/trainenv/bin/pip install -q "
         "'trl==0.9.6' 'transformers==4.44.2' 'peft>=0.12.0' "
-        "'accelerate>=0.34.0' datasets huggingface_hub && "
+        "'accelerate>=0.34.0' datasets huggingface_hub rich && "  # rich needed by CPOTrainer
         "/root/trainenv/bin/python -c '"
         "import trl, transformers; "
         "from trl import SimPOTrainer, SimPOConfig; "
