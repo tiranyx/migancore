@@ -205,6 +205,37 @@ def main():
     else:
         raise RuntimeError(f"Unknown TRAINER_MODE: {TRAINER_MODE}")
 
+    # ── Pre-training None scan + filter ──────────────────────────────
+    # Lesson #112/ORPO: DPODataCollatorWithPadding crashes if any tokenized field
+    # (ending in _input_ids/_attention_mask/_labels) is None in the tokenized dataset.
+    # Root cause identified: happens for BOTH ORPOTrainer AND CPOTrainer — shared collator.
+    # Fix: scan trainer.train_dataset for None in tokenized fields, print diagnostic,
+    #   then filter those rows out so training can proceed with clean data.
+    print("\nScanning tokenized dataset for None values before training...")
+    td = trainer.train_dataset
+    print(f"Tokenized columns: {td.column_names}")
+    _tokenized_keys = [k for k in td.column_names
+                       if k.endswith(("_input_ids", "_attention_mask", "_labels"))]
+    print(f"Checking keys: {_tokenized_keys}")
+    _none_rows = []
+    for _i in range(len(td)):
+        ex = td[_i]
+        for k in _tokenized_keys:
+            if ex.get(k) is None:
+                _none_rows.append((_i, k, ds[_i].get("prompt", "")[:60]))
+                break
+    if _none_rows:
+        print(f"WARNING: {len(_none_rows)} rows have None in tokenized fields:")
+        for (_i, k, prompt_preview) in _none_rows[:10]:
+            print(f"  row {_i}: key={k}  prompt={repr(prompt_preview)}")
+        # Filter them out
+        _good_idxs = set(range(len(td))) - {r[0] for r in _none_rows}
+        td = td.select(sorted(_good_idxs))
+        trainer.train_dataset = td
+        print(f"Filtered dataset: {len(td)} clean examples (removed {len(_none_rows)} with None)")
+    else:
+        print(f"None scan CLEAN — all {len(td)} examples have valid tokenized fields ✓")
+
     # ── Train ─────────────────────────────────────────────────────────
     print("\nStarting training...")
     t_train = time.time()
