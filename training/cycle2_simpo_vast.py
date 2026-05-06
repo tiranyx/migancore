@@ -352,19 +352,37 @@ def main():
     #   in sys.path, so newly installed TRL always wins over old conda TRL.
     #   With PyTorch 2.5.1 there is no transformers 4.47+ compat issue, so no
     #   version pins needed — plain `pip install trl` gets latest 1.x+.
+    # Lesson #110: TRL 2.x (2026) dropped SimPOTrainer from top-level __init__.py.
+    # Pin to trl==0.12.0 (Oct 2024, last 0.x with SimPOTrainer at top level) OR
+    # fall through to latest and let train_simpo_standard.py handle import path.
+    # Diagnostic: print TRL version + available SimPO classes so every failure
+    # gives actionable info in the log (captured via out.strip()[-500:]).
     install_cmd = (
         "python -m venv /root/trainenv --system-site-packages && "
-        "/root/trainenv/bin/pip install -q trl peft accelerate datasets huggingface_hub && "
-        "/root/trainenv/bin/python -c 'from trl import SimPOTrainer, SimPOConfig; import trl; "
-        "import transformers; "
-        "print(\"DEPS OK — trl\", trl.__version__, \"transformers\", transformers.__version__)'"
+        # Try to install trl<1.0 first (has SimPOTrainer); fall back to latest
+        "( /root/trainenv/bin/pip install -q 'trl<1.0' peft accelerate datasets huggingface_hub || "
+        "  /root/trainenv/bin/pip install -q trl peft accelerate datasets huggingface_hub ) && "
+        # Diagnostic: show installed TRL version and available SimPO/Trainer classes
+        "/root/trainenv/bin/python -c \""
+        "import trl; print('TRL:', trl.__version__); "
+        "simpo=[x for x in dir(trl) if 'impo' in x.lower() or 'Trainer' in x]; "
+        "print('SimPO/Trainer classes:', simpo)\""
+        " && "
+        # Verify import — resilient path (Lesson #110 multi-path now in train script)
+        "/root/trainenv/bin/python -c \""
+        "try:\\n"
+        "    from trl import SimPOTrainer, SimPOConfig\\n"
+        "except ImportError:\\n"
+        "    from trl.trainer import SimPOTrainer, SimPOConfig\\n"
+        "import trl, transformers\\n"
+        "print('DEPS OK — trl', trl.__version__, 'transformers', transformers.__version__)\""
     )
     rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
     log(f"Install exit={rc}")
     if out.strip():
-        log(f"  stdout: {out.strip()[-300:]}")
+        log(f"  stdout: {out.strip()[-600:]}")  # 600 chars to capture TRL diagnostic
     if rc != 0:
-        log(f"  stderr: {err[-200:]}")
+        log(f"  stderr: {err[-400:]}")
         # Non-fatal — continue and see if unsloth is available
         log("Install had errors — continuing (unsloth may be partial)")
 

@@ -70,8 +70,32 @@ def main():
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import LoraConfig, get_peft_model, TaskType
-    from trl import SimPOConfig, SimPOTrainer
     from datasets import load_dataset
+
+    # Lesson #110: TRL 1.x+ (2026) may have moved SimPOTrainer/SimPOConfig.
+    # Try all known import paths in order of preference.
+    _trl_import_error = None
+    try:
+        from trl import SimPOConfig, SimPOTrainer
+        print(f"TRL imports OK via top-level (trl.__version__ = {__import__('trl').__version__})")
+    except ImportError as _e1:
+        try:
+            from trl.trainer import SimPOConfig, SimPOTrainer
+            print(f"TRL imports OK via trl.trainer submodule")
+        except ImportError as _e2:
+            try:
+                from trl.trainer.simpo_trainer import SimPOTrainer
+                from trl.trainer.simpo_config import SimPOConfig
+                print(f"TRL imports OK via trl.trainer.simpo_* submodules")
+            except ImportError as _e3:
+                _trl_import_error = f"All import paths failed: {_e1} | {_e2} | {_e3}"
+
+    if _trl_import_error:
+        import trl as _trl_mod
+        _available = [x for x in dir(_trl_mod) if "Trainer" in x]
+        print(f"FATAL: SimPOTrainer not found in TRL {_trl_mod.__version__}")
+        print(f"Available trainers: {_available}")
+        raise ImportError(_trl_import_error)
 
     # ── Load model in bf16 (no quantization — 47 GB VRAM is enough) ──
     print(f"\nLoading {args.base_model} in bf16 (no bitsandbytes quantization)...")
