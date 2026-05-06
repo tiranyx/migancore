@@ -1,6 +1,6 @@
 # INDONESIA KNOWLEDGE BASE — Ontologi Data Multidimensi
 # Source: Laporan Komprehensif dari Fahmi Ghani (Tiranyx)
-# Version: 1.0 | Date: 2026-05-07
+# Version: 1.1 | Date: 2026-05-07 | Updated: tambah ESG/Green Sukuk, game studio, geografi detail, pahlawan 2025
 # Purpose: MiganCore training & RAG knowledge base
 
 ## MAKROEKONOMI INDONESIA
@@ -114,8 +114,10 @@
 | KBLI | Aktivitas | Catatan |
 |------|-----------|---------|
 | 62012 | Pengembangan Aplikasi E-Commerce | Menengah-Tinggi, butuh Sertifikat Standar |
-| 62015 | Pemodelan 3D | - |
-| 74101 | Desain Grafis | - |
+| 62015 | Pemrograman Berbasis AI (ML, NLP) | Termasuk pengembangan AI untuk studio kreatif |
+| 7412 | Desain Interior | - |
+| 7413 | Desain Komunikasi Visual / Desain Grafis | - |
+| 7414 | Aktivitas Desain Konten Kreatif | - |
 | 73100 | Periklanan (Advertising Agency) | - |
 | 90002 | Aktivitas Sastra (Copywriting) | - |
 
@@ -131,22 +133,76 @@
 - Sumber ilmiah: jurnal SINTA 1&2 (peer-review tertinggi Indonesia, gratis)
 - SINTA 1 & 2: H5-Index tinggi, lintas disiplin (hukum, teknik, manajemen, logistik)
 
+### Ekosistem Game Developer Indonesia
+- Studio pionir: Agate, Toge Productions, Mojiken Studio, Digital Happiness (kreator DreadOut — game horor fenomenal)
+- Google Play IGA (Indie Games Accelerator) 2024 — wakil Indonesia: Algorocks, Dreams Studio, Lentera Nusantara, Own Games
+- Niji Games: game teka-teki 3D "Umbra" — >3 juta unduhan internasional
+- AI digunakan di pemodelan 3D dan desain latar belakang (pra-produksi, prototipe)
+
+### Struktur Organisasi Startup & Creative Agency Indonesia
+| Jabatan | Tanggung Jawab |
+|---------|---------------|
+| CEO | Visi strategis, rekrut tim inti, relasi investor |
+| CTO | Pimpin teknologi (game/software), adopsi AI & tren terkini |
+| CFO | Arus kas, anggaran operasional, strategi fundraising |
+| CMO | Riset pasar, strategi komunikasi, launch IP game atau kampanye |
+| COO | Operasional produksi: pre-production (konsep, storyboard) → production (3D modeling, rigging, texturing) → post-production (rendering, VFX) |
+
+- SOP yang solid = pembeda utama agensi unggulan vs kompetitor
+- Copywriter = arsitek pesan pemasaran (bukan sekadar penulis)
+
+---
+
+---
+
+## EKONOMI HIJAU — ESG, BURSA KARBON, GREEN SUKUK
+
+### Status Adopsi ESG Indonesia (RSM Indonesia 2025)
+- 61% organisasi Indonesia sudah mulai langkah pemenuhan regulasi keberlanjutan
+- 72,5% perusahaan telah alokasikan anggaran khusus untuk program ESG
+- ESG bukan lagi sukarela — sudah menjadi keharusan strategis
+
+### Regulasi Karbon
+- **Perpres No. 110 Tahun 2025**: Penyelenggaraan Instrumen Nilai Ekonomi Karbon
+  - Disebut "game changer" tata kelola karbon nasional
+  - Mengatur batas atas emisi + perdagangan kuota emisi antarpelaku usaha
+  - Target: FOLU Net Sink 2030 dan NDC (Nationally Determined Contribution)
+- **Bursa Karbon**: dikelola Bursa Efek Indonesia (BEI), diawasi OJK
+- **Permen LHK/BPLH No. 7 Tahun 2025**: Perbarui kriteria PROPER
+  - PROPER = instrumen audit kinerja perusahaan dalam pengelolaan lingkungan
+
+### Instrumen Pembiayaan Hijau
+- **Green Sukuk (Sukuk Hijau)**: Indonesia = pelopor global
+  - Sukuk Tabungan ST011: imbal hasil 6,30–6,50%/tahun
+  - Dana eksklusif untuk: energi terbarukan, efisiensi energi, transportasi berkelanjutan, pengelolaan sampah
+  - ST012: lanjutan seri Green Sukuk ritel
+- **Reksadana dan Obligasi ESG**: BEI dorong emiten untuk ESG reporting
+- Produk investasi berbasis ESG terus berkembang di pasar modal Indonesia
+
 ---
 
 ## ETNOGRAFI NUSANTARA
 
-### Administratif
+### Administratif & Geografi
 - Total provinsi: 38 provinsi (Sabang hingga Merauke)
+- Posisi astronomis: 6° LU – 11° LS dan 95° BT – 141° BT
+- Iklim: tropis, hutan hujan lebat, posisi silang strategis untuk perdagangan internasional
+- Titik terluar:
+  - Paling utara: Pulau Rondo (Aceh) dan Pulau Miangas (Sulawesi Utara, 5°34′2″N 126°34′54″E)
+  - Paling selatan: Pulau Pamana, Kabupaten Rote Ndao, NTT
 
 ### Budaya per Provinsi (sampel)
 | Provinsi | Bahasa | Rumah Adat | Kebudayaan Khas |
 |----------|--------|------------|-----------------|
-| Aceh | Aceh, Gayo | - | Tari Saman (UNESCO) |
-| Sumatera Utara | Batak | Rumah Bolon | Piso Surit, Tari Tor-Tor |
+| Aceh | Aceh, Gayo | - | Tari Saman (UNESCO) / Upacara Peusijuk |
+| Sumatera Utara | Batak | Rumah Bolon | Tari Tor-Tor / Tradisi Mangokkal Holi |
+| Sumatera Barat | Minangkabau | Rumah Gadang | Pesta Tabuik / Upacara Turun Mandi |
 | Jawa Timur | Jawa | - | Upacara Kasada (suku Tengger) |
 | Kalimantan Timur | - | Rumah Lamin | Mandau, Upacara Dahau |
+| Kalimantan Tengah | Dayak | - | Tradisi Tiwah / Uluh Matei |
 | Kalimantan Utara | - | Rumah Baloy | - |
 | Kalimantan Selatan | Banjar | - | Tradisi Aru Baharin |
+| Sulawesi Selatan | Bugis, Makassar | - | - |
 | Sulawesi Tengah | - | Rumah Souraja | - |
 | Sulawesi Tenggara | - | - | Upacara Posuo |
 | Sulawesi Barat | - | Rumah Boyang | - |
@@ -161,7 +217,16 @@
 - Aforisme resiliensi: "Kuat dilakoni, yen ra kuat ditinggal ngopi"
 - Ngoko = keakraban, Krama = formalitas
 
-### Bahasa Batak Toba
+### Bahasa Minangkabau (Sumatera Barat)
+- Akhiran "us" → "uih": kurus = "kuruih"
+- Akhiran "ung" → "uang"
+- "rancak" = indah
+- "lamak" = enak
+- Digunakan dalam pergaulan komersial dan kuliner Minang
+- Fonologi khas, efektif untuk copywriting hyperlocal Sumbar
+
+### Bahasa Batak Toba (Sumatera Utara)
+- Karakteristik: langsung dan tegas
 - "Male au" = Saya lapar
 - "Mauas au" = Saya haus
 - "Horasma lao majo au ateh" = Baiklah, saya permisi pergi, Horas
@@ -197,6 +262,23 @@
 - Nasihat: "Di jalan tak sengaja berjumpa daun sugi / Ingat manfaat, lantas cepat dibawa / Tiada belajar tiada yang rugi / Kecuali diri sendiri di masa tua"
 - Anak-anak: "Kayu randu kayu jati / Jangan bandingkan dengan bambu / Senang nian rasanya hati / Bila disayang ayah dan ibu"
 - Karmina (kilat): "Gendang gendut tali kecapi / Kenyang perut senang hati"
+
+### Syair — Format & Tipologi
+- Berbeda dengan pantun, Syair bersajak **a-a-a-a** (semua baris berima sama) — tidak ada sampiran, semua baris = isi
+- Genre utama: Syair Agama/Sosioreligius (pengaruh sastra Islam Melayu), Syair Sejarah, Syair Romantis
+- Contoh Syair Agama:
+  > "Salat lima waktu adalah tiang agama
+  > Agar kehidupan bisa seimbang dan bahagia
+  > Tidak lupa pula untuk berdoa
+  > Seperti penyakit yang butuh obat setara"
+- Syair vs Pantun:
+  | Aspek | Pantun | Syair |
+  |-------|--------|-------|
+  | Sajak | a-b-a-b | a-a-a-a |
+  | Struktur | Sampiran + isi (2+2 baris) | Semua baris = isi |
+  | Fungsi | Hiburan, teka-teki, nasihat singkat | Pengajaran panjang, cerita, dakwah |
+  | Panjang | Biasanya 4 baris | Bisa puluhan bait |
+- Warisan: Syair Bidasari, Syair Ken Tambuhan, Syair Abdul Muluk (Raja Ali Haji)
 
 ### Penyair Besar
 - Chairil Anwar: eksistensialis
@@ -234,6 +316,19 @@
 | H.O.S. Tjokroaminoto | Ponorogo, Jatim | 1882-1934 | Sarekat Islam, mentor pendiri bangsa |
 | Mohammad Hatta | Bukittinggi, Sumbar | - | Proklamasi, "asas kekeluargaan" Pasal 33 |
 | Sutan Sjahrir | Padang Panjang, Sumbar | - | Proklamasi, diplomat |
+
+### Pahlawan Nasional 2025 — Penetapan Terbaru
+Pada tahun 2025, Presiden Prabowo Subianto menetapkan 10 tokoh baru sebagai Pahlawan Nasional:
+
+| Pahlawan | Asal | Kontribusi |
+|----------|------|-----------|
+| K.H. Abdurrahman Wahid (Gus Dur) | Jombang, Jatim | Presiden RI ke-4, pluralisme, reformasi demokrasi, NU |
+| Jenderal Besar TNI H.M. Soeharto | Kemusuk, Yogyakarta | Presiden RI ke-2, Orde Baru, Trilogi Pembangunan |
+| Marsinah | Jawa Timur | Aktivis buruh perempuan, simbol perjuangan hak pekerja |
+| Sultan Muhammad Salahuddin | NTB (Bima) | Raja Bima yang melawan penjajahan Belanda |
+| Tuan Rondahaim Saragih | Sumatera Utara (Simalungun) | Pemimpin adat Batak Simalungun, lawan kolonialisme |
+
+> Catatan: penetapan Gus Dur dan Soeharto sebagai Pahlawan Nasional sempat memicu diskursus publik tentang kriteria kepahlawanan nasional vs. kontroversi historis masing-masing tokoh.
 
 ---
 
