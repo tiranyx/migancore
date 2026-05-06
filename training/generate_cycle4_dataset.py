@@ -276,21 +276,35 @@ CATEGORIES: dict[str, dict] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def call_gemini(prompt: str, api_key: str, model: str = "gemini-2.5-flash") -> str:
-    """Call Gemini API asynchronously."""
-    import httpx
+    """Call Gemini API asynchronously.
+
+    Lesson #128: gemini-2.5-flash is a THINKING MODEL.
+    Response has 2 parts: parts[0]=thoughts (reasoning, NOT JSON), parts[1]=actual answer.
+    Fix: (1) thinkingBudget=0 to disable thinking entirely, (2) iterate parts to find
+    the non-thought part as fallback, (3) maxOutputTokens=4096 (creative responses are long).
+    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.85,
-            "maxOutputTokens": 800,
+            "maxOutputTokens": 4096,            # ↑ from 800 (creative responses need space)
+            "thinkingConfig": {
+                "thinkingBudget": 0,            # disable thinking — not needed for DPO gen
+            },
         },
     }
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:  # ↑ timeout for larger output
         resp = await client.post(url, json=payload, params={"key": api_key})
         resp.raise_for_status()
         data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        parts = data["candidates"][0]["content"]["parts"]
+        # Return the first non-thought part (handles thinking model response structure)
+        for part in parts:
+            if not part.get("thought", False) and "text" in part:
+                return part["text"]
+        # Fallback: last part (should always have the actual answer)
+        return parts[-1]["text"]
 
 
 async def generate_pair(
