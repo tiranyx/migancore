@@ -30,7 +30,7 @@ class Agent(Base):
     slug: Mapped[str] = mapped_column(String(63), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    model_version: Mapped[str] = mapped_column(String(64), nullable=False, default="migancore:0.2")
+    model_version: Mapped[str] = mapped_column(String(64), nullable=False, default="migancore:0.3")
     system_prompt: Mapped[str | None] = mapped_column(String(8192), nullable=True)
     persona_blob: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     persona_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

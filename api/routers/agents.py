@@ -31,7 +31,7 @@ class CreateAgentRequest(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1024)
-    model_version: str = Field(default="migancore:0.2")
+    model_version: str = Field(default="migancore:0.3")
     system_prompt: str | None = Field(None, max_length=8192)
     visibility: str = Field(default="private")
 
