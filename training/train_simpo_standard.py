@@ -72,11 +72,15 @@ def main():
     from peft import LoraConfig, get_peft_model, TaskType
     from datasets import load_dataset
 
-    # Lesson #110: SimPOTrainer exists only in TRL ~0.10.x-0.20.x window.
-    # TRL 0.9.6 has CPOTrainer with loss_type="simpo" (CPO-SimPO = equivalent).
-    # TRL 0.29.1 has no SimPO at all (removed in cleanup). ORPOTrainer is
-    # reference-free fallback also available in TRL 0.9.6.
-    # Priority: SimPO native → CPO-SimPO → ORPO
+    # Lesson #110: SimPOTrainer does not exist in TRL 0.9.6 (nor in 0.29.1).
+    # Lesson #112: CPOTrainer with loss_type="simpo" in TRL 0.9.6 fails with
+    #   TypeError: 'NoneType' cannot be interpreted as int in DataCollator
+    #   (DataCollatorWithPadding receives None for a tokenized field during
+    #   CPO-SimPO tokenize_row — root cause unresolved; skip CPO entirely).
+    # ORPOTrainer (TRL 0.9.6): reference-free, SFT + odds-ratio preference loss.
+    #   Equivalent quality to SimPO for identity/behavioral alignment.
+    #   beta=0.1 (standard ORPO scale) = simpo_beta/25.
+    # Priority: SimPO native → ORPO → CPO (last resort)
     import trl as _trl
     print(f"TRL version: {_trl.__version__}")
     _available_trainers = [x for x in dir(_trl) if "Trainer" in x]
@@ -89,14 +93,15 @@ def main():
         print("Trainer mode: SimPOTrainer (native)")
     except ImportError:
         try:
-            from trl import CPOTrainer, CPOConfig
-            TRAINER_MODE = "cpo_simpo"
-            print("Trainer mode: CPOTrainer with loss_type=simpo (CPO-SimPO)")
+            from trl import ORPOTrainer, ORPOConfig
+            TRAINER_MODE = "orpo"
+            print("Trainer mode: ORPOTrainer (reference-free, SFT+OR preference, TRL 0.9.6)")
         except ImportError:
             try:
-                from trl import ORPOTrainer, ORPOConfig
-                TRAINER_MODE = "orpo"
-                print("Trainer mode: ORPOTrainer (reference-free fallback)")
+                # CPO last: known to have DataCollator NoneType bug with loss_type=simpo
+                from trl import CPOTrainer, CPOConfig
+                TRAINER_MODE = "cpo_simpo"
+                print("Trainer mode: CPOTrainer (last resort — may have DataCollator issues)")
             except ImportError:
                 available = [x for x in dir(_trl) if "Trainer" in x]
                 raise RuntimeError(f"No compatible preference trainer in TRL {_trl.__version__}. Available: {available}")
@@ -114,6 +119,9 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.base_model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+    tokenizer.padding_side = "right"  # required for ORPO/DPO causal training
     print(f"Model loaded in {time.time() - t_load:.0f}s")
 
     # ── Enable gradient checkpointing (reduce activation memory) ──────
@@ -170,25 +178,32 @@ def main():
         )
         trainer = SimPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
 
+    elif TRAINER_MODE == "orpo":
+        # ORPO: reference-free, beta=lambda controls preference strength.
+        # ORPOConfig beta is typically 0.1; simpo_beta/25 scales proportionally.
+        # (2.5 / 25 = 0.1 = standard ORPO recommendation)
+        # ORPO jointly optimizes SFT loss + odds-ratio preference loss.
+        # No reference model needed — memory-efficient on any GPU.
+        orpo_beta = round(args.simpo_beta / 25.0, 3)  # 2.5/25 = 0.1
+        config = ORPOConfig(beta=orpo_beta, **_common)
+        trainer = ORPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
+        print(f"ORPOConfig: beta={orpo_beta} (scaled from SimPO beta {args.simpo_beta})")
+
     elif TRAINER_MODE == "cpo_simpo":
-        # CPO-SimPO: CPOTrainer with loss_type="simpo" = reference-free SimPO
-        # simpo_gamma may not be in all CPOConfig versions — handle gracefully
+        # CPO-SimPO: CPOTrainer with loss_type="simpo" = reference-free SimPO.
+        # WARNING: TRL 0.9.6 CPOTrainer has a DataCollator NoneType bug (Lesson #112).
+        # This branch is last resort only.
         _cpo_args = dict(beta=args.simpo_beta, loss_type="simpo", cpo_alpha=0.0, **_common)
         try:
             config = CPOConfig(simpo_gamma=args.simpo_gamma, **_cpo_args)
             print(f"CPOConfig: beta={args.simpo_beta} simpo_gamma={args.simpo_gamma}")
         except TypeError:
             config = CPOConfig(**_cpo_args)
-            print(f"CPOConfig: beta={args.simpo_beta} (simpo_gamma not supported in this CPOConfig version)")
+            print(f"CPOConfig: beta={args.simpo_beta} (simpo_gamma not supported in this CPOConfig)")
         trainer = CPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
 
-    else:  # orpo
-        # ORPO: reference-free, beta=lambda controls preference strength
-        # ORPO beta is typically 0.1; we use simpo_beta/25 to scale proportionally
-        orpo_beta = round(args.simpo_beta / 25.0, 3)  # 2.5/25 = 0.1
-        config = ORPOConfig(beta=orpo_beta, **_common)
-        trainer = ORPOTrainer(model=model, tokenizer=tokenizer, train_dataset=ds, args=config)
-        print(f"ORPOConfig: beta={orpo_beta} (scaled from SimPO beta {args.simpo_beta})")
+    else:
+        raise RuntimeError(f"Unknown TRAINER_MODE: {TRAINER_MODE}")
 
     # ── Train ─────────────────────────────────────────────────────────
     print("\nStarting training...")
