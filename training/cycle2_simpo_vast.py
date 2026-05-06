@@ -339,14 +339,18 @@ def main():
 
     # ── 4. Install dependencies ───────────────────────────────
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
-    # Lesson #103: Unsloth upgrades torch to 2.10+ which breaks torchvision==0.19
-    # on pytorch/pytorch:2.4.0-cuda12.1 image. Drop unsloth entirely.
-    # Use standard transformers + bitsandbytes + peft + trl — same quality, better portability.
+    # Lesson #103: Unsloth upgrades torch 2.4→2.10 breaking torchvision==0.19.
+    # Lesson #104: conda pip split — plain pip installs to user site; conda python
+    #   finds old TRL first. /opt/conda/bin/pip also hits conda constraints.
+    # Lesson #105: Solution — venv --system-site-packages inherits conda torch/CUDA,
+    #   but upgraded packages installed into venv take precedence over conda base.
+    #   This is the only reliable way to get fresh TRL without reinstalling torch.
     install_cmd = (
-        "pip install -q 'trl>=0.9.6' peft accelerate bitsandbytes datasets "
-        "'huggingface_hub>=0.20' 2>&1 | tail -5 && "
-        "python -c 'from trl import SimPOTrainer; from peft import LoraConfig; "
-        "import bitsandbytes; print(\"DEPS OK — trl+peft+bitsandbytes ready\")'"
+        "/opt/conda/bin/python -m venv /root/venv --system-site-packages && "
+        "/root/venv/bin/pip install -q --upgrade 'trl>=0.9.6' peft accelerate "
+        "bitsandbytes datasets 'huggingface_hub>=0.20' && "
+        "/root/venv/bin/python -c 'from trl import SimPOTrainer; import trl; "
+        "print(\"DEPS OK — trl\", trl.__version__)'"
     )
     rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
     log(f"Install exit={rc}")
@@ -385,9 +389,9 @@ def main():
     log("\n[6/8] Starting SimPO training...")
     log(f"Args: {' '.join(SIMPO_ARGS)}")
 
-    # Lesson #102 (exit code fix): "python ... | tee" ALWAYS returns tee's exit code (0),
-    # masking python failures. Use redirect only; read log separately for output.
-    train_cmd = f"python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
+    # Use venv python (upgraded TRL, inherited torch) — Lesson #105.
+    # Redirect output to file (no tee pipe) to preserve real exit code — Lesson #102.
+    train_cmd = f"/root/venv/bin/python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
     log("Training started. Estimated 15-45 min for 613 pairs × 1 epoch on A100...")
 
     train_start = time.time()
