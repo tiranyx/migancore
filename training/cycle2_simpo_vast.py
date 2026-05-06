@@ -349,8 +349,12 @@ def main():
     #   torch.library.custom_op used by transformers 4.47+/moe.py). With 2.5.1 image,
     #   plain `pip install trl` gets TRL 1.x which works correctly. No venv needed —
     #   conda base already has correct torch; just add TRL/PEFT/accelerate on top.
+    # Lesson #109: pytorch:2.5.1 conda base has OLD TRL pre-installed.
+    # `pip install trl` without --upgrade sees it's already installed and skips.
+    # Must use --upgrade to force TRL to latest 1.x+ which has SimPOTrainer.
+    # PyTorch 2.5.1 is fully compatible with modern TRL + transformers 4.47+.
     install_cmd = (
-        "pip install -q trl peft accelerate datasets huggingface_hub && "
+        "pip install -q --upgrade trl peft accelerate datasets huggingface_hub && "
         "python -c 'from trl import SimPOTrainer, SimPOConfig; import trl; "
         "import transformers; "
         "print(\"DEPS OK — trl\", trl.__version__, \"transformers\", transformers.__version__)'"
