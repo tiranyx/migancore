@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""
+MiganCore Cycle 3 ORPO Training — Vast.ai Orchestration
+=========================================================
+Day 61+ | 2026-05-06
+
+Dataset  : 685 pairs (613 Cycle 2 + 72 new: voice 15 + agentic 17 + tool 10 + analytical 13 + code 12 + evolution 5)
+Algorithm: ORPO — SFT + odds-ratio preference, beta=0.1, lr=6e-7, 2 epochs
+Target   : A40/A100 40-80GB @ ~$0.27-0.60/hr | ~15-25 min total (2× Cycle 2 = 2 epochs)
+Output   : Tiranyx/migancore-7b-soul-v0.3 (ORPO Cycle 3 adapter)
+
+Cycle 3 OKRs:
+  weighted_avg ≥ 0.90  (Cycle 2: 0.8744)
+  voice ≥ 0.85         (Cycle 2: 0.715 ❌)
+  tool-use ≥ 0.85      (Cycle 2: 0.755 ❌)
+  agentic ≥ 0.85       (NEW category)
+  identity ≥ 0.94      (Cycle 2: 0.947 ✅ — preserve)
+
+Lessons applied (from Cycle 2):
+  #59 — verify instance DELETE (not just 204 — list again after)
+  #60 — 10-min auto-abort if no SSH
+  #61 — cost telemetry per-minute logged to file
+  #62 — never >2hr same vendor same fail mode
+  #63 — Vast.ai API key stored in /opt/secrets/migancore/vastai_api_key
+  #110 — TRL 0.9.6 has CPOTrainer/ORPOTrainer, NOT SimPOTrainer
+  #111 — era-pin: trl==0.9.6 + transformers==4.44.2 + peft==0.12.0 + accelerate==0.34.0
+  #113 — SSH ping before install (status=running != sshd ready)
+  #114 — Qwen2.5 bos_token_id=None fix in train_simpo_standard.py
+  #116 — Gemini model: use gemini-2.5-flash (not 2.0-flash which is 404)
+"""
+
+import os
+import sys
+import json
+import time
+import subprocess
+import requests
+from pathlib import Path
+from datetime import datetime, timezone
+
+# ─────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────
+VAST_KEY_PATH = "/opt/secrets/migancore/vastai_api_key"
+HF_TOKEN_PATH = "/opt/secrets/migancore/hf_token"
+DATASET_PATH  = "/opt/ado/data/workspace/cycle3_combined_dataset.jsonl"
+TRAIN_SCRIPT  = "/opt/ado/training/train_simpo_standard.py"
+OUTPUT_DIR    = "/opt/ado/cycle3_output"
+LOG_PATH      = "/tmp/cycle3_training.log"
+
+HF_REPO       = "Tiranyx/migancore-7b-soul-v0.3"
+BASE_MODEL    = "Qwen/Qwen2.5-7B-Instruct"
+
+# GPU requirements
+MIN_GPU_RAM_MB = 40_000   # 40 GB
+MAX_PRICE_HR   = 0.65     # USD hard cap per hour (slightly higher than Cycle 2 for availability)
+MIN_DISK_GB    = 65       # base 15GB + training overhead
+
+# Timing (Lesson #60, #62)
+MAX_BOOT_WAIT_SEC = 600   # 10 min — abort if SSH not up
+COST_CAP_USD      = 5.00  # hard stop
+
+# Training hyperparams (Cycle 3 upgrades from Cycle 2)
+# Key changes vs Cycle 2:
+#   epochs: 1 → 2 (more gradient steps for voice/tool convergence)
+#   lr: 5e-7 → 6e-7 (slightly stronger signal, still conservative)
+#   dataset: 613 → 685 (added 72 targeted new pairs)
+SIMPO_ARGS = [
+    "--dataset",       "/root/cycle3_combined_dataset.jsonl",
+    "--output-dir",    "/root/cycle3_adapter",
+    "--base-model",    BASE_MODEL,
+    "--epochs",        "2",          # ↑ from 1 (Cycle 3 upgrade)
+    "--learning-rate", "6e-7",       # ↑ from 5e-7 (Cycle 3 upgrade)
+    "--simpo-beta",    "2.5",
+    "--simpo-gamma",   "1.0",
+    "--loss-type",     "apo_zero",
+    "--lora-r",        "16",
+    "--lora-alpha",    "16",
+    "--batch-size",    "2",
+    "--grad-accum",    "8",
+    "--max-seq-length","2048",
+]
+
+VAST_API = "https://console.vast.ai/api/v0"
+SSH_KEY  = "/root/.ssh/id_ed25519"
+
+# ─────────────────────────────────────────
+# HELPERS (same as Cycle 2)
+# ─────────────────────────────────────────
+VAST_KEY = ""
+HF_TOKEN = ""
+
+
+def log(msg: str):
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    line = f"[{ts}] {msg}"
+    print(line, flush=True)
+    with open(LOG_PATH, "a") as f:
+        f.write(line + "\n")
+
+
+def load_secret(path: str) -> str:
+    try:
+        val = Path(path).read_text().strip()
+        if not val:
+            raise ValueError("empty")
+        return val
+    except Exception as e:
+        log(f"FATAL: cannot read {path}: {e}")
+        sys.exit(1)
+
+
+def vast(method: str, path: str, **kwargs) -> dict:
+    """Vast.ai API wrapper — always injects api_key as query param."""
+    url = f"{VAST_API}{path}"
+    params = kwargs.pop("params", {})
+    params["api_key"] = VAST_KEY
+    resp = getattr(requests, method)(url, params=params, timeout=30, **kwargs)
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+    if resp.status_code not in (200, 201):
+        log(f"Vast API {method.upper()} {path} → {resp.status_code}: {resp.text[:200]}")
+        return {}
+    return data
+
+
+def search_offers() -> list:
+    """Find cheapest A40/A100-class offers meeting our requirements."""
+    query = {
+        "verified": {"eq": True},
+        "rentable": {"eq": True},
+        "gpu_ram":  {"gte": MIN_GPU_RAM_MB},
+        "disk_space": {"gte": MIN_DISK_GB},
+        "dph_total":  {"lte": MAX_PRICE_HR},
+        "type": "ask",
+        "order": [["dph_total", "asc"]],
+        "limit": 20,
+    }
+    result = vast("get", "/bundles/", params={"q": json.dumps(query)})
+    return result.get("offers", [])
+
+
+def create_instance(offer_id: int) -> int | None:
+    """Rent an instance from offer_id. Returns instance_id or None."""
+    payload = {
+        "client_id":       "me",
+        "image":           "pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel",
+        "disk":            MIN_DISK_GB,
+        "runtype":         "ssh",
+        "use_jupyter_lab": False,
+        "label":           "migancore-cycle3-orpo",
+        "ssh_key_ids":     [808896],  # VPS id_ed25519 registered in Vast.ai
+    }
+    result = vast("put", f"/asks/{offer_id}/", json=payload)
+    inst_id = (result.get("new_contract") or
+               result.get("contract_id") or
+               result.get("id"))
+    if not inst_id:
+        log(f"create_instance: no id in response: {result}")
+    return inst_id
+
+
+def get_instance(inst_id: int) -> dict:
+    """GET /instances/{id}/ returns {"instances": <dict>}."""
+    result = vast("get", f"/instances/{inst_id}/")
+    if not result:
+        return {}
+    instances = result.get("instances", result)
+    if isinstance(instances, dict):
+        return instances
+    if isinstance(instances, list):
+        for inst in instances:
+            if isinstance(inst, dict) and inst.get("id") == inst_id:
+                return inst
+    return {}
+
+
+def delete_instance(inst_id: int) -> bool:
+    """Delete + verify gone (Lesson #59)."""
+    log(f"Deleting instance {inst_id}...")
+    vast("delete", f"/instances/{inst_id}/")
+    time.sleep(5)
+    remaining_inst = get_instance(inst_id)
+    status = remaining_inst.get("actual_status", "")
+    if remaining_inst and status not in ("exited", "deleted", ""):
+        log(f"WARNING: instance {inst_id} still present (status={status}). Retrying delete...")
+        time.sleep(10)
+        vast("delete", f"/instances/{inst_id}/")
+        time.sleep(10)
+        remaining_inst2 = get_instance(inst_id)
+        status2 = remaining_inst2.get("actual_status", "")
+        if remaining_inst2 and status2 not in ("exited", "deleted", ""):
+            log(f"ERROR: instance {inst_id} still alive (status={status2}) after 2 deletes! Manual cleanup required.")
+            return False
+    log(f"Instance {inst_id} CONFIRMED DELETED ✓  (Lesson #59)")
+    return True
+
+
+def wait_for_ssh(inst_id: int, deadline: float) -> tuple[str, int] | tuple[None, None]:
+    """Poll until instance is running with SSH, or deadline reached."""
+    log(f"Waiting for SSH (max {int(deadline - time.time())}s remaining)...")
+    while time.time() < deadline:
+        inst = get_instance(inst_id)
+        status = inst.get("actual_status", "unknown")
+        ssh_host = inst.get("ssh_host", "")
+        ssh_port = inst.get("ssh_port", 0)
+        log(f"  status={status} ssh_host={ssh_host} ssh_port={ssh_port}")
+        if status == "running" and ssh_host and ssh_port:
+            log(f"SSH ready: {ssh_host}:{ssh_port}")
+            return ssh_host, int(ssh_port)
+        if status in ("exited", "error", "failed"):
+            log(f"Instance entered terminal state: {status}")
+            return None, None
+        time.sleep(20)
+    log(f"ABORT: no SSH within {MAX_BOOT_WAIT_SEC}s (Lesson #60)")
+    return None, None
+
+
+def ssh(host: str, port: int, cmd: str, timeout: int = 600) -> tuple[int, str, str]:
+    """Run a command on the instance via SSH."""
+    result = subprocess.run(
+        ["ssh",
+         "-i", SSH_KEY,
+         "-o", "StrictHostKeyChecking=no",
+         "-o", "BatchMode=yes",
+         "-o", f"ConnectTimeout=15",
+         "-p", str(port),
+         f"root@{host}",
+         cmd],
+        capture_output=True, text=True, timeout=timeout
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def scp_to(local: str, host: str, port: int, remote: str, timeout: int = 300) -> bool:
+    result = subprocess.run(
+        ["scp",
+         "-i", SSH_KEY,
+         "-o", "StrictHostKeyChecking=no",
+         "-P", str(port),
+         local,
+         f"root@{host}:{remote}"],
+        capture_output=True, text=True, timeout=timeout
+    )
+    if result.returncode != 0:
+        log(f"SCP failed: {result.stderr[:200]}")
+        return False
+    return True
+
+
+def scp_from(host: str, port: int, remote: str, local: str, timeout: int = 600) -> bool:
+    Path(local).parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["scp", "-r",
+         "-i", SSH_KEY,
+         "-o", "StrictHostKeyChecking=no",
+         "-P", str(port),
+         f"root@{host}:{remote}",
+         local],
+        capture_output=True, text=True, timeout=timeout
+    )
+    if result.returncode != 0:
+        log(f"SCP-from failed: {result.stderr[:300]}")
+        return False
+    return True
+
+
+def cost_so_far(inst_id: int, start_ts: float) -> float:
+    """Rough cost estimate: elapsed_hours × price_per_hour."""
+    elapsed_h = (time.time() - start_ts) / 3600
+    inst = get_instance(inst_id)
+    dph = inst.get("dph_total", 0.35)
+    return round(elapsed_h * dph, 4)
+
+
+# ─────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────
+def main():
+    global VAST_KEY, HF_TOKEN
+
+    log("=" * 60)
+    log("MIGANCORE CYCLE 3 — ORPO Training (Vast.ai)")
+    log(f"Dataset: {DATASET_PATH}")
+    log(f"Pairs  : 685 (613 Cycle 2 + 72 new targeted pairs)")
+    log(f"  New: voice 15 + agentic 17 + tool 10 + analytical 13 + code 12 + evolution 5")
+    log(f"Epochs : 2 (↑ from Cycle 2's 1 epoch)")
+    log(f"LR     : 6e-7 (↑ from Cycle 2's 5e-7)")
+    log(f"Target : {HF_REPO}")
+    log(f"Goal   : weighted_avg ≥ 0.90, voice ≥ 0.85, tool ≥ 0.85, agentic ≥ 0.85")
+    log("=" * 60)
+
+    # Load secrets
+    VAST_KEY = load_secret(VAST_KEY_PATH)
+    HF_TOKEN = load_secret(HF_TOKEN_PATH)
+    log(f"Vast.ai key loaded ({len(VAST_KEY)} chars)")
+    log(f"HF token loaded: {HF_TOKEN[:10]}...")
+
+    # Pre-flight
+    if not Path(DATASET_PATH).exists():
+        log(f"FATAL: dataset not found at {DATASET_PATH}")
+        sys.exit(1)
+    dataset_lines = len(Path(DATASET_PATH).read_text().splitlines())
+    log(f"Dataset: {dataset_lines} pairs ✓")
+
+    if not Path(TRAIN_SCRIPT).exists():
+        log(f"FATAL: train_simpo_standard.py not at {TRAIN_SCRIPT}")
+        sys.exit(1)
+    log(f"Training script: {TRAIN_SCRIPT} ✓")
+
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+
+    # ── 1. Search offers ──────────────────────────────────────
+    log("\n[1/8] Searching Vast.ai for GPU offers...")
+    offers = search_offers()
+    if not offers:
+        log("No offers found with current criteria. Try relaxing GPU RAM or price cap.")
+        sys.exit(1)
+
+    log(f"Found {len(offers)} offers. Top 5:")
+    for o in offers[:5]:
+        log(f"  #{o['id']} {o.get('gpu_name','?')} {o.get('num_gpus',1)}× "
+            f"RAM={o.get('gpu_ram',0)//1000}GB "
+            f"${o.get('dph_total',0):.3f}/hr "
+            f"disk={o.get('disk_space',0):.0f}GB "
+            f"cuda={o.get('cuda_vers','?')}")
+
+    best = offers[0]
+    offer_id = best["id"]
+    price_hr = best.get("dph_total", 0.35)
+    log(f"\nSelected offer #{offer_id}: {best.get('gpu_name','?')} @ ${price_hr:.3f}/hr")
+
+    # ── 2. Create instance ────────────────────────────────────
+    log("\n[2/8] Creating instance...")
+    inst_id = create_instance(offer_id)
+    if not inst_id:
+        log("FATAL: could not create instance.")
+        sys.exit(1)
+    log(f"Instance {inst_id} created.")
+    start_ts = time.time()
+
+    # ── 3. Wait for SSH (Lesson #60) ─────────────────────────
+    log(f"\n[3/8] Waiting for SSH (abort deadline: {MAX_BOOT_WAIT_SEC}s)...")
+    deadline = start_ts + MAX_BOOT_WAIT_SEC
+    ssh_host, ssh_port = wait_for_ssh(inst_id, deadline)
+
+    if not ssh_host:
+        log("No SSH within abort window. Cleaning up...")
+        delete_instance(inst_id)
+        elapsed_min = (time.time() - start_ts) / 60
+        wasted = cost_so_far(inst_id, start_ts)
+        log(f"Cost: ${wasted:.4f} for {elapsed_min:.1f} min (Lesson #60 abort works)")
+        sys.exit(2)
+
+    # ── 3b. SSH readiness ping (Lesson #113) ─────────────────
+    log("Verifying SSH is ready for commands...")
+    for _ping_attempt in range(12):
+        rc_ping, _, _ = ssh(ssh_host, ssh_port, "echo PING_OK", timeout=15)
+        if rc_ping == 0:
+            log("SSH command-ready ✓")
+            break
+        log(f"  SSH ping attempt {_ping_attempt+1}/12 failed (rc={rc_ping}) — retrying in 5s...")
+        time.sleep(5)
+    else:
+        log("SSH not command-ready after 60s. Aborting.")
+        delete_instance(inst_id)
+        sys.exit(2)
+
+    # ── 4. Install dependencies (era-pinned, Lessons #110-111) ──
+    log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
+    install_cmd = (
+        "python -m venv /root/trainenv --system-site-packages && "
+        "/root/trainenv/bin/pip install -q "
+        "'trl==0.9.6' 'transformers==4.44.2' 'peft==0.12.0' "
+        "'accelerate==0.34.0' datasets huggingface_hub rich && "
+        "/root/trainenv/bin/python -c '"
+        "import trl, transformers, peft, accelerate; "
+        "from trl import ORPOTrainer, ORPOConfig; "
+        "print(\"DEPS OK — trl\", trl.__version__, "
+        "\"transformers\", transformers.__version__, "
+        "\"peft\", peft.__version__, "
+        "\"accelerate\", accelerate.__version__)'"
+    )
+    rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
+    log(f"Install exit={rc}")
+    if out.strip():
+        log(f"  stdout: {out.strip()[-600:]}")
+    if rc != 0:
+        log(f"  stderr: {err[-400:]}")
+        log("Install FAILED (rc != 0). Aborting — venv not ready for training.")
+        delete_instance(inst_id)
+        sys.exit(6)
+
+    # Cost check
+    cost = cost_so_far(inst_id, start_ts)
+    log(f"Cost so far: ${cost:.4f}  (cap: ${COST_CAP_USD})")
+    if cost > COST_CAP_USD:
+        log("COST CAP EXCEEDED. Aborting.")
+        delete_instance(inst_id)
+        sys.exit(3)
+
+    # ── 5. Upload dataset + script ────────────────────────────
+    log("\n[5/8] Uploading dataset + training script...")
+
+    ok1 = scp_to(DATASET_PATH, ssh_host, ssh_port, "/root/cycle3_combined_dataset.jsonl")
+    ok2 = scp_to(TRAIN_SCRIPT, ssh_host, ssh_port, "/root/train_simpo_standard.py")
+
+    if not (ok1 and ok2):
+        log("Upload failed. Aborting.")
+        delete_instance(inst_id)
+        sys.exit(4)
+    log("Upload complete ✓")
+
+    rc, out, _ = ssh(ssh_host, ssh_port, "wc -l /root/cycle3_combined_dataset.jsonl /root/train_simpo_standard.py")
+    log(f"Remote file check: {out.strip()}")
+
+    # ── 6. Train ──────────────────────────────────────────────
+    log("\n[6/8] Starting ORPO training (Cycle 3: 2 epochs, LR=6e-7)...")
+    log(f"Args: {' '.join(SIMPO_ARGS)}")
+
+    train_cmd = f"/root/trainenv/bin/python /root/train_simpo_standard.py {' '.join(SIMPO_ARGS)} > /root/train_log.txt 2>&1"
+    log("Training started. Estimated 15-30 min for 685 pairs × 2 epochs on A40/A100...")
+
+    train_start = time.time()
+    rc, out, err = ssh(ssh_host, ssh_port, train_cmd, timeout=7200)  # 2hr hard timeout
+
+    train_elapsed = time.time() - train_start
+    log(f"Training exit={rc} | elapsed={train_elapsed:.0f}s ({train_elapsed/60:.1f}min)")
+
+    # Read training log
+    _, train_log_tail, _ = ssh(ssh_host, ssh_port, "tail -200 /root/train_log.txt 2>/dev/null", timeout=30)
+    if train_log_tail:
+        log("Training log (tail 200):")
+        for line in train_log_tail.strip().splitlines():
+            log(f"  {line}")
+
+    if rc != 0:
+        log(f"Training FAILED (rc={rc})")
+        log("Manual recovery commands:")
+        log(f"  ssh -i {SSH_KEY} -p {ssh_port} root@{ssh_host}")
+        log(f"  cat /root/train_log.txt")
+        delete_instance(inst_id)
+        sys.exit(5)
+
+    log("Training COMPLETE ✓")
+
+    cost = cost_so_far(inst_id, start_ts)
+    log(f"Cost so far: ${cost:.4f}")
+
+    # ── 7. Download adapter + upload to HF ───────────────────
+    log("\n[7/8] Downloading adapter to VPS...")
+
+    rc, out, _ = ssh(ssh_host, ssh_port,
+                     "ls -lh /root/cycle3_adapter/ 2>/dev/null | head -20")
+    log(f"Adapter contents:\n{out}")
+
+    adapter_local = f"{OUTPUT_DIR}/cycle3_adapter"
+    ok = scp_from(ssh_host, ssh_port, "/root/cycle3_adapter", adapter_local, timeout=600)
+    if not ok:
+        log("Adapter download failed. Manual SCP:")
+        log(f"  scp -i {SSH_KEY} -r -P {ssh_port} root@{ssh_host}:/root/cycle3_adapter {adapter_local}")
+    else:
+        log(f"Adapter saved to {adapter_local} ✓")
+
+        log("Uploading adapter to HuggingFace...")
+        hf_cmd = (
+            f"cd /root/cycle3_adapter && "
+            f"pip install -q huggingface_hub && "
+            f"huggingface-cli upload {HF_REPO} . "
+            f"--token {HF_TOKEN} "
+            f"--commit-message 'Day 61: ORPO Cycle 3 (685 pairs, 2 epochs, lr=6e-7, voice+agentic+tool targeted)' "
+            f"2>&1 | tail -10"
+        )
+        rc_hf, out_hf, _ = ssh(ssh_host, ssh_port, hf_cmd, timeout=600)
+        log(f"HF upload exit={rc_hf}: {out_hf.strip()[-300:]}")
+
+        if rc_hf == 0:
+            log(f"Adapter live at: https://huggingface.co/{HF_REPO} ✓")
+        else:
+            log(f"HF upload failed (rc={rc_hf}). Adapter is in {adapter_local} — upload manually later.")
+
+    # ── 8. Cleanup (Lesson #59) ───────────────────────────────
+    log("\n[8/8] Deleting instance (Lesson #59 — verify gone)...")
+    deleted = delete_instance(inst_id)
+
+    total_elapsed = time.time() - start_ts
+    total_cost = round((total_elapsed / 3600) * price_hr, 4)
+    log("\n" + "=" * 60)
+    log("CYCLE 3 TRAINING SUMMARY")
+    log("=" * 60)
+    log(f"Instance     : {inst_id}")
+    log(f"GPU          : {best.get('gpu_name','?')}")
+    log(f"Total time   : {total_elapsed/60:.1f} min")
+    log(f"Train time   : {train_elapsed/60:.1f} min")
+    log(f"Cost         : ${total_cost:.4f} @ ${price_hr:.3f}/hr")
+    log(f"Instance gone: {'YES ✓' if deleted else 'WARNING — check Vast.ai console!'}")
+    log(f"Adapter (VPS): {adapter_local}")
+    log(f"Adapter (HF) : https://huggingface.co/{HF_REPO}")
+    log(f"Log          : {LOG_PATH}")
+    log("=" * 60)
+    log("\nNext step: GGUF conversion + eval")
+    log("  # 1. Convert to GGUF LoRA")
+    log("  python3 /opt/llama.cpp/convert_lora_to_gguf.py /opt/ado/cycle3_output/cycle3_adapter/ \\")
+    log("    --outfile /opt/ado/cycle3_output/cycle3_lora.gguf --outtype f16")
+    log("")
+    log("  # 2. Copy GGUF into Ollama volume")
+    log("  cp /opt/ado/cycle3_output/cycle3_lora.gguf /opt/ado/data/ollama/cycle3_lora.gguf")
+    log("")
+    log("  # 3. Create Modelfile and register in Ollama")
+    log("  echo 'FROM qwen2.5:7b-instruct-q4_K_M' > /opt/ado/data/ollama/Modelfile_cycle3")
+    log("  echo 'ADAPTER /root/.ollama/cycle3_lora.gguf' >> /opt/ado/data/ollama/Modelfile_cycle3")
+    log("  docker exec ado-ollama-1 ollama create migancore:0.3 -f /root/.ollama/Modelfile_cycle3")
+    log("")
+    log("  # 4. Run eval")
+    log("  docker exec ado-api-1 python /app/eval/run_identity_eval.py \\")
+    log("    --model migancore:0.3 --reference /app/eval/baseline_day58.json")
+    log("")
+
+
+if __name__ == "__main__":
+    main()
