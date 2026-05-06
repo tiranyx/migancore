@@ -341,18 +341,24 @@ def main():
     log(f"\n[4/8] Installing ML packages on {ssh_host}:{ssh_port}...")
     # Lesson #103: Unsloth upgrades torch 2.4→2.10 breaking torchvision==0.19.
     # Lesson #104: conda pip split — plain pip installs to user site; conda python
-    #   finds old TRL first. /opt/conda/bin/pip also hits conda constraints.
+    #   finds old TRL first.
     # Lesson #105: venv --system-site-packages inherits conda torch/CUDA; upgraded
     #   packages installed into venv take precedence over conda base.
-    # Lesson #106: Q RTX 8000 has 47.8 GB VRAM. bf16 (~14 GB) fits directly.
-    #   bitsandbytes causes infer_schema(torch.Tensor) errors on PyTorch 2.4.0.
-    #   Drop bitsandbytes entirely. No quantization = no bnb = no schema conflict.
+    # Lesson #106: bitsandbytes infer_schema error — drop bnb, use bf16 direct.
+    # Lesson #107: pip --upgrade trl also upgrades transformers to 4.47+ which uses
+    #   torch.library.custom_op(moe.py) requiring PyTorch>=2.5 (image has 2.4.0).
+    #   Fix: pin transformers<4.47 AND require trl>=0.12.0 (SimPOTrainer added).
+    #   Do NOT use --upgrade globally; pin explicitly to avoid cascade upgrades.
     install_cmd = (
         "/opt/conda/bin/python -m venv /root/venv --system-site-packages && "
-        "/root/venv/bin/pip install -q --upgrade 'trl>=0.9.6' peft accelerate "
+        "/root/venv/bin/pip install -q "
+        "'trl>=0.12.0,<0.14.0' "        # SimPOTrainer added in 0.12.0
+        "'transformers>=4.44.0,<4.47.0' "  # <4.47 avoids moe.py torch 2.5 API
+        "'peft>=0.12.0' 'accelerate>=0.34.0' "
         "datasets 'huggingface_hub>=0.20' && "
         "/root/venv/bin/python -c 'from trl import SimPOTrainer; import trl; "
-        "print(\"DEPS OK — trl\", trl.__version__)'"
+        "import transformers; "
+        "print(\"DEPS OK — trl\", trl.__version__, \"transformers\", transformers.__version__)'"
     )
     rc, out, err = ssh(ssh_host, ssh_port, install_cmd, timeout=900)
     log(f"Install exit={rc}")
