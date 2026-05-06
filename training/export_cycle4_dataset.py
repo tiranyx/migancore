@@ -299,10 +299,16 @@ async def export_cycle4(
     kpi_pass = target_min <= len(validated) <= target_max
     print(f"\n  KPI: {target_min}≤pairs≤{target_max} → {'✅ PASS' if kpi_pass else '❌ FAIL'}")
     print(f"  New category coverage:")
-    print(f"    evolution_aware  : {breakdown.get('evolution', 0):3d} (target ≥ 30)")
-    print(f"    creative         : {breakdown.get('creative', 0):3d} (target ≥ 40)")
-    print(f"    tool_disc        : {breakdown.get('tool_disc', 0):3d} (target ≥ 40)")
-    print(f"    voice            : {breakdown.get('voice', 0):3d} (target ≥ 30)")
+    # Labels from generate_cycle4_dataset.py use source_method prefix as label
+    # e.g. "evolution_anchor_v1:cycle4" → split(":")[0] = "evolution_anchor_v1"
+    evo   = breakdown.get('evolution', 0) or breakdown.get('evolution_anchor_v1', 0)
+    creat = breakdown.get('creative', 0) or breakdown.get('creative_anchor_v1', 0)
+    tdisk = breakdown.get('tool_disc', 0) or breakdown.get('tool_discriminate_v1', 0)
+    voice = breakdown.get('voice', 0) or breakdown.get('voice_natural_v1', 0)
+    print(f"    evolution_aware  : {evo:3d} (target ≥ 30)  {'✅' if evo >= 30 else '❌'}")
+    print(f"    creative         : {creat:3d} (target ≥ 40)  {'✅' if creat >= 40 else '❌'}")
+    print(f"    tool_disc        : {tdisk:3d} (target ≥ 40)  {'✅' if tdisk >= 40 else '❌'}")
+    print(f"    voice            : {voice:3d} (target ≥ 30)  {'✅' if voice >= 30 else '❌'}")
 
     summary = {
         "total": len(validated),
