@@ -1,21 +1,27 @@
-# MiganCore — User Guide & Credentials
-**Versi:** Day 68 · **Update:** 2026-05-08 · **Fahmi Wol (Private)**
+# MiganCore — User Guide
+**Versi:** Day 69 · **Update:** 2026-05-08 · **Public-safe (secrets removed)**
 
-> **Day 68 changes:** Conversation history E2E hidup (UI baca dari server, bukan localStorage), mobile drawer nav (sidebar slide-in via hamburger ☰), feedback buttons visible per assistant message (👍/👎), build metadata di /health. Codex C1/C3/C4/C8 RESOLVED.
+> **Day 69 SECURITY FIX (Codex P1):** ADMIN_SECRET_KEY rotated. Old key (Day 22 → Day 68) was committed in repo history and is now PERMANENTLY EXPOSED. The new key is stored ONLY in:
+> - `/opt/ado/.env` on production VPS (mode 600, gitignored)
+> - `/root/.migancore_admin_key` (mode 600 fallback)
+> - **Owner's password manager** (Fahmi must store immediately)
+>
+> **Never** put admin keys, SSH paths, or VPS credentials in `docs/`. Use a separate private vault (1Password, Bitwarden, Notion private).
+>
+> **Day 68 product changes:** Conversation history E2E (UI fetches `/v1/conversations`, not localStorage), mobile drawer nav (hamburger ☰), feedback buttons per message (👍/👎), build metadata di `/health`.
 
 ---
 
-## 🔑 QUICK REFERENCE — SIMPAN INI
+## 🔑 QUICK REFERENCE (public-safe)
 
 | Item | Value |
 |------|-------|
 | **Chat App** | https://app.migancore.com |
 | **API Base URL** | https://api.migancore.com |
 | **API Docs** | https://api.migancore.com/docs |
-| **VPS IP** | 72.62.125.6 |
-| **SSH** | `ssh -i ~/.ssh/sidix_session_key root@72.62.125.6` |
-| **Admin API Key** | `ado-admin-5eab08ff6453b160dd4908cab9ead9ef` |
 | **GitHub Repo** | https://github.com/tiranyx/migancore |
+| **Admin API Key** | _stored in private vault — see Section "Admin Access"_ |
+| **SSH credentials** | _stored in private vault_ |
 
 ---
 
@@ -53,7 +59,9 @@ Token disimpan di browser localStorage. Kamu tidak perlu login ulang kecuali log
 ### Tips:
 - Klik hint chip di halaman kosong untuk coba prompt contoh
 - **+ NEW CHAT** di sidebar untuk mulai percakapan baru
-- Riwayat chat disimpan di browser (localStorage) — tidak hilang saat refresh
+- Riwayat chat disimpan di **server** (Day 68 fix): klik item di sidebar RIWAYAT CHAT untuk lanjut percakapan lama, atau klik tombol × untuk hapus (soft archive)
+- Sidebar di mobile: tap ikon ☰ di header untuk buka drawer (history, NEW CHAT, agents, logout)
+- Klik 👍 atau 👎 setelah jawaban Migan — itu jadi training data untuk improvement berikutnya
 
 ---
 
@@ -134,12 +142,12 @@ data: {"type": "done", "conversation_id": "uuid"}
 
 ## 👑 ADMIN — Monitoring & Control
 
-Semua endpoint admin butuh header: `X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef`
+Semua endpoint admin butuh header `X-Admin-Key: <ADMIN_KEY>` — value tidak ada di repo, simpan di private vault. Untuk perintah di bawah, set env var dulu: `export ADMIN_KEY=$(cat /root/.migancore_admin_key)` (di VPS) atau paste manual dari password manager.
 
 ### Cek status sistem
 ```bash
 curl https://api.migancore.com/v1/admin/stats \
-  -H "X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef"
+  -H "X-Admin-Key: $ADMIN_KEY"   # set ADMIN_KEY=... from your private vault
 ```
 
 Response berisi: total users, agents, conversations, preference pairs, dll.
@@ -147,7 +155,7 @@ Response berisi: total users, agents, conversations, preference pairs, dll.
 ### Cek synthetic DPO generation
 ```bash
 curl https://api.migancore.com/v1/admin/synthetic/status \
-  -H "X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef"
+  -H "X-Admin-Key: $ADMIN_KEY"   # set ADMIN_KEY=... from your private vault
 ```
 
 Response penting:
@@ -160,7 +168,7 @@ Response penting:
 ### Mulai auto-rerun synthetic (target 1000 pairs)
 ```bash
 curl -X POST https://api.migancore.com/v1/admin/synthetic/start \
-  -H "X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef" \
+  -H "X-Admin-Key: $ADMIN_KEY"   # set ADMIN_KEY=... from your private vault \
   -H "Content-Type: application/json" \
   -d '{"target_pairs": 1000}'
 ```
@@ -180,9 +188,11 @@ Buka di browser: https://api.migancore.com/docs
 ## 🖥️ AKSES VPS
 
 ### SSH
+SSH credentials (key path + IP) disimpan di private vault. Format generik:
 ```bash
-ssh -i ~/.ssh/sidix_session_key root@72.62.125.6
+ssh -i <path-to-private-key> root@<vps-ip>
 ```
+Untuk owner: lihat password manager entry "MiganCore VPS Production".
 
 ### Lihat logs API
 ```bash
@@ -262,7 +272,7 @@ migancore/
 ### Cek progress cepat:
 ```bash
 curl https://api.migancore.com/v1/admin/synthetic/status \
-  -H "X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef" | python -m json.tool
+  -H "X-Admin-Key: $ADMIN_KEY"   # set ADMIN_KEY=... from your private vault | python -m json.tool
 ```
 
 ---
@@ -271,7 +281,7 @@ curl https://api.migancore.com/v1/admin/synthetic/status \
 
 | Problem | Solution |
 |---------|----------|
-| App tidak bisa dibuka | Cek DNS — A record `app.migancore.com` harus pointing ke 72.62.125.6 |
+| App tidak bisa dibuka | Cek DNS — A record `app.migancore.com` harus pointing ke production VPS IP (lihat private vault) |
 | Login gagal | Cek email/password. Error "Email already registered" = email sudah ada, coba login |
 | Chat tidak streaming | Cek koneksi internet. Coba refresh halaman |
 | "Agent not found" | Logout → login ulang (agent_id di localStorage mungkin stale) |

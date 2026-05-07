@@ -86,6 +86,6 @@ echo "Log: $LOG" | tee -a $LOG
 echo "" | tee -a $LOG
 echo "NEXT: Restart synthetic gen after confirming API is healthy:" | tee -a $LOG
 echo "  curl -X POST http://localhost:18000/v1/admin/synthetic/start \\" | tee -a $LOG
-echo "    -H 'X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef' \\" | tee -a $LOG
+echo "    -H \"X-Admin-Key: \$ADMIN_KEY\" \\" | tee -a $LOG  # Day 69: redacted, set ADMIN_KEY from private vault
 echo "    -H 'Content-Type: application/json' \\" | tee -a $LOG
 echo "    -d '{\"target_pairs\": 1000}'" | tee -a $LOG

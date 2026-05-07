@@ -232,7 +232,7 @@ bash /opt/ado/scripts/deploy_day65.sh
 
 # 4. Restart synthetic generation
 curl -X POST http://localhost:18000/v1/admin/synthetic/start \
-  -H 'X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef' \
+  -H "X-Admin-Key: $ADMIN_KEY" \   # Day 69: redacted, see private vault
   -H 'Content-Type: application/json' \
   -d '{"target_pairs": 1000}'
 ```
