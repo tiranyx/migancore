@@ -116,22 +116,16 @@ fi
 # NOT /app/workspace/ version (old, no retry, causes unfair ROLLBACK)
 # Output: eval_result_migancore-7b-soul-cycle6.json in container CWD (/app)
 # --mode eval required; --model = Ollama tag; --model-tag = result filename label
-docker compose -f /opt/ado/docker-compose.yml exec -T api \
-    python /app/eval/run_identity_eval.py \
-    --mode eval \
-    --model "$MODEL_TAG" \
-    --model-tag "migancore-7b-soul-cycle6" \
-    --reference /app/eval/baseline_day58.json \
-    2>&1 | tee -a "$LOG"
+docker compose -f /opt/ado/docker-compose.yml exec -T api bash -c "cd /app/workspace && python /app/eval/run_identity_eval.py --mode eval --model migancore:0.6 --model-tag migancore-7b-soul-cycle6 --reference /app/eval/baseline_day58.json" 2>&1 | tee -a "$LOG"
 
 # ─── Step 5: PROMOTE or ROLLBACK ──────────────────────────────────────────────
 info "[5/5] Checking eval result..."
 
 # eval script writes to CWD inside container (mounted as /app = ./api build context)
 # Check workspace + eval dir as fallback
-EVAL_JSON="/opt/ado/eval_result_migancore-7b-soul-cycle6.json"
+EVAL_JSON="/opt/ado/data/workspace/eval_result_migancore-7b-soul-cycle6.json"
 if [[ ! -f "$EVAL_JSON" ]]; then
-    EVAL_JSON=$(ls /opt/ado/eval/eval_result_*cycle6*.json /opt/ado/eval_result_*cycle6*.json 2>/dev/null | tail -1 || echo "")
+    EVAL_JSON=$(ls /opt/ado/data/workspace/eval_result_*cycle6*.json /opt/ado/eval/eval_result_*cycle6*.json /opt/ado/eval_result_*cycle6*.json 2>/dev/null | tail -1 || echo "")
 fi
 
 if [[ -z "$EVAL_JSON" || ! -f "$EVAL_JSON" ]]; then
