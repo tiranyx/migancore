@@ -43,7 +43,7 @@ LLAMASERVER_URL = os.environ.get("LLAMASERVER_URL", "http://llamaserver:8080")
 
 # Same timeout philosophy as OllamaClient — 7B + speculation can take longer
 # on a busy CPU even though throughput is higher per token.
-DEFAULT_TIMEOUT = httpx.Timeout(90.0, connect=5.0, read=90.0)
+DEFAULT_TIMEOUT = httpx.Timeout(180.0, connect=5.0, read=180.0)  # Day 71c: bumped 90->180 after enabling 29 tools (Lesson #179)
 STREAM_TIMEOUT = httpx.Timeout(None, connect=5.0, read=60.0)
 
 

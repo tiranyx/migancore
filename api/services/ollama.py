@@ -12,7 +12,7 @@ import httpx
 from config import settings
 
 # Default: 90s total, 5s connect, 90s read — 7B model with 8-tool spec needs up to 60s to reason
-DEFAULT_TIMEOUT = httpx.Timeout(90.0, connect=5.0, read=90.0)
+DEFAULT_TIMEOUT = httpx.Timeout(180.0, connect=5.0, read=180.0)  # Day 71c: bumped 90->180 after enabling 29 tools (Lesson #179)
 
 # Streaming: no total timeout (response can be long), but 60s between chunks
 STREAM_TIMEOUT = httpx.Timeout(None, connect=5.0, read=60.0)
