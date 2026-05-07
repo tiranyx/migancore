@@ -24,10 +24,10 @@ services:
       OLLAMA_MAX_LOADED_MODELS: "1"
       OLLAMA_KEEP_ALIVE: "24h"
       OLLAMA_MAX_QUEUE: "32"
-      OLLAMA_NUM_THREAD: "4"
+      OLLAMA_NUM_THREAD: "6"  # Day 67: 4→6 (llamaserver stopped, steal ~0%, SIDIX migrated)
     deploy:
       resources:
-        limits: { memory: 12G, cpus: "4.0" }
+        limits: { memory: 12G, cpus: "6.0" }  # Day 67: 4→6 cores (freed by llamaserver stop)
     # Note: No healthcheck — ollama image lacks curl/wget.
     # Health verified externally via `docker compose exec ollama ollama list`.
 

@@ -178,10 +178,12 @@ async def lifespan(app: FastAPI):
         target = st.get("target_pairs")
         cumulative = st.get("cumulative_stored", 0)
         prev_status = (st.get("status") or "idle").lower()
-        # Day 45 fix: "cancelled" and "stopped" are EXACTLY the deploy-kill
-        # signature we want to recover from. Only skip for terminal-success
-        # states (completed) or true idle (no run was ever active).
-        if target and cumulative < target and prev_status not in ("idle", "completed"):
+        # Day 45 fix: "cancelled" was treated as deploy-kill to recover.
+        # Day 67 fix: "cancelled" via admin /stop = INTENTIONAL user action.
+        #   Do NOT auto-resume cancelled — only resume if status is "running"
+        #   or "error" (genuinely killed by deploy restart, not by admin).
+        _resume_statuses = {"running", "error", "starting"}
+        if target and cumulative < target and prev_status in _resume_statuses:
             logger.info(
                 "synthetic.auto_resume.attempt",
                 prev_run_id=st.get("run_id"),
