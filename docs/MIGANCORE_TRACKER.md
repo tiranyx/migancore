@@ -11,9 +11,9 @@
 | **Today** | Day 70 · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
-| **Cycle 7 Status** | 🔄 GENERATING — 20/260 pairs stored, full run in progress on VPS |
-| **API Commit** | `1b58d57` (Day 70: schema fix + gemini model fix, day=Day 70 live) |
-| **API Version** | v0.5.16 — BUILD_DAY=Day 70, `/health` verified ✅ |
+| **Cycle 7 Status** | ✅ DATASET READY — 508 pairs exported to cycle7_dataset.jsonl (317KB) |
+| **API Commit** | `32f2cb4` (Day 70: C7 security fix + BUILD_DAY + export identity fix) |
+| **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
 | **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 fix deployed Day 69 |
