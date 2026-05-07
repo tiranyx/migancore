@@ -8,11 +8,11 @@
 <!-- Section tag: QUICK_STATUS — auto-updated by tracker.py update -->
 | Key | Value |
 |-----|-------|
-| **Today** | Day 70 · 2026-05-08 |
+| **Today** | Day 71 · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
-| **Cycle 7 Status** | ✅ DATASET READY — 508 pairs exported to cycle7_dataset.jsonl (317KB) |
-| **API Commit** | `32f2cb4` (Day 70: C7 security fix + BUILD_DAY + export identity fix) |
+| **Cycle 7 Status** | 🟡 TRAINING LIVE — Instance 36311511 A40 48GB $0.322/hr (launched 20:27 UTC) |
+| **API Commit** | `46d7922` (Day 71: Kimi+Codex review committed, agent sync complete) |
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
@@ -21,7 +21,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.20 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 159 (Day 70 adds #158-159) |
+| **Lessons Cumulative** | 165 (Day 71 adds #162-165) |
 
 ---
 
