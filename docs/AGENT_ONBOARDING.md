@@ -80,7 +80,7 @@ User's exact words yang HARUS diikuti tiap sprint:
 
 ## 🚨 CRITICAL FAILURE MODES (LESSONS PAST)
 
-Top 6 yang HARUS diingat (83 lessons total — semua di MEMORY.md per-day notes):
+Top 6 yang HARUS diingat (133 lessons total — semua di MEMORY.md per-day notes):
 
 | # | Lesson | Forever-rule |
 |---|--------|--------------|
@@ -156,6 +156,17 @@ Top 6 yang HARUS diingat (83 lessons total — semua di MEMORY.md per-day notes)
 | **118** | **Creativity must be trained explicitly** | Day 60: Creative score 0.695 — tidak pernah dilatih. Identity training tidak otomatis menghasilkan creativity. **Rule:** Setiap capability yang diinginkan WAJIB punya dedicated training pairs. Jangan assume transfer learning dari identity. |
 | **119** | **Tool-use discrimination > tool-use execution** | Day 60: Tool-use 0.797 — model bisa execute tools tapi kurang baik memutuskan KAPAN menggunakan tool vs KAPAN tidak. **Rule:** Tool-use pairs harus include discrimination scenarios: "when to use", "when NOT to use", "which tool to use". |
 | **120** | **Training cost decreases 10x per cycle** | Day 60: Cycle 1 $1.50 → Cycle 2 $0.15 → Cycle 3 $0.16. Pipeline efficiency + GGUF LoRA deploy = dramatic cost reduction. **Rule:** Early cycles invest in pipeline. Later cycles reap cost benefits. Budget future cycles at $0.10-0.20 each. |
+| **121** | **License: HMAC-SHA256 for Phase 1, Ed25519 for Phase 2 air-gapped** | Day 61-62: HMAC sufficient for cloud-verified licensing. BERLIAN tier (air-gapped) needs asymmetric: Tiranyx private key signs, client public key verifies. Rule: HMAC valid Phase 1; Ed25519 mandatory for air-gapped distribution. Roadmap: docs/LICENSE_CRYPTO_ROADMAP.md. |
+| **122** | **Router prefix mismatch = silent 404** | Day 62: license router registered as /license but tested at /v1/license = 404. Rule: when adding router, test with EXACT production URL prefix. |
+| **123** | **Docker BUILD required after code change, not just restart** | Day 62: edit Python code → docker compose restart = old code still running. Rule: code change = . Restart only for config/env changes. |
+| **124** | **Env vars in docker-compose must be explicit per service** | Day 62: var in .env not auto-injected to all containers. Must declare in service.environment block. Rule: after add env var, verify . |
+| **127** | **httpx lazy import inside function = NameError on module load** | Day 63: import inside function body OK if called normally, but asyncio.create_task before httpx loaded = NameError. Rule: all imports at top-level module. |
+| **128** | **Gemini thinking mode silently drains token budget** | Day 63: Gemini 2.5 Flash with thinking enabled: 0/180 pairs generated (all tokens used for thinking traces). Rule: for batch generation use thinking budget=0 or non-thinking variant. |
+| **129** | **Voice score (weight=30%) dominates weighted_avg — fix high-weight first** | Day 63: Cycle 4 failed because voice=0.739 despite identity=0.963. Rule: priority order = weight descending. identity(40%) -> voice(30%) -> evo-aware(15%) -> tool-use(10%) -> creative(5%). |
+| **130** | **Targeted 50 pairs = +0.134 creative score** | Day 63: proof that targeted pair generation works. Rule: for each category missing gate, generate MINIMUM 50 targeted pairs. Formula: (current_score - gate_score) x 200 = estimated pairs needed. |
+| **131** | **Voice/evo seed dedup: seed pool MUST be >= target pairs** | Day 64: 30 voice seeds x 4 repeats = still only 30 unique prompts after dedup. Rule: seed pool size >= target pairs. 60 unique pairs needs 60 unique seeds. Check unique count after generation. |
+| **132** | **NEVER scp -r full adapter directory** | Day 64-65: scp -r full dir = adapter (155MB) + 3 checkpoints (3x325MB) = 700MB. 600s timeout exceeded. Rule: only SCP adapter_model.safetensors + adapter_config.json = 155MB total, 60-90s. Checkpoints = temporary, not needed. |
+| **133** | **Ollama all-cores triggers hypervisor CPU throttle** | Day 65: Ollama runner at 687% CPU (7/8 cores) -> hypervisor throttles VM -> %st=93.8% steal -> inference 16x slower. FIX: OLLAMA_NUM_THREAD=4 + cpus=4.0 in docker-compose ollama service. 4 dedicated cores without throttle > 8 throttled cores. Watchdog cron every 15min. |
 
 ---
 

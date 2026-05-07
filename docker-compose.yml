@@ -24,9 +24,10 @@ services:
       OLLAMA_MAX_LOADED_MODELS: "1"
       OLLAMA_KEEP_ALIVE: "24h"
       OLLAMA_MAX_QUEUE: "32"
+      OLLAMA_NUM_THREAD: "4"
     deploy:
       resources:
-        limits: { memory: 12G }
+        limits: { memory: 12G, cpus: "4.0" }
     # Note: No healthcheck — ollama image lacks curl/wget.
     # Health verified externally via `docker compose exec ollama ollama list`.
 
