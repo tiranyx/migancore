@@ -89,19 +89,14 @@ def generate_pairs(n: int = 40) -> list[dict]:
     random.shuffle(chosen_pool)
     random.shuffle(rejected_pool)
 
+    # TRL 0.9.6 ORPOTrainer expects STRING format for chosen/rejected (Lesson #172).
+    # Message-list (chat) format causes: ValueError: rejected should be an str but got <class 'dict'>
+    # Existing C7 pairs use string format — match it exactly.
     for i, prompt in enumerate(prompts):
         pairs.append({
             "prompt": prompt,
-            "chosen": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": chosen_pool[i]},
-            ],
-            "rejected": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": rejected_pool[i]},
-            ],
+            "chosen": chosen_pool[i],
+            "rejected": rejected_pool[i],
             "source": "voice_casual_q5_cycle7c",
         })
 
@@ -146,8 +141,8 @@ def main():
     print("Sample new Q5 pairs:")
     for p in new_pairs[:3]:
         print(f"  Prompt: {p['prompt']}")
-        print(f"  Chosen: {p['chosen'][-1]['content'][:60]}")
-        print(f"  Rejected: {p['rejected'][-1]['content'][:60]}")
+        print(f"  Chosen: {p['chosen'][:60]}")
+        print(f"  Rejected: {p['rejected'][:60]}")
         print()
     print(f"\nNext: python3 /opt/ado/training/cycle7c_orpo_vast.py")
 

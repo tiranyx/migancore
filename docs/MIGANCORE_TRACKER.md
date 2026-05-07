@@ -22,7 +22,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 171 (Day 71 adds #162-171; Day 71c = no new lessons, implementation) |
+| **Lessons Cumulative** | 172 (Day 71c adds #172: TRL ORPO string format requirement, smoke-test before upload) |
 
 ---
 
@@ -185,8 +185,9 @@
 - #169: weighted_avg can drop even if content better if training intensity insufficient.
 - #170: Eval baseline reference must MATCH training target. Formal baseline punishes correctly casual model.
 - #171: Steps > pair count for ORPO voice absorption. C5: 80 pairs/119 steps → +0.155; C7: 120 pairs/63 steps → +0.016.
+- #172: TRL 0.9.6 ORPOTrainer expects STRING format for `chosen`/`rejected`, not ChatML message-list. Always smoke-test 1 pair through `tokenize_row()` BEFORE upload. Cycle 7c v1 wasted $0.02 on this. Defensive validator: `verify_c7c_format.py` (string-type check across all rows) blocks bad data at source.
 
-**Costs:** Cycle 7 = $0.054 · Cycle 7b = ~$0.06 (in progress) · Day 71 total ≈ $0.11
+**Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = in progress · Day 71+71c total ≈ $0.18
 
 ---
 
