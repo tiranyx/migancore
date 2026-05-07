@@ -2155,12 +2155,16 @@
           const lower = (msg || '').toLowerCase();
           if (lower.includes('typeerror') || lower.includes('network') || lower.includes('fetch') || lower.includes('koneksi')) {
             friendly = 'Koneksi terputus. Pesan kamu aman — coba klik Retry di bawah.';
+          } else if (lower.includes('onamix timed out') || lower.includes('onamix timeout')) {
+            friendly = '⏱ Pencarian web timeout (30s). Coba Retry — atau gunakan query lebih spesifik, misal nama yang lebih pendek.';
           } else if (lower.includes('timeout') || lower.includes('timed out')) {
-            friendly = 'MiganCore butuh waktu lebih lama dari biasanya. Klik Retry untuk mencoba lagi.';
+            friendly = '⏱ MiganCore butuh waktu lebih dari biasanya. Klik Retry — jika terus gagal, mulai New Chat.';
           } else if (lower.includes('unauthorized') || lower.includes('401')) {
             friendly = 'Sesi habis. Silakan logout + login lagi.';
           } else if (lower.includes('rate limit') || lower.includes('429')) {
             friendly = 'Terlalu banyak request. Tunggu sebentar lalu coba lagi.';
+          } else if (lower.includes('onamix') || lower.includes('hyperx')) {
+            friendly = '⚠ Pencarian web gagal. Coba Retry atau coba query berbeda.';
           }
           setMsgs(p => p.map(m =>
             m.id === targetMsgId ? { ...m, content: friendly, streaming: false, error: true } : m

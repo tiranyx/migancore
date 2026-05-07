@@ -766,7 +766,7 @@ async def _analyze_image(args: dict, ctx: ToolContext) -> dict:
 # ---------------------------------------------------------------------------
 ONAMIX_DIR = "/app/hyperx"  # underlying binary path (not user-facing)
 ONAMIX_BIN = f"{ONAMIX_DIR}/bin/hyperx.js"
-ONAMIX_TIMEOUT_S = 30
+ONAMIX_TIMEOUT_S = 45  # Day 67: increased 30→45s — Wikipedia pages can be slow to scrape
 
 
 def _onamix_available() -> bool:
