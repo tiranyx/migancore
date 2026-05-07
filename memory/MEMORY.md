@@ -88,6 +88,10 @@
 - **#141**: Clone mechanism deploy: selalu ada dry_run=True mode untuk test template + license tanpa SSH ke client VPS.
 - **#142**: license.py mengekspos mint_license() sebagai standalone function, bukan class method. Selalu baca signature function sebelum integrate.
 
+
+### Day 67 Additional Lesson (#143)
+- **#143**: Training via blocking SSH (subprocess.run timeout=7200) vs actual training time (3.3hr) = timeout fires BEFORE completion. Fix: always set timeout > 2x estimated training time, OR run training as detached background on remote (nohup &) + poll for completion separately. Safeguards added: tmux guard on Vast.ai (restart if killed) + vast_recovery.sh on VPS (periodic SSH download).
+
 ### Day 67 Events
 - Cycle 5 ROLLBACK confirmed: weighted_avg 0.8453 < 0.92, 4/6 gates failed (evo-aware/tool-use/creative/weighted)
 - Cycle 6 training LAUNCHED: Q RTX 8000, 954 pairs, 2 epochs, ETA ~18:00 UTC
