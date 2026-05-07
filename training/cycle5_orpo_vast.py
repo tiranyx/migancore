@@ -253,9 +253,10 @@ def scp_to(local: str, host: str, port: int, remote: str, timeout: int = 300) ->
 
 
 def scp_from(host: str, port: int, remote: str, local: str, timeout: int = 600) -> bool:
+    """SCP a single file (NOT -r) to avoid downloading checkpoints. Lesson #132."""
     Path(local).parent.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
-        ["scp", "-r",
+        ["scp",           # NO -r flag: only copy exact file specified
          "-i", SSH_KEY,
          "-o", "StrictHostKeyChecking=no",
          "-P", str(port),
@@ -477,11 +478,25 @@ def main():
                      "ls -lh /root/cycle5_adapter/ 2>/dev/null | head -20")
     log(f"Adapter contents:\n{out}")
 
+    # Lesson #132: NEVER scp -r the full adapter dir (checkpoints = 700MB+, causes timeout).
+    # Only download the 2 essential files: adapter_model.safetensors + adapter_config.json
     adapter_local = f"{OUTPUT_DIR}/cycle5_adapter"
-    ok = scp_from(ssh_host, ssh_port, "/root/cycle5_adapter", adapter_local, timeout=600)
+    Path(adapter_local).mkdir(parents=True, exist_ok=True)
+    files_to_download = ["adapter_model.safetensors", "adapter_config.json"]
+    ok = True
+    for fname in files_to_download:
+        file_ok = scp_from(ssh_host, ssh_port,
+                           f"/root/cycle5_adapter/{fname}",
+                           f"{adapter_local}/{fname}",
+                           timeout=300)
+        if not file_ok:
+            log(f"  Failed to download {fname}")
+            ok = False
+        else:
+            log(f"  {fname} downloaded ✓")
     if not ok:
-        log("Adapter download failed. Manual SCP:")
-        log(f"  scp -i {SSH_KEY} -r -P {ssh_port} root@{ssh_host}:/root/cycle5_adapter {adapter_local}")
+        log("Partial adapter download. Manual SCP for missing files:")
+        log(f"  scp -i {SSH_KEY} -P {ssh_port} root@{ssh_host}:/root/cycle5_adapter/adapter_model.safetensors {adapter_local}/")
     else:
         log(f"Adapter saved to {adapter_local} ✓")
 

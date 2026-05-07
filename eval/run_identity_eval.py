@@ -88,7 +88,7 @@ async def generate_response(prompt: str, model: str = None) -> str:
         {"role": "user", "content": prompt},
     ]
     import httpx as _httpx
-    _eval_timeout = _httpx.Timeout(300.0, connect=5.0, read=300.0)
+    _eval_timeout = _httpx.Timeout(600.0, connect=10.0, read=600.0)
     async with OllamaClient(timeout=_eval_timeout) as client:
         resp = await client.chat(
             model=use_model,
