@@ -21,17 +21,12 @@ while true; do
     # Check that cycle6_orpo_vast.py is still running (did not crash)
     MONITOR_PID=$(pgrep -f cycle6_orpo_vast.py || echo "")
     if [[ -z "$MONITOR_PID" ]]; then
-        echo "[$(date -u +%H:%M) UTC] WARNING: cycle6_orpo_vast.py not running. Adapter files: safetensor=$SAFETENSOR config=$CONFIG" | tee -a $LOG
-        # Check if adapter appeared anyway
-        if [[ $SAFETENSOR -gt 0 ]]; then
-            echo "[$(date -u +%H:%M) UTC] Safetensor found but no config — waiting 60s for SCP to finish" | tee -a $LOG
-            sleep 60
-            continue
-        fi
-        echo "[$(date -u +%H:%M) UTC] Monitor exited with no adapter — check $LOG manually" | tee -a $LOG
-        break
+        echo "[$(date -u +%H:%M) UTC] WARNING: cycle6_orpo_vast.py not running (expected after SSH timeout at ~16:02 UTC)" | tee -a $LOG
+        echo "[$(date -u +%H:%M) UTC] vast_recovery.sh (PID $(pgrep -f vast_recovery.sh || echo '?')) is still downloading adapter — continuing to poll..." | tee -a $LOG
+        # DO NOT break — vast_recovery.sh will download adapter, keep polling
+    else
+        echo "[$(date -u +%H:%M) UTC] Training in progress... (safetensor=$SAFETENSOR config=$CONFIG monitor_pid=$MONITOR_PID)" | tee -a $LOG
     fi
     
-    echo "[$(date -u +%H:%M) UTC] Training in progress... (safetensor=$SAFETENSOR config=$CONFIG monitor_pid=$MONITOR_PID)" | tee -a $LOG
     sleep 300
 done
