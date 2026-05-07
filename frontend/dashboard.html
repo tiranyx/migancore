@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MiganCore — Admin Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -698,6 +699,8 @@
     function Dashboard({ adminKey, onLogout }) {
       const [stats, setStats] = useState(null);
       const [tab, setTab] = useState('overview');  // Day 30: tab navigation
+      // Day 68 (Codex C4): build metadata from /health for footer label
+      const [buildMeta, setBuildMeta] = useState(null);
 
       async function loadStats() {
         try {
@@ -711,6 +714,8 @@
       useEffect(() => {
         loadStats();
         const t = setInterval(loadStats, 5000);
+        // Day 68: fetch /health once for build metadata
+        fetch(`${API_BASE}/health`).then(r => r.json()).then(setBuildMeta).catch(() => {});
         return () => clearInterval(t);
       }, [adminKey]);
 
@@ -827,9 +832,9 @@
               </div>
             )}
 
-            {/* Footer */}
+            {/* Footer (Day 68: dynamic build metadata) */}
             <div style={{ marginTop: '3rem', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: '0.7rem', color: 'var(--text-faint)' }}>
-              MiganCore Admin v0.4.7 · Endpoint {API_BASE}
+              MiganCore Admin · {buildMeta?.day || 'Day ?'} {buildMeta?.commit_sha || ''} · Endpoint {API_BASE}
             </div>
           </div>
         </>

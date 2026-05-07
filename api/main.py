@@ -5,11 +5,38 @@ Entry point for the autonomous digital organism.
 
 import asyncio
 import os
+import subprocess
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import httpx
 import structlog
+
+
+# ─── Day 68 (Codex C4): build metadata exposed via /health ────────────────────
+# Computed once at import time so subsequent /health calls are O(1).
+# Falls back to env vars if git not available (e.g. inside slim Docker image).
+def _resolve_build_metadata() -> tuple[str, str, str]:
+    sha = os.getenv("BUILD_COMMIT_SHA", "")
+    build_time = os.getenv("BUILD_TIME", "")
+    day = os.getenv("BUILD_DAY", "")
+    if not sha:
+        try:
+            sha = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL, timeout=2,
+            ).decode().strip()
+        except Exception:
+            sha = "unknown"
+    if not build_time:
+        build_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not day:
+        day = "Day 68"
+    return sha, build_time, day
+
+
+_BUILD_COMMIT_SHA, _BUILD_TIME, _BUILD_DAY = _resolve_build_metadata()
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -367,12 +394,19 @@ else:
 
 @app.get("/health", tags=["system"])
 async def health_check():
-    """Liveness probe for orchestrators and load balancers."""
+    """Liveness probe for orchestrators and load balancers.
+
+    Day 68 (Codex C4): expose commit_sha + build_time + day so frontend
+    labels can be dynamic instead of hardcoded version strings going stale.
+    """
     return {
         "status": "healthy",
         "service": "migancore-api",
         "version": app.version,
         "model": settings.DEFAULT_MODEL,
+        "commit_sha": _BUILD_COMMIT_SHA,
+        "build_time": _BUILD_TIME,
+        "day": _BUILD_DAY,
     }
 
 

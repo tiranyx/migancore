@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MiganCore — Chat</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -887,13 +888,100 @@
     ::-webkit-scrollbar-thumb:hover { background: var(--green); }
 
     /* ===========================
-       MOBILE
+       CONV ITEM (Day 68 — Codex C1)
     =========================== */
-    @media (max-width: 640px) {
-      .sidebar { display: none; }
+    .conv-item-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 5px;
+      transition: all 0.15s;
+    }
+    .conv-item-row:hover, .conv-item-row.active {
+      background: var(--green-dim);
+    }
+    .conv-item-row:hover .conv-item, .conv-item-row.active .conv-item {
+      color: var(--text);
+    }
+    .conv-item-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      padding: 0.55rem 0.5rem 0.55rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: left;
+      font-family: inherit;
+    }
+    .conv-item-row.active .conv-item-btn { color: var(--text); }
+    .conv-del {
+      opacity: 0;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+    .conv-item-row:hover .conv-del { opacity: 0.7; }
+    .conv-del:hover { opacity: 1 !important; color: #ff6b6b; }
+
+    /* ===========================
+       MOBILE NAV (Day 68 — Codex C3 P1 fix)
+       Sidebar = slide-in drawer. Hamburger button toggles.
+    =========================== */
+    .mobile-nav-toggle { display: none; }
+    .mobile-overlay { display: none; }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        top: 0; left: 0;
+        height: 100vh;
+        z-index: 200;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease-out;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .mobile-nav-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--orange-dim);
+        border: 1px solid var(--orange-border);
+        color: var(--orange);
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 1.1rem;
+        margin-right: 0.5rem;
+        flex-shrink: 0;
+      }
+      .mobile-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 150;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+      }
+      .mobile-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
       .messages { padding: 1rem; }
       .input-area { padding: 0.75rem 1rem; }
       .msg-row { max-width: 95%; }
+      .chat-header { padding-left: 0.75rem; }
     }
   </style>
 </head>
@@ -1029,6 +1117,14 @@
       `/v1/conversations/${convId}/messages/${msgId}/feedback`,
       { method: 'POST', body: JSON.stringify({ rating, comment: comment || null }) }
     ),
+
+    // Day 68 — conversation history E2E (Codex C1 P1 fix)
+    listConversations: (limit = 30) =>
+      apiFetch(`/v1/conversations?limit=${limit}`),
+    getConversation: (convId, messageLimit = 100) =>
+      apiFetch(`/v1/conversations/${convId}?message_limit=${messageLimit}`),
+    deleteConversation: (convId) =>
+      apiFetch(`/v1/conversations/${convId}`, { method: 'DELETE' }),
   };
 
   // ===========================
@@ -1115,15 +1211,22 @@
   // ===========================
   // BOOT SEQUENCE
   // ===========================
-  const BOOT_LINES = [
-    { text: '> MIGANCORE v0.4.1 INITIALIZING...', cls: 'dim' },
-    { text: '> NEURAL ENGINE.............. [OK]', cls: 'ok'  },
-    { text: '> MEMORY SUBSYSTEM........... [OK]', cls: 'ok'  },
-    { text: '> TOOL EXECUTOR.............. [OK]', cls: 'ok'  },
-    { text: '> HYBRID SEARCH.............. [OK]', cls: 'ok'  },
-    { text: '> AUTONOMOUS SYNTHESIS........ [OK]', cls: 'ok'  },
-    { text: '> CORE ONLINE — READY.', cls: 'ok'  },
-  ];
+  // Day 68: dynamic boot label fetched from /health (Codex C4 fix)
+  // Build the boot lines once health metadata is known; fallback if /health fails.
+  function buildBootLines(meta) {
+    const versionLabel = meta?.day && meta?.commit_sha
+      ? `${meta.day} ${meta.commit_sha}`
+      : meta?.version || 'LIVE';
+    return [
+      { text: `> MIGANCORE ${versionLabel} INITIALIZING...`, cls: 'dim' },
+      { text: '> NEURAL ENGINE.............. [OK]', cls: 'ok'  },
+      { text: '> MEMORY SUBSYSTEM........... [OK]', cls: 'ok'  },
+      { text: '> TOOL EXECUTOR.............. [OK]', cls: 'ok'  },
+      { text: '> HYBRID SEARCH.............. [OK]', cls: 'ok'  },
+      { text: '> AUTONOMOUS SYNTHESIS........ [OK]', cls: 'ok'  },
+      { text: '> CORE ONLINE — READY.', cls: 'ok'  },
+    ];
+  }
 
   function BootSequence({ onDone }) {
     const [lines, setLines] = useState([]);
@@ -1131,17 +1234,33 @@
     useEffect(() => {
       if (sessionStorage.getItem('mc_booted')) { onDone(); return; }
 
-      let i = 0;
-      const step = () => {
-        if (i < BOOT_LINES.length) {
-          setLines(p => [...p, BOOT_LINES[i++]]);
-          setTimeout(step, 300);
-        } else {
-          sessionStorage.setItem('mc_booted', '1');
-          setTimeout(onDone, 600);
-        }
-      };
-      setTimeout(step, 150);
+      let cancelled = false;
+      // Fetch health metadata (Day 68); time out at 1.5s so boot doesn't stall
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+
+      fetch(`${API_BASE}/health`, { signal: ctrl.signal })
+        .then(r => r.json())
+        .catch(() => null)
+        .then(meta => {
+          clearTimeout(t);
+          if (cancelled) return;
+          const BOOT_LINES = buildBootLines(meta);
+          let i = 0;
+          const step = () => {
+            if (cancelled) return;
+            if (i < BOOT_LINES.length) {
+              setLines(p => [...p, BOOT_LINES[i++]]);
+              setTimeout(step, 300);
+            } else {
+              sessionStorage.setItem('mc_booted', '1');
+              setTimeout(onDone, 600);
+            }
+          };
+          setTimeout(step, 150);
+        });
+
+      return () => { cancelled = true; clearTimeout(t); };
     }, []);
 
     return (
@@ -1917,6 +2036,10 @@
     // Day 37 — onboarding modal (two-question, dynamic starters)
     const [showOnboarding, setShowOnboarding] = useState(() => !LS.get('mc_onboarded'));
 
+    // Day 68 — mobile drawer toggle (Codex C3 P1 fix) + conv loading state
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const [convLoading, setConvLoading] = useState(false);
+
     // Day 40 — multimodal sense inputs (vision + audio).
     // attachments: list of {id, name, dataUrl, size, mime, status: 'compressing'|'ready'|'error'}
     // Max 4 images per send (Anthropic Claude.ai limit).
@@ -2025,10 +2148,89 @@
 
       const cid = LS.get('mc_conv');
       if (cid) setConvId(cid);
-
-      const cl = LS.get('mc_convlist');
-      if (Array.isArray(cl)) setConvList(cl);
     }, []);
+
+    // ─── Day 68: Fetch conversation history from server (Codex C1 fix) ─────
+    // Replace localStorage-only history with server-sourced list.
+    const refreshConvList = useCallback(async () => {
+      try {
+        const list = await api.listConversations(30);
+        if (Array.isArray(list)) {
+          setConvList(list.map(c => ({
+            id: c.id,
+            title: c.title || 'Chat',
+            agent_id: c.agent_id,
+            last_message_at: c.last_message_at,
+            message_count: c.message_count,
+          })));
+        }
+      } catch (e) {
+        // Silent fail — history is non-critical for chat function
+      }
+    }, []);
+
+    useEffect(() => { refreshConvList(); }, [refreshConvList]);
+
+    // Auto-refresh history every 30s while user is active (cheap, paginated)
+    useEffect(() => {
+      const id = setInterval(refreshConvList, 30000);
+      return () => clearInterval(id);
+    }, [refreshConvList]);
+
+    // ─── Day 68: Load past conversation when user clicks history item ─────
+    const loadConversation = useCallback(async (cid) => {
+      if (!cid || cid === convId || convLoading) return;
+      setConvLoading(true);
+      setMobileNavOpen(false);  // close drawer on mobile after pick
+      try {
+        const detail = await api.getConversation(cid, 100);
+        const loadedMsgs = (detail.messages || []).map((m, i) => ({
+          id: Date.now() + i,
+          serverId: m.id,
+          role: m.role,
+          content: m.content,
+        }));
+        setMsgs(loadedMsgs);
+        setConvId(cid);
+        LS.set('mc_msgs', loadedMsgs.slice(-60));
+        LS.set('mc_conv', cid);
+        // Switch agent if needed
+        if (detail.agent_id && detail.agent_id !== agentId) {
+          const found = agents.find(a => a.id === detail.agent_id);
+          if (found) {
+            setAgentId(found.id);
+            setAgentName(found.name);
+            LS.set('agent_id', found.id);
+            LS.set('agent_name', found.name);
+          }
+        }
+      } catch (e) {
+        console.error('Load conv failed:', e);
+        alert('Gagal memuat percakapan: ' + (e.message || 'unknown error'));
+      } finally {
+        setConvLoading(false);
+      }
+    }, [convId, convLoading, agentId, agents]);
+
+    // ─── Day 68: Delete conversation (soft archive) ─────
+    const deleteConversation = useCallback(async (cid, title) => {
+      if (!cid) return;
+      const ok = window.confirm(`Hapus percakapan "${title || 'ini'}"? Tidak bisa di-restore lewat UI.`);
+      if (!ok) return;
+      try {
+        await api.deleteConversation(cid);
+        // If deleting active conv, clear current chat
+        if (cid === convId) {
+          setMsgs([]);
+          setConvId(null);
+          LS.del('mc_msgs');
+          LS.del('mc_conv');
+        }
+        await refreshConvList();
+      } catch (e) {
+        alert('Gagal menghapus: ' + (e.message || 'unknown error'));
+      }
+    }, [convId, refreshConvList]);
 
     // ─── Auto-scroll ──────────────────────────────────────
     useEffect(() => {
@@ -2040,21 +2242,18 @@
       if (msgs.length > 0) LS.set('mc_msgs', msgs.slice(-60));
     }, [msgs]);
 
-    // ─── New chat ─────────────────────────────────────────
+    // ─── New chat (Day 68: server-sourced history, no localStorage merge) ───
     const newChat = useCallback(() => {
-      if (msgs.length > 0 && convId) {
-        const first = msgs.find(m => m.role === 'user');
-        const title = first?.content.slice(0, 42) || 'Chat';
-        const updated = [{ id: convId, title }, ...convList.slice(0, 19)];
-        setConvList(updated);
-        LS.set('mc_convlist', updated);
-      }
       setMsgs([]);
       setConvId(null);
       setInput('');
+      setMobileNavOpen(false);  // close drawer on mobile after new chat
       LS.del('mc_msgs');
       LS.del('mc_conv');
-    }, [msgs, convId, convList]);
+      // Refresh server list — current conv (if any) auto-shows since backend
+      // returns ordered by last_message_at desc. No localStorage merge needed.
+      refreshConvList();
+    }, [refreshConvList]);
 
     // ─── Send message (Day 36: with retry support) ───────
     // Internal helper — does NOT touch input field, can be reused for retry
@@ -2510,8 +2709,13 @@
 
     return (
       <div className="app">
+        {/* Day 68: Mobile overlay (Codex C3 fix) — click to close drawer */}
+        <div
+          className={`mobile-overlay ${mobileNavOpen ? 'open' : ''}`}
+          onClick={() => setMobileNavOpen(false)}
+        />
         {/* ── Sidebar ── */}
-        <aside className="sidebar">
+        <aside className={`sidebar ${mobileNavOpen ? 'open' : ''}`}>
           <div className="sidebar-brand">
             <BrandSVG />
             <span className="brand-name">MIGANCORE</span>
@@ -2562,10 +2766,26 @@
               : convList.map(c => (
                   <div
                     key={c.id}
-                    className={`conv-item ${c.id === convId ? 'active' : ''}`}
-                    title={c.title}
+                    className={`conv-item-row ${c.id === convId ? 'active' : ''}`}
                   >
-                    {c.title}
+                    <button
+                      type="button"
+                      className="conv-item-btn"
+                      onClick={() => loadConversation(c.id)}
+                      disabled={convLoading}
+                      title={c.title}
+                    >
+                      {c.title}
+                    </button>
+                    <button
+                      type="button"
+                      className="conv-del"
+                      onClick={(e) => { e.stopPropagation(); deleteConversation(c.id, c.title); }}
+                      title="Hapus percakapan"
+                      aria-label="Delete"
+                    >
+                      ×
+                    </button>
                   </div>
                 ))
             }
@@ -2584,6 +2804,13 @@
         <main className="chat-area">
           {/* Header */}
           <div className="chat-header">
+            {/* Day 68: Hamburger toggle (mobile only — Codex C3 fix) */}
+            <button
+              className="mobile-nav-toggle"
+              onClick={() => setMobileNavOpen(o => !o)}
+              aria-label="Toggle navigation"
+              title="Menu"
+            >☰</button>
             <div className={`dot-pulse${busy ? ' streaming' : ''}`}/>
             <span className="header-agent">{agentName}</span>
             <span className="header-model">{modelLabel}{busy ? ' · streaming' : ' · ready'}</span>
