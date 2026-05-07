@@ -8,11 +8,14 @@
 <!-- Section tag: QUICK_STATUS — auto-updated by tracker.py update -->
 | Key | Value |
 |-----|-------|
-| **Today** | Day 71c · 2026-05-08 |
+| **Today** | Day 71d · 2026-05-08 (BETA-READY sprint) |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 7b Result** | ❌ ROLLBACK — voice 0.771 (+0.050), Q5=0.609, weighted_avg 0.8870 (gate 0.92). Root cause: Q5 brief gap |
 | **Cycle 7c Result** | ❌ ROLLBACK — voice 0.789 (Δ+0.018), Q5=0.625 (Δ+0.016), w_avg 0.8829 (Δ-0.004 vs C7b WORSE). Lessons #172-175 |
-| **Frontend Sprint** | ✅ LIVE — Service Worker + PWA + ErrorBoundary + Offline UX deployed app.migancore.com (TTFB 318→45ms, -86%) |
+| **Frontend Sprint** | ✅ LIVE — Service Worker + PWA + ErrorBoundary + Offline UX (TTFB 318→45ms, -86%) + Babel pre-compile (-600KB) |
+| **Brain Performance** | ✅ 50%+ latency cut: semantic tool filter (29→6) + keep_alive 30m + tool policies seeded + 180s timeout |
+| **Telemetry** | ✅ /v1/system/{status,metrics} live — brain version, tool count, latency p50/p95, cache stats |
+| **Beta Readiness** | ✅ READY for 100 users (docs/BETA_READY_71D.md) — 38s direct chat, 46s multi-tool query verified live |
 | **Baseline Fix** | ✅ `eval/baseline_day70_voice_fixed.json` — Q5 casual ref fixed (Kimi P0 Day 71b) |
 | **API Commit** | `8a575b7` (Day 71c: Cycle 7c plan + scripts committed) |
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
@@ -23,7 +26,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 180 (Day 71c #172-180: TRL ORPO · HF roundtrip · signal density · ORPO-vs-SFT · realistic refs · baseline-gate · 16 tools enabled · nginx add_header · tool-timeout scaling) |
+| **Lessons Cumulative** | 185 (Day 71d adds #181-185: docker mount gotcha · semantic tool filter · Babel precompile · Ollama keep_alive · nginx headers reaffirmed) |
 
 ---
 
@@ -195,6 +198,11 @@
 - #178: 16 of 29 registered tools (55%) were missing from agents.json `default_tools` for core_brain. Cognitive tools (Day 67: think, calculate, run_python, tavily_search, serper_search, synthesize, teacher_ask, multi_teacher, extract_insights, knowledge_discover) + 6 ONAMIX MCP advanced (post, crawl, history, links, config, multi) = effectively DISABLED for brain. Root cause for tool-use eval 0.74 stagnation. Fixed Day 71c: agents.json updated 13→29 tools + SOUL.md Section IX (few-shot tool patterns) per Codex B2/Lesson #168. Audit before assuming registry size = brain visibility.
 - #179: Nginx `add_header` does NOT cascade — when location block has its own `add_header`, server-level headers are REPLACED, not merged. Security headers (X-Frame-Options, Referrer-Policy, Permissions-Policy, X-Content-Type-Options, Strict-Transport-Security) silently dropped on /chat.html, /sw.js, /manifest.json. Fix: repeat all 5 headers in EVERY location block. Discovered via live curl audit during Day 71c validation. Always test headers per-path, not just server-level.
 - #180: Tool-detection inference time scales with tool list size. Bumping default_tools 13→29 caused chat to hit 90s tool-call timeout consistently on CPU 7B. Bumped DEFAULT_TIMEOUT 90→180s in api/services/{ollama,llamaserver}.py. Long-term: filter tool list per-query (semantic match), pre-warm Ollama, or move to GPU inference. Trade-off acknowledged: more tools = better tool-use but slower latency.
+- #181: CRITICAL DEPLOYMENT GOTCHA: /opt/ado/api/ is NOT mounted into ado-api-1 container. Only /opt/ado/config + /opt/ado/data/workspace are mounts. Python code changes need `docker compose build api && docker compose up -d api` (3-5 min, recreates container). Config changes (agents.json, skills.json, SOUL.md, license) only need `docker compose restart api` (5s). Always verify deploy with `docker exec ado-api-1 cat /app/services/<changed_file>` to confirm code arrived.
+- #182: Semantic tool filtering = single highest-impact perf fix for CPU LLM with many tools. 29 tools → 6 tools (top-K=4 + ALWAYS_INCLUDE memory_*) cut tool-detection prompt 5x, latency 50%+. Implementation: pre-compute tool description embeddings at boot using paraphrase-multilingual-mpnet (768-dim), cosine-similarity match query→tools, return top-K. Defensive fallback to all tools if filter fails. New module api/services/tool_relevance.py.
+- #183: Babel @babel/standalone in production = 600KB drag per first page load. Fix: pre-compile JSX → JS via Node.js (@babel/core + preset-env + preset-react). Single Node script (scripts/precompile_jsx.js) reads chat.html, finds <script type="text/babel"> blocks, transforms in-place, removes Babel CDN tag. Browser saves 600KB on first visit, instant subsequent visits via SW cache. JSX compilation cost moves from runtime to build time.
+- #184: Ollama keep_alive default is 5 min. Set to "30m" for sporadic beta traffic to eliminate 5-15s cold-start latency between messages. RAM cost: ~5GB for Q4_K_M Q3 model. Apply in payload of all chat/generate/chat_with_tools methods.
+- #185: nginx `add_header` does NOT cascade — when location block has its own `add_header`, server-level headers are REPLACED (not merged). Already locked Day 71c (#179) but reaffirmed Day 71d while validating. Repeat all 5 security headers in EVERY location block. Always test headers per-path with `curl -sI https://app.migancore.com/<path>`, not just root.
 
 **Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = $0.10 (incl. recovery) · Day 71+71c total ≈ **$0.27**
 
