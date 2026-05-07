@@ -624,34 +624,34 @@ def validate_pair(pair: dict, category: str) -> tuple[bool, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def store_pair(pair: dict, category: str, source: str, db) -> bool:
-    """Store validated pair to preference_pairs table."""
+    """Store validated pair to preference_pairs table.
+    Real schema: id, prompt, chosen, rejected, judge_score, judge_model,
+                 source_method, source_message_id, created_at, used_in_training_run_id
+    NO category, quality_score, is_validated columns (checked Day 70).
+    """
     from sqlalchemy import text
 
-    # Dedup check
-    result = await db.execute(
-        text("SELECT id FROM preference_pairs WHERE prompt = :p AND source_method = :s LIMIT 1"),
-        {"p": pair["prompt"], "s": source}
-    )
-    if result.fetchone():
-        return False  # duplicate
-
-    await db.execute(
-        text("""
-            INSERT INTO preference_pairs
-              (prompt, chosen, rejected, category, source_method, quality_score, is_validated)
-            VALUES
-              (:prompt, :chosen, :rejected, :category, :source, 0.85, true)
-        """),
-        {
-            "prompt": pair["prompt"],
-            "chosen": pair["chosen"],
-            "rejected": pair["rejected"],
-            "category": category,
-            "source": source,
-        }
-    )
-    await db.commit()
-    return True
+    try:
+        result = await db.execute(
+            text("""
+                INSERT INTO preference_pairs (prompt, chosen, rejected, source_method, judge_score)
+                VALUES (:prompt, :chosen, :rejected, :source, :score)
+                ON CONFLICT DO NOTHING
+            """),
+            {
+                "prompt": pair["prompt"],
+                "chosen": pair["chosen"],
+                "rejected": pair["rejected"],
+                "source": source,
+                "score": 0.85,
+            }
+        )
+        await db.commit()
+        return result.rowcount > 0  # 0 = duplicate (conflict), 1 = inserted
+    except Exception as e:
+        print(f"  [db-err] {e}", file=sys.stderr)
+        await db.rollback()
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

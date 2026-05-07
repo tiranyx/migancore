@@ -95,9 +95,8 @@ EXCLUDE_SOURCES = [
     "distill_kimi_v1",             # small signal, exclude
 ]
 
-CATEGORY_INCLUDE = [
-    "identity", "voice", "tool-use", "creative", "honesty",
-]
+# NOTE: preference_pairs table has NO category column (Day 70 schema audit).
+# Filtering is done by source_method only. CATEGORY_INCLUDE removed.
 
 
 def to_trl_format(row) -> dict:
@@ -115,36 +114,35 @@ async def export_async(args):
     from models.base import init_engine
     init_engine()
 
+    # Real schema columns: id, prompt, chosen, rejected, judge_score, judge_model,
+    # source_method, source_message_id, created_at, used_in_training_run_id
+    # NO category, quality_score, is_validated (Day 70 schema audit)
+
     async with _base.AsyncSessionLocal() as db:
-        # Build query
+        # Build query — filter by source_method only (no category/is_validated columns)
         source_placeholders = ", ".join(f":s{i}" for i in range(len(INCLUDE_SOURCES)))
         exclude_placeholders = ", ".join(f":e{i}" for i in range(len(EXCLUDE_SOURCES)))
-        cat_placeholders = ", ".join(f":c{i}" for i in range(len(CATEGORY_INCLUDE)))
 
         source_params = {f"s{i}": v for i, v in enumerate(INCLUDE_SOURCES)}
         exclude_params = {f"e{i}": v for i, v in enumerate(EXCLUDE_SOURCES)}
-        cat_params = {f"c{i}": v for i, v in enumerate(CATEGORY_INCLUDE)}
 
         query = text(f"""
-            SELECT prompt, chosen, rejected, category, source_method
+            SELECT prompt, chosen, rejected, source_method
             FROM preference_pairs
             WHERE source_method IN ({source_placeholders})
               AND source_method NOT IN ({exclude_placeholders})
-              AND category IN ({cat_placeholders})
-              AND is_validated = true
               AND LENGTH(chosen) > 20
               AND LENGTH(rejected) > 20
               AND chosen != rejected
             ORDER BY created_at ASC
         """)
 
-        result = await db.execute(query, {**source_params, **exclude_params, **cat_params})
+        result = await db.execute(query, {**source_params, **exclude_params})
         rows = result.fetchall()
 
     # Stats
     from collections import Counter
     source_counts = Counter(r.source_method for r in rows)
-    cat_counts = Counter(r.category for r in rows)
 
     print(f"\n{'='*55}")
     print(f"CYCLE 7 EXPORT SUMMARY")
@@ -154,9 +152,6 @@ async def export_async(args):
     for src, count in sorted(source_counts.items(), key=lambda x: -x[1]):
         included = "[include]" if any(src.startswith(s) for s in INCLUDE_SOURCES) else "[?]"
         print(f"  {included} {count:4d}  {src}")
-    print(f"\nBy category:")
-    for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
-        print(f"  {count:4d}  {cat}")
 
     if args.dry_run:
         print(f"\n[DRY RUN] — no file written")
