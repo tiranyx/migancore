@@ -78,7 +78,21 @@
 - **Knowledge Graph**: fact_extractor.py EXISTS, tapi kg_entities = 0 rows (belum dijalankan)
 - **Conversation Summarizer**: conv_summarizer.py, trigger 2900 token, local Qwen (Day 45)
 
-### B. Tools (23 tools terdaftar)
+### B. Tools (29 tools terdaftar — Day 67 +10 Cognitive)
+
+**10 NEW cognitive tools (Day 67):**
+- tavily_search: real-time search via Tavily API (needs key)
+- serper_search: Google search via Serper API (needs key)
+- think: structured CoT reasoning (analyze/decide/debug/plan/critique) via teacher
+- synthesize: multi-source search+synthesis via teacher -> insight
+- teacher_ask: direct access Claude/Kimi/GPT/Gemini
+- multi_teacher: ask 2-4 teachers simultaneously, compare perspectives
+- calculate: safe math eval (sqrt/log/sin/cos/factorial/pi/e)
+- run_python: sandboxed Python subprocess (timeout 8s)
+- extract_insights: extract N insights from long text via teacher
+- knowledge_discover: autonomous self-education (search->synthesize->KB)
+
+**Original 19 tools:**
 - web_read (Jina), onamix_get/search/scrape, generate_image (fal.ai)
 - analyze_image (Gemini Vision), tts, stt (Scribe)
 - export_pdf (WeasyPrint), export_slides (Marp PPTX)
