@@ -179,10 +179,13 @@ RunPod saldo: $16.69 remaining
 - [ ] After ROLLBACK: analyze failed cats, plan Cycle 6 supplement
 
 ### Short-term (Day 66-67)
-- [ ] KB auto-update mechanism (BPS/BI/JDIH RSS cron → auto-append to KB)
-- [ ] User input → training pairs (thumbs up/down UI hook → CAI judge → DB)
+- [x] KB auto-update mechanism → `scripts/kb_auto_update.py` LIVE, cron installed 23:00 UTC
+- [x] User input → training pairs → `POST /v1/conversations/{id}/messages/{id}/feedback` COMMITTED (not yet deployed — pending eval + restart)
+- [x] Frontend 👍👎 thumbs buttons → `frontend/chat.html` COMMITTED (not yet deployed)
+- [x] Teacher refinement cron → `scripts/refine_pending_pairs.py` COMMITTED
+- [x] DAY66_PLAN.md + deploy_day65.sh COMMITTED
 - [ ] Re-enable synthetic gen after eval completes (currently stopped)
-- [ ] Commit Day 65 progress to local repo + push
+- [x] Commit Day 65 progress to local repo + push (commits: eb5b114 → b28cd9b)
 
 ### Medium-term (Week 10+)
 - [ ] Clone mechanism (GAP-01) — first paid client prerequisite
@@ -191,17 +194,33 @@ RunPod saldo: $16.69 remaining
 
 ---
 
-## NEXT AGENT INSTRUCTIONS
+## NEXT AGENT INSTRUCTIONS (Day 66 handoff)
 
-1. **First**: check eval result — `cat /opt/ado/data/workspace/cycle5_eval_stdout.log`
-2. **Eval done**: read `eval_result_migancore-7b-soul-cycle5.json` in same dir
-3. **If PROMOTE** (weighted_avg ≥ 0.92, all gates pass):
-   - Update `DEFAULT_MODEL=migancore:0.5` in `/opt/ado/.env`
-   - `docker compose restart api` in `/opt/ado/`
-   - Test via `curl -s https://api.migancore.com/v1/chat/...`
-   - Hot-swap confirmed → update MEMORY.md, CONTEXT.md, production state
-4. **If ROLLBACK** (any gate fails):
-   - Keep `migancore:0.3` as production
-   - Identify failed cats → plan targeted supplement pairs
-   - Log in AGENT_ONBOARDING.md + create Day66 plan
-5. **Restart synthetic gen**: `curl -X POST http://localhost:18000/v1/admin/synthetic/start -H 'X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef' -H 'Content-Type: application/json' -d '{"target_pairs": 1000}'`
+**One-command handoff when eval completes:**
+```bash
+# 1. Check eval (should be done by 12:00 UTC or soon after)
+cat /opt/ado/data/workspace/eval_result_migancore-7b-soul-cycle5.json
+
+# 2. Auto PROMOTE or ROLLBACK based on gates
+bash /opt/ado/scripts/promote_cycle5.sh
+
+# 3. Deploy Day 65 changes (feedback endpoint + SSE message_id + thumbs UI)
+# Run deploy_day65.sh from VPS (after git pull so it has the script):
+git -C /opt/ado pull origin main
+bash /opt/ado/scripts/deploy_day65.sh
+
+# 4. Restart synthetic generation
+curl -X POST http://localhost:18000/v1/admin/synthetic/start \
+  -H 'X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef' \
+  -H 'Content-Type: application/json' \
+  -d '{"target_pairs": 1000}'
+```
+
+**See docs/DAY66_PLAN.md for full priority list.**
+
+Key contexts:
+- Eval stdout: `/opt/ado/data/workspace/cycle5_eval_stdout.log`
+- Eval result: `/opt/ado/data/workspace/eval_result_migancore-7b-soul-cycle5.json`
+- promote script: `/opt/ado/scripts/promote_cycle5.sh`
+- deploy script: `scripts/deploy_day65.sh` (in repo, need git pull first)
+- Lessons #134-136 in docs/DAY66_PLAN.md — add to AGENT_ONBOARDING.md
