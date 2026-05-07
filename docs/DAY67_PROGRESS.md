@@ -172,3 +172,31 @@ Jangan asumsi class interface — selalu baca signature function yang ada.
 8. **Eval single source of truth**: post_cycle6.sh sudah implement Lesson #140
 
 *Dibuat: Claude Code Day 67, 14:25 UTC*
+
+---
+
+## MONITORING SETUP (added ~15:05 UTC)
+
+### Training Safeguards Deployed
+- **cycle6_orpo_vast.py** (PID 31373): original monitor, SSH timeout=7200s fires at ~16:02 UTC
+  - Fixed in git: timeout→14400s + try/except + Lesson #143
+  - Running process uses OLD timeout (7200s) — will fail at 16:02
+- **wait_cycle6.sh** (PID 106142): VPS-side wait loop, triggers post_cycle6.sh when adapter files arrive
+- **vast_recovery.sh** (PID 118146): VPS-side periodic SSH downloader (every 10min)
+  - If adapter ready on Vast.ai → downloads → deletes instance
+- **tmux guard on Vast.ai** (session "guard"): monitors PID 494, restarts training if killed
+
+### Training Timeline
+- Started: 14:02 UTC (step 0/118)
+- Status at 15:05: step ~33/118 (28%), ~110s/step, GPU 100%
+- ssh_run timeout fires: ~16:02 UTC (at step ~63/118)
+- If training survives SSH disconnect: ETA ~17:40 UTC
+- If training killed + restarted by guard: ETA ~19:30 UTC
+- Total cost estimate: $1.10-1.20
+
+### Lesson #143
+SSH blocking call (subprocess.run timeout) vs training duration:
+- timeout=7200 (2h) < actual training time (3.5h) = premature kill
+- Fix: use timeout=14400 (4h+) OR detached mode (nohup &) + polling
+- Recovery: tmux guard (restart) + VPS downloader (periodic pull)
+
