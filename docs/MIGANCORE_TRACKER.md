@@ -23,7 +23,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 177 (Day 71c adds #172-177: TRL ORPO format · HF roundtrip · signal density · ORPO-vs-SFT · realistic refs · baseline-gate coupling) |
+| **Lessons Cumulative** | 178 (Day 71c #172-178: TRL ORPO · HF roundtrip · signal density · ORPO-vs-SFT · realistic refs · baseline-gate · 16 tools enabled) |
 
 ---
 
@@ -192,6 +192,7 @@
 - #175: rewards/margins NEGATIVE throughout C7c training (-0.13). ORPO preference loss ineffective for "shorter casual" preference (model naturally prefers verbose explanations). For length-style targets, ORPO is wrong tool — pivot to SFT with brief examples or dataset-level filtering.
 - #176: Eval baseline references must reflect REALISTIC human Indonesian conversation (15-20 words for greetings), not idealized brevity (7w). Artificial brief refs punish natural model output. Update Q5 ref from 7w to 17w in baseline_day71_voice_realistic.json.
 - #177: Baseline reference + gate threshold are TIGHTLY COUPLED. Cannot change baseline without recalibrating gate. Empirical: migancore:0.3 scored 0.9082 vs day58 ref → promoted. Same model scored 0.8796 vs day71_realistic ref → would fail. Different baselines = different distance distributions in 768-dim space. Production gate 0.92 is locked to day58 baseline. To use realistic baseline for promotion: re-run all historical evals + recalibrate gate empirically.
+- #178: 16 of 29 registered tools (55%) were missing from agents.json `default_tools` for core_brain. Cognitive tools (Day 67: think, calculate, run_python, tavily_search, serper_search, synthesize, teacher_ask, multi_teacher, extract_insights, knowledge_discover) + 6 ONAMIX MCP advanced (post, crawl, history, links, config, multi) = effectively DISABLED for brain. Root cause for tool-use eval 0.74 stagnation. Fixed Day 71c: agents.json updated 13→29 tools + SOUL.md Section IX (few-shot tool patterns) per Codex B2/Lesson #168. Audit before assuming registry size = brain visibility.
 
 **Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = $0.10 (incl. recovery) · Day 71+71c total ≈ **$0.27**
 
