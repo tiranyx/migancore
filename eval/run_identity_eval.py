@@ -40,7 +40,7 @@ from pathlib import Path
 sys.path.insert(0, "/app")
 
 EVAL_SET_PATH = Path("/app/eval/persona_consistency_v1.jsonl")
-PASS_THRESHOLD = 0.80  # Day 57: recalibrated from 0.85 (baseline was 0.8438 not 0.85+)
+PASS_THRESHOLD = 0.92  # Lesson #155 (Day 69): real Codex gate=0.92, not 0.80. False PROMOTE 3x (Cycles 4,5,6). NEVER change without updating ROADMAP_DAY67_MASTER.md gate table.
 
 # Category weights — Cycle 2 (Day 57 update per Kimi + Codex recommendation)
 # Root cause Day 56: identity (0.527, 0.582) + voice casual (0.386) crashed hardest.
@@ -108,9 +108,17 @@ async def generate_response(prompt: str, model: str = None) -> str:
             return resp.get("message", {}).get("content", "").strip()
         except Exception as exc:
             last_exc = exc
-            is_500 = "500" in str(exc) or "Internal Server Error" in str(exc)
-            if is_500 and attempt < max_attempts:
-                print(f"  [retry {attempt}/{max_attempts-1}] Ollama 500 on attempt {attempt}, sleeping 10s...",
+            # Day 69 — Lesson #156/Kimi Q1: expand retry to timeout + connect errors
+            # Previously only retried on HTTP 500; timeouts caused unfair 0.000 scores
+            err_str = str(exc)
+            is_retryable = (
+                "500" in err_str or "Internal Server Error" in err_str
+                or "timeout" in err_str.lower() or "Timeout" in err_str
+                or "ConnectError" in err_str or "connect" in err_str.lower()
+                or "ReadError" in err_str or "WriteError" in err_str
+            )
+            if is_retryable and attempt < max_attempts:
+                print(f"  [retry {attempt}/{max_attempts-1}] Retryable error on attempt {attempt}: {type(exc).__name__}, sleeping 10s...",
                       file=sys.stderr, flush=True)
                 import asyncio
                 await asyncio.sleep(10)

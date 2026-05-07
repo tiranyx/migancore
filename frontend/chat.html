@@ -1853,7 +1853,14 @@
       if (!convId || !msg.serverId || fbSent) return;
       setFbState(rating === 'thumbs_up' ? 'liked' : 'disliked');
       setFbSent(true);
-      try { await api.submitFeedback(convId, msg.serverId, rating, null); } catch (_) {}
+      try {
+        await api.submitFeedback(convId, msg.serverId, rating, null);
+      } catch (err) {
+        // Day 69 — Lesson #156 Bug 2 fix (Kimi review): unlock on error so user can retry
+        setFbSent(false);
+        setFbState(null);
+        console.error('Feedback failed:', err?.message || err);
+      }
     };
 
     // Track elapsed seconds while thinking
@@ -1937,7 +1944,7 @@
                   alignItems: 'center',
                 }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: '0.05em', marginRight: 4 }}>
-                    {fbSent ? (fbState === 'liked' ? '✓ Berguna' : '✓ Dicatat') : 'Berguna?'}
+                    {fbSent ? (fbState === 'liked' ? '✓ Berguna!' : '✓ Dicatat') : 'Bantu Migan belajar'}
                   </span>
                   <button
                     onClick={() => sendFeedback('thumbs_up')}

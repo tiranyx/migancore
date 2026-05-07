@@ -9,10 +9,10 @@
 | Key | Value |
 |-----|-------|
 | **Today** | Day 69 · 2026-05-08 |
-| **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 |
-| **Candidate Brain** | `migancore:0.6` — post_cycle6.sh converting GGUF (status: pending eval) |
-| **API Commit** | `990458a` (Day 68 seamless audit — all 5 layers aligned) |
-| **API Version** | v0.5.20 (Day 68: conv history E2E, mobile nav, build metadata) |
+| **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
+| **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
+| **API Commit** | `7243161` (Day 69: tracker + watcher + agent briefs) |
+| **API Version** | v0.5.16 (container still at `ebd7ded` — docs-only drift, no rebuild needed) |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
 | **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 |
@@ -20,7 +20,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.20 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 152 (Day 68 adds #147-152) |
+| **Lessons Cumulative** | 155 (Day 69 adds #153-155) |
 
 ---
 
@@ -62,7 +62,7 @@
 
 | ID | Task | Priority | Status | Owner | ETA |
 |----|------|----------|--------|-------|-----|
-| A-01 | Cycle 6 outcome: PROMOTE / ROLLBACK migancore:0.6 | P0 | 🔄 IN PROGRESS | Claude | Day 69 |
+| A-01 | Cycle 6 outcome: ROLLBACK — migancore:0.3 stays production | P0 | ✅ DONE | Claude | Day 69 |
 | A-02 | Feedback UI live + wired to API (thumbs 👍👎 signals stored) | P0 | ⚠️ PARTIAL | Claude | Day 69–70 |
 | A-03 | Admin key stored in password manager (Fahmi action) | P0 | ❌ PENDING | **Fahmi** | ASAP |
 | A-04 | Hafidz Ledger Phase A (table + endpoint + genealogy) | P0 | ❌ PENDING | Claude | Day 70–74 |
@@ -122,7 +122,9 @@
 <!-- Keep sorted P0→P3. Update when items move to roadmap or done. -->
 
 ### P0 — Must Fix Now
-- [ ] **Cycle 6 eval + PROMOTE/ROLLBACK** — post_cycle6.sh GGUF converting (PID 313271 as of Day 68 EOD). Run eval once adapter ready.
+- [x] **Cycle 6 ROLLBACK** — Done. migancore:0.3 stays. Root cause documented → Cycle 7 plan locked.
+- [ ] **Cycle 7 dataset** — 100 voice-anchor pairs + 80 tool-use pairs + 60 creative pairs. STOP domain pairs. Generate → Vast.ai → eval.
+- [ ] **Fix eval script threshold** — `run_identity_eval.py` uses 0.8 internally but real gate = 0.92. Fix to prevent future false PROMOTE. (Lesson #155)
 - [ ] **Feedback signals = 0** — Verify thumbs UI wired to POST /v1/conversations/{id}/messages/{id}/feedback + store in DB. Gate: 1st signal in <72h.
 - [ ] **Admin key in password manager** — Fahmi action, cannot be delegated.
 - [ ] **Hafidz Ledger Phase A** — hafidz_contributions table + POST endpoint + genealogy link.
@@ -155,27 +157,31 @@
 ### Day 69 — 2026-05-08
 **Status:** IN PROGRESS
 
-**Pre-execution:**
-- [ ] Cycle 6 eval check (is GGUF done? is eval script ready?)
-- [ ] Seamless audit (git, server, API, live app — 5 layers)
-- [ ] BUILD_DAY update to "Day 69"
-
-**Planned:**
-1. Cycle 6 outcome: PROMOTE migancore:0.6 or ROLLBACK analysis
-2. Feedback endpoint audit (wire to DB + confirm signals)
-3. Codex C5/C6/C7 quick fixes
-4. Hafidz Ledger Phase A design → implementation
-
 **Delivered:**
-- [x] MIGANCORE_TRACKER.md created (this file)
-- [x] scripts/tracker.py CLI created
-- [x] Multi-agent sync protocol documented
+- [x] MIGANCORE_TRACKER.md created (this file) — living single source of truth
+- [x] scripts/tracker.py CLI — status, day-start, day-end, agent-sync, lesson, align, update
+- [x] scripts/watch_agent_sync.py — file-based ping watcher (spawned in background PowerShell)
+- [x] docs/AGENT_SYNC/BRIEF_UNTUK_KIMI.md + BRIEF_UNTUK_CODEX.md — copy-paste onboarding
+- [x] docs/AGENT_SYNC/CLAUDE_PLAN_69_CYCLE6_AND_FEEDBACK.md — first real agent sync plan
+- [x] **Cycle 6 eval COMPLETE → ROLLBACK** — migancore:0.3 stays production
+  - Recovered stuck pipeline: GGUF copied to ollama mount, ollama create via container
+  - Eval ran in 3 min (CPU steal=0% — clean condition)
+  - Result: weighted_avg 0.8661, voice 0.705, tool-use 0.733, creative 0.771
+  - 2/6 gates pass against real thresholds (eval script uses wrong threshold 0.8)
+
+**Still pending:**
+- [ ] Feedback signals audit + wire
+- [ ] Cycle 7 dataset generation
+- [ ] Fix eval script threshold (0.8 → 0.92)
+- [ ] BUILD_DAY env update
+- [ ] Codex C5/C6/C7
 
 **Lessons:**
-- #153: Automated tracker must live alongside code (not separate wiki) — so agents can read context as code, not as narrative
-- #154: Multi-agent sync via files (`docs/AGENT_SYNC/`) beats real-time protocol — each agent works async, drops file, next agent picks up
+- #153: Tracker alongside code — agents read context as files, not narrative
+- #154: File-based async agent sync beats real-time protocol
+- #155: Eval script threshold 0.8 ≠ real gate 0.92 — THIRD TIME this caused confusion (Lessons #140, #144, now #155). Fix the source permanently: hardcode real gates in eval script.
 
-**Costs:** $0 (local + VPS no new compute)
+**Costs:** $0
 
 ---
 
@@ -383,7 +389,7 @@ Full lesson text in `AGENT_ONBOARDING.md` (canonical) and `LESSONS_LEARNED.md`.
 | Cycle 3 | 685 | 0.9082 | 0.817 | 0.953 | PROMOTE → migancore:0.3 ✅ PRODUCTION |
 | Cycle 4 | 723 | 0.8910 | 0.739 | 0.963 | ROLLBACK (voice drift) |
 | Cycle 5 | 877 | 0.8453 | 0.8946 | 0.9376 | ROLLBACK (3 Ollama 500 errors) |
-| Cycle 6 | 954 | TBD | TBD | TBD | PENDING (post_cycle6.sh converting) |
+| Cycle 6 | 954 | 0.8661 | 0.705 | 0.9334 | ROLLBACK (voice 0.705↓, tool-use 0.733, creative 0.771) |
 
 **Gate thresholds:** weighted_avg ≥ 0.92 · voice ≥ 0.85 · identity ≥ 0.90 · evo-aware ≥ 0.80 · tool-use ≥ 0.85 · creative ≥ 0.80
 

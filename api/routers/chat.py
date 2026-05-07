@@ -439,17 +439,16 @@ async def chat_stream(
                             yield _sse({"type": "chunk", "content": content_now})
                             chunk_count += 1
                             full_text = "".join(full_response)
-                            yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
-                            logger.info("chat.stream.done_via_toolcall", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
-                            _t_done = asyncio.create_task(_persist_assistant_message(
+                            # Day 69 — Lesson #156: persist before done (same race fix as main stream path)
+                            await _persist_assistant_message(
                                 conversation_id=conversation_id,
                                 tenant_id=tenant_id,
                                 content=full_text,
                                 message_count=len(history) + 2,
                                 message_id=assistant_msg_id,
-                            ))
-                            _background_tasks.add(_t_done)
-                            _t_done.add_done_callback(_background_tasks.discard)
+                            )
+                            yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
+                            logger.info("chat.stream.done_via_toolcall", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
                             return
                         # Empty content + no tool calls — degenerate state. At iter 0
                         # let the streaming branch try once more (may recover); at >0
@@ -561,11 +560,23 @@ async def chat_stream(
                         break
 
             full_text = "".join(full_response)
+
+            # Day 69 — Lesson #156: persist BEFORE done event (Kimi review Bug 1).
+            # Race condition: done fires → frontend enables thumbs → user clicks →
+            # feedback endpoint 404 because message not yet in DB (create_task = async).
+            # Fix: await persist first (~10-50ms latency), then yield done.
+            # Reference: AGENT_SYNC/KIMI_REVIEW_69_CYCLE6_AND_FEEDBACK.md
+            await _persist_assistant_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                content=full_text,
+                message_count=len(history) + 2,
+                message_id=assistant_msg_id,
+            )
+
             yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
 
             # Day 53 — telemetry: engine, TTFB, sustained throughput.
-            # Acceptance rate (true spec-dec metric) lives in llama-server
-            # logs; we emit chunk/sec which approximates what user feels.
             _stream_total_s = asyncio.get_event_loop().time() - _stream_t0
             _ttfb_ms = (
                 int((_first_chunk_t - _stream_t0) * 1000)
@@ -592,19 +603,6 @@ async def chat_stream(
                 len=len(full_text),
                 tool_iters=tool_iter,
             )
-
-            # Persist assistant message in background — store ref to prevent GC
-            _t = asyncio.create_task(
-                _persist_assistant_message(
-                    conversation_id=conversation_id,
-                    tenant_id=tenant_id,
-                    content=full_text,
-                    message_count=len(history) + 2,
-                    message_id=assistant_msg_id,
-                )
-            )
-            _background_tasks.add(_t)
-            _t.add_done_callback(_background_tasks.discard)
 
             # Day 45 — Innovation #1: trigger conv summarization if threshold met.
             # Build the full message list including new user msg + assistant response,
