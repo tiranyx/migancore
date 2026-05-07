@@ -89,6 +89,10 @@
 - **#142**: license.py mengekspos mint_license() sebagai standalone function, bukan class method. Selalu baca signature function sebelum integrate.
 
 
+
+### Day 67 Additional Lesson (#144)
+- **#144**: Orphaned Vast.ai instance 36263704 (A40) ran 16h = $5.72 wasted. Pattern: instance from prior session (Day 66?) was never deleted. Lesson: EVERY session start must check `curl .../instances/` FIRST, verify no orphans billing. Add to AGENT_ONBOARDING.md: "Before ANY Vast.ai work, list instances + delete orphans."
+
 ### Day 67 Additional Lesson (#143)
 - **#143**: Training via blocking SSH (subprocess.run timeout=7200) vs actual training time (3.3hr) = timeout fires BEFORE completion. Fix: always set timeout > 2x estimated training time, OR run training as detached background on remote (nohup &) + poll for completion separately. Safeguards added: tmux guard on Vast.ai (restart if killed) + vast_recovery.sh on VPS (periodic SSH download).
 
