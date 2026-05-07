@@ -23,7 +23,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 173 (Day 71c adds #172: TRL ORPO string format · #173: HF roundtrip > SCP for adapter transfer) |
+| **Lessons Cumulative** | 177 (Day 71c adds #172-177: TRL ORPO format · HF roundtrip · signal density · ORPO-vs-SFT · realistic refs · baseline-gate coupling) |
 
 ---
 
@@ -190,10 +190,14 @@
 - #173: SCP timeout 300s TOO SHORT for 155MB safetensors over Vast.ai consumer hosts. Pattern fix: HF roundtrip (upload from training → download on inference host) — 5-10x faster (CDN+parallel chunks), resumable. Recovery cost: $0.10 burned during 18-min instance-still-alive window. Use Lesson #59 cost containment: HF push first, THEN delete instance, THEN pull from HF. Update `cycle7c_orpo_vast.py` Day 72 to make HF roundtrip default.
 - #174: 40 targeted pairs out of 548 (7.3% signal density) NOT ENOUGH for Q5-specific behavior change via ORPO. Q5 only +0.016 (vs +0.131 in C7→C7b). Worse: brevity pairs caused creative -0.193 + evolution-aware -0.199 regressions. Threshold rule: targeted ORPO pairs need ≥15% signal density OR pivot to SFT stage for narrow style targets.
 - #175: rewards/margins NEGATIVE throughout C7c training (-0.13). ORPO preference loss ineffective for "shorter casual" preference (model naturally prefers verbose explanations). For length-style targets, ORPO is wrong tool — pivot to SFT with brief examples or dataset-level filtering.
+- #176: Eval baseline references must reflect REALISTIC human Indonesian conversation (15-20 words for greetings), not idealized brevity (7w). Artificial brief refs punish natural model output. Update Q5 ref from 7w to 17w in baseline_day71_voice_realistic.json.
+- #177: Baseline reference + gate threshold are TIGHTLY COUPLED. Cannot change baseline without recalibrating gate. Empirical: migancore:0.3 scored 0.9082 vs day58 ref → promoted. Same model scored 0.8796 vs day71_realistic ref → would fail. Different baselines = different distance distributions in 768-dim space. Production gate 0.92 is locked to day58 baseline. To use realistic baseline for promotion: re-run all historical evals + recalibrate gate empirically.
 
 **Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = $0.10 (incl. recovery) · Day 71+71c total ≈ **$0.27**
 
-**Cycle 7c verdict: ROLLBACK** — weighted_avg 0.8829 (gate 0.92), voice 0.789 (gate 0.85), Q5=0.625 (target 0.75+). migancore:0.3 STAYS as production.
+**Cycle 7c verdict: ROLLBACK** — weighted_avg 0.8829 (gate 0.92, day70 voice-fixed baseline), voice 0.789 (gate 0.85), Q5=0.625 (target 0.75+). migancore:0.3 STAYS as production (validated 0.9082 against day58 baseline).
+
+**Cycle 7d plan: SFT pivot** — 200 voice-only pairs, LR 5e-7, 5 epochs, lora-r=8. Awaiting Kimi+Codex review of CLAUDE_PLAN_71D.
 
 ---
 
