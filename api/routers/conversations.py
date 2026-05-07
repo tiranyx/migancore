@@ -255,16 +255,7 @@ async def submit_message_feedback(
             detail="Feedback is only accepted on assistant messages",
         )
 
-    if body.rating == "thumbs_up":
-        # Positive signal: record but don't create a full preference pair yet
-        # (no rejected counterpart available; use for future positive sampling)
-        return FeedbackOut(
-            ok=True,
-            pair_id=None,
-            message="Positive feedback recorded. Thank you!",
-        )
-
-    # thumbs_down: find the preceding user message as the prompt
+    # Find the preceding user message as the prompt (used for both thumbs_up and thumbs_down)
     prev_msgs_result = await db.execute(
         select(Message)
         .where(
@@ -278,6 +269,29 @@ async def submit_message_feedback(
     prev_user_msg = prev_msgs_result.scalar_one_or_none()
     prompt_text = prev_user_msg.content if prev_user_msg else "[context unavailable]"
 
+    if body.rating == "thumbs_up":
+        # Day 67 fix: store thumbs_up as a positive DPO pair (chosen = good response).
+        # source_method="user_thumbs_up" distinguishes it from teacher-generated pairs.
+        # Enables future positive sampling for ORPO "chosen" selection.
+        pair = PreferencePair(
+            prompt=prompt_text,
+            chosen=target_msg.content,
+            rejected="PENDING — no explicit rejected for thumbs_up signal",
+            judge_score=1.0,
+            judge_model="user_signal",
+            source_method="user_thumbs_up",
+            source_message_id=target_msg.id,
+        )
+        db.add(pair)
+        await db.commit()
+        await db.refresh(pair)
+        return FeedbackOut(
+            ok=True,
+            pair_id=str(pair.id),
+            message="Positive feedback recorded. Thank you!",
+        )
+
+    # thumbs_down: build the preference pair using prompt_text fetched above
     # Build rejected text (optionally include user comment as annotation)
     rejected_text = target_msg.content
     if body.comment:

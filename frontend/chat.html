@@ -403,11 +403,23 @@
       background: var(--green);
       flex-shrink: 0;
       animation: livePulse 2.2s ease-in-out infinite;
+      transition: background 0.3s;
+    }
+
+    /* Day 67: orange + fast pulse when streaming */
+    .dot-pulse.streaming {
+      background: var(--orange);
+      animation: livePulseActive 0.7s ease-in-out infinite;
     }
 
     @keyframes livePulse {
       0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(47,227,154,0.7); }
       50% { opacity: 0.75; box-shadow: 0 0 0 5px rgba(47,227,154,0); }
+    }
+
+    @keyframes livePulseActive {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,138,36,0.9); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(255,138,36,0); }
     }
 
     /* Day 52 Fix: NEW CHAT button glow when 2+ consec errors (context contamination prevention) */
@@ -1796,33 +1808,42 @@
                 </div>
               )}
               {linkifyContent(content)}
-              {/* Day 65 — thumbs up/down feedback on completed assistant messages */}
-              {role === 'assistant' && !streaming && !isError && content && msg.serverId && convId && (
-                <div style={{ display: 'flex', gap: 5, marginTop: 8, justifyContent: 'flex-end' }}>
+              {/* Day 67 — thumbs up/down feedback on completed assistant messages
+                  Condition: serverId required for API call; convId required for conversation scope.
+                  Show feedback row even without serverId (disabled state) so users see the UI exists. */}
+              {role === 'assistant' && !streaming && !isError && content && convId && (
+                <div style={{
+                  display: 'flex', gap: 6, marginTop: 10, paddingTop: 8,
+                  borderTop: '1px solid rgba(47,227,154,0.08)',
+                  alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)', letterSpacing: '0.05em', marginRight: 4 }}>
+                    {fbSent ? (fbState === 'liked' ? '✓ Berguna' : '✓ Dicatat') : 'Berguna?'}
+                  </span>
                   <button
                     onClick={() => sendFeedback('thumbs_up')}
-                    title="Respons bagus"
-                    disabled={fbSent}
+                    title="Respons bagus — bantu ADO belajar"
+                    disabled={fbSent || !msg.serverId}
                     style={{
-                      background: fbState === 'liked' ? 'var(--green-dim)' : 'transparent',
-                      border: `1px solid ${fbState === 'liked' ? 'var(--green-border)' : 'rgba(147,179,165,0.18)'}`,
-                      borderRadius: 4, padding: '2px 7px', cursor: fbSent ? 'default' : 'pointer',
-                      fontSize: '0.72rem', lineHeight: 1.4,
+                      background: fbState === 'liked' ? 'var(--green-dim)' : 'rgba(47,227,154,0.05)',
+                      border: `1px solid ${fbState === 'liked' ? 'var(--green-border)' : 'rgba(47,227,154,0.2)'}`,
+                      borderRadius: 6, padding: '3px 10px', cursor: (fbSent || !msg.serverId) ? 'default' : 'pointer',
+                      fontSize: '0.85rem', lineHeight: 1.4,
                       color: fbState === 'liked' ? 'var(--green)' : 'var(--text-dim)',
-                      transition: 'all 0.15s', opacity: fbSent && fbState !== 'liked' ? 0.35 : 1,
+                      transition: 'all 0.15s', opacity: fbSent && fbState !== 'liked' ? 0.3 : 1,
                     }}
                   >👍</button>
                   <button
                     onClick={() => sendFeedback('thumbs_down')}
-                    title="Perlu diperbaiki"
-                    disabled={fbSent}
+                    title="Perlu diperbaiki — bantu ADO belajar"
+                    disabled={fbSent || !msg.serverId}
                     style={{
-                      background: fbState === 'disliked' ? 'var(--orange-dim)' : 'transparent',
-                      border: `1px solid ${fbState === 'disliked' ? 'var(--orange-border)' : 'rgba(147,179,165,0.18)'}`,
-                      borderRadius: 4, padding: '2px 7px', cursor: fbSent ? 'default' : 'pointer',
-                      fontSize: '0.72rem', lineHeight: 1.4,
+                      background: fbState === 'disliked' ? 'var(--orange-dim)' : 'rgba(255,138,36,0.05)',
+                      border: `1px solid ${fbState === 'disliked' ? 'var(--orange-border)' : 'rgba(255,138,36,0.2)'}`,
+                      borderRadius: 6, padding: '3px 10px', cursor: (fbSent || !msg.serverId) ? 'default' : 'pointer',
+                      fontSize: '0.85rem', lineHeight: 1.4,
                       color: fbState === 'disliked' ? 'var(--orange)' : 'var(--text-dim)',
-                      transition: 'all 0.15s', opacity: fbSent && fbState !== 'disliked' ? 0.35 : 1,
+                      transition: 'all 0.15s', opacity: fbSent && fbState !== 'disliked' ? 0.3 : 1,
                     }}
                   >👎</button>
                 </div>
@@ -1888,6 +1909,8 @@
     const [initing, setIniting]     = useState(true);
     // Day 52 Fix: track consecutive errors. >=2 = suggest NEW CHAT (prevents context contamination)
     const [consecErrors, setConsecErrors] = useState(0);
+    // Day 67 — dynamic model label fetched from /health (was hardcoded qwen2.5:7b)
+    const [modelLabel, setModelLabel] = useState('migancore:0.3');
     // Day 29 — agent list + spawn modal
     const [agents, setAgents]       = useState([]);
     const [spawnOpen, setSpawnOpen] = useState(false);
@@ -1965,6 +1988,14 @@
         }
       })();
     }, [refreshAgents]);
+
+    // Day 67 — fetch current model from /health (no auth needed, open endpoint)
+    useEffect(() => {
+      fetch(`${API_BASE}/health`)
+        .then(r => r.json())
+        .then(d => { if (d.model) setModelLabel(d.model); })
+        .catch(() => {}); // keep default if fetch fails
+    }, []);
 
     // Switch to a different agent
     const switchAgent = useCallback((agent) => {
@@ -2549,9 +2580,9 @@
         <main className="chat-area">
           {/* Header */}
           <div className="chat-header">
-            <div className="dot-pulse"/>
+            <div className={`dot-pulse${busy ? ' streaming' : ''}`}/>
             <span className="header-agent">{agentName}</span>
-            <span className="header-model">qwen2.5:7b · streaming</span>
+            <span className="header-model">{modelLabel}{busy ? ' · streaming' : ' · ready'}</span>
           </div>
 
           {/* Messages */}
