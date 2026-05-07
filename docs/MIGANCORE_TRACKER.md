@@ -11,8 +11,9 @@
 | **Today** | Day 71 · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
-| **Cycle 7 Status** | 🟡 TRAINING LIVE — Instance 36311511 A40 48GB $0.322/hr (launched 20:27 UTC) |
-| **API Commit** | `46d7922` (Day 71: Kimi+Codex review committed, agent sync complete) |
+| **Cycle 7 Result** | ❌ ROLLBACK — voice 0.721 (gate 0.85), weighted_avg 0.8814 (gate 0.92). Root cause: under-training 63 steps |
+| **Cycle 7b Status** | 🟡 TRAINING LIVE — A40 $0.322/hr, LR=1.2e-6, epochs=3 (~95 steps) — launched 21:29 UTC |
+| **API Commit** | `c83371c` (Day 71: cycle7b trainer committed, Cycle 7 ROLLBACK documented) |
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
