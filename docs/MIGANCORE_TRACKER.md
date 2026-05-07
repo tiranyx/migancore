@@ -10,19 +10,19 @@
 |-----|-------|
 | **Today** | Day 71 · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
-| **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
 | **Cycle 7 Result** | ❌ ROLLBACK — voice 0.721 (gate 0.85), weighted_avg 0.8814 (gate 0.92). Root cause: under-training 63 steps |
-| **Cycle 7b Status** | 🟡 TRAINING LIVE — A40 $0.322/hr, LR=1.2e-6, epochs=3 (~95 steps) — launched 21:29 UTC |
-| **API Commit** | `c83371c` (Day 71: cycle7b trainer committed, Cycle 7 ROLLBACK documented) |
+| **Cycle 7b Status** | 🟡 TRAINING LIVE — A40 $0.322/hr, LR=1.2e-6, epochs=3 (~95 steps) — est. completion 21:51-22:01 UTC |
+| **Baseline Fix** | ✅ `eval/baseline_day70_voice_fixed.json` — Q5 casual ref fixed (Kimi P0 Day 71b) |
+| **API Commit** | `26eba3a` (Day 71b: Kimi+Codex 71b reviews + RECAP committed) |
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
 | **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 fix deployed Day 69 |
-| **Total Pairs** | ~3,004 + 20 honesty (cycle7) in DB |
+| **Total Pairs** | ~3,004 in DB (same as C7 — no new pairs for C7b retry) |
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
-| **Compute Budget** | Vast.ai ~$6.20 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 165 (Day 71 adds #162-165) |
+| **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
+| **Lessons Cumulative** | 171 (Day 71 adds #162-171) |
 
 ---
 
@@ -155,6 +155,40 @@
 
 ## 📅 DAILY LOG
 <!-- Append new entry with: python scripts/tracker.py day-end N -->
+
+### Day 71 — 2026-05-08 (IN PROGRESS)
+**Status:** IN PROGRESS — Cycle 7b training LIVE, post-pipeline pending
+
+**Delivered:**
+- [x] **Mandatory protocol** — git status, 5-layer alignment, health check
+- [x] **Vision elaboration** — DAY71_PLAN.md: Cognitive Kernel paradigm, BaaS architecture, Sprint roadmap D71-150
+- [x] **Cycle 7 training** — 10.1 min, $0.054, Instance 36311511 DELETED ✅ (migancore:0.7 registered but ROLLBACK)
+- [x] **Cycle 7 ROLLBACK documented** — voice 0.721 (gap -0.129), weighted_avg 0.8814 (gap -0.038). Root cause: 63 steps = under-training
+- [x] **cycle7b_orpo_vast.py** — LR=1.2e-6 (2x), epochs=3 (+1). Committed c83371c
+- [x] **Cycle 7b training LIVE** — Instance 36314593, A40, 21:29 UTC launch
+- [x] **Agent sync complete** — CLAUDE_PLAN/KIMI_REVIEW/CODEX_QA/RECAP all committed
+- [x] **Q5 baseline fix** — `eval/baseline_day70_voice_fixed.json` created (Kimi P0 action). Casual reference re-embedded.
+- [x] **CLAUDE_PLAN_71B + KIMI_REVIEW_71B + CODEX_QA_71B + RECAP_71B** — committed 26eba3a
+- [ ] Cycle 7b training complete + GGUF + Ollama register
+- [ ] Eval with voice-fixed baseline + PROMOTE/ROLLBACK decision
+- [ ] Formal register smoke test (Codex F3)
+- [ ] Lesson #170-171 locked to tracker
+
+**Lessons:**
+- #162: Modelfile for each cycle must be created BEFORE training trigger, not after (Codex B1)
+- #163: Eval command needs explicit `--model <tag>`, not just `--model-tag` (Codex B2)
+- #164: Multi-teacher quorum (vote 2/3) bad for ORPO — flat margin. Use specialist per category
+- #165: 47% fewer gradient steps + same LR = under-training risk. Scale LR × epochs with dataset
+- #166: Cycle 7 ROLLBACK: cleaner data alone insufficient if steps too few. Voice needs gradient volume.
+- #167: Q5 "Hai! Bagaimana kabarmu?" = hardest voice gate (0.478). Casual Indonesian greeting hard to transfer via ORPO.
+- #168: Tool-use via ORPO = wrong tool. ORPO = preference learning. Tool trigger = format conditioning → few-shot SOUL.md.
+- #169: weighted_avg can drop even if content better if training intensity insufficient.
+- #170: Eval baseline reference must MATCH training target. Formal baseline punishes correctly casual model.
+- #171: Steps > pair count for ORPO voice absorption. C5: 80 pairs/119 steps → +0.155; C7: 120 pairs/63 steps → +0.016.
+
+**Costs:** Cycle 7 = $0.054 · Cycle 7b = ~$0.06 (in progress) · Day 71 total ≈ $0.11
+
+---
 
 ### Day 70 — 2026-05-08 (IN PROGRESS)
 **Status:** IN PROGRESS
@@ -339,10 +373,20 @@ Every `CODEX_QA_*.md` must include:
 <!-- Append new lessons with: python scripts/tracker.py lesson "TEXT" -->
 <!-- Format: #NUM · DAY · CATEGORY · Lesson text -->
 
-### Recent Lessons (Day 67–69)
+### Recent Lessons (Day 67–71)
 
 | # | Day | Category | Lesson |
 |---|-----|----------|--------|
+| 171 | 71 | Training | Steps > pair count for ORPO voice absorption. C5: 80 pairs/119 steps → +0.155 voice; C7: 120 pairs/63 steps → +0.016. Effective optimization = LR × steps, not pair count alone. |
+| 170 | 71 | Training | Eval baseline reference must MATCH training target. Formal baseline embedding punishes correctly casual model even if training succeeded. Fix: create versioned voice-fixed baseline before eval. |
+| 169 | 71 | Training | weighted_avg can drop even if content quality improves, if training intensity (LR × epochs) insufficient. LR + epochs must scale proportionally with dataset size. |
+| 168 | 71 | Architecture | Tool-use via ORPO = wrong tool. ORPO = preference learning. Tool trigger conditioning = format conditioning. Solution: few-shot examples in SOUL.md, NOT more training pairs. |
+| 167 | 71 | Training | Q5 "Hai! Bagaimana kabarmu?" is hardest voice gate (scored 0.478 in C7). Casual Indonesian greeting extremely hard to transfer via ORPO in few steps. Pairs must be extremely casual to shift model from formal default. |
+| 166 | 71 | Training | Cycle 7 ROLLBACK: cleaner data alone insufficient if gradient steps too few. Voice absorption needs gradient volume (steps), not just pair quality. |
+| 165 | 71 | Training | 47% fewer gradient steps with same LR = under-training risk. Always prepare Cycle N+1 contingency (LR 2x) before GO when step count drops vs previous cycle. |
+| 164 | 71 | Training | Multi-teacher quorum (vote 2/3) bad for ORPO — produces flat preference margin → flat loss. Use specialist per category: Kimi=voice, GPT=tool, Gemini=general/identity. |
+| 163 | 71 | QA | Eval command needs explicit `--model <tag>`, not just `--model-tag`. Ambiguous model arg can cause silent default model usage. |
+| 162 | 71 | Workflow | Modelfile for each cycle must be created BEFORE training trigger, not after. Missing Modelfile = post-training pipeline blocked (Codex B1 pattern). |
 | 157 | 69 | Frontend | fbSent permanent lock on API error = user can never retry feedback. Always rollback UI state (fbSent=false, fbState=null) in catch. Silent swallowed errors = silent broken features. |
 | 156 | 69 | Architecture | `asyncio.create_task(_persist)` AFTER `yield done` = race condition. Fast user clicks feedback before DB write completes → 404 for 16 days, 0 signals. Always `await _persist` BEFORE yielding SSE done. |
 | 155 | 69 | Training | Eval threshold 0.80 ≠ real gate 0.92 — THIRD TIME (also Lessons #140, #144). Fix the source: hardcode real gates in eval script with permanent comment. |
@@ -408,6 +452,8 @@ Full lesson text in `AGENT_ONBOARDING.md` (canonical) and `LESSONS_LEARNED.md`.
 | Cycle 4 | 723 | 0.8910 | 0.739 | 0.963 | ROLLBACK (voice drift) |
 | Cycle 5 | 877 | 0.8453 | 0.8946 | 0.9376 | ROLLBACK (3 Ollama 500 errors) |
 | Cycle 6 | 954 | 0.8661 | 0.705 | 0.9334 | ROLLBACK (voice 0.705↓, tool-use 0.733, creative 0.771) |
+| Cycle 7 | 508 | 0.8814 | 0.721 | 0.939 | ROLLBACK (under-training 63 steps, voice gap 0.721<0.85) |
+| Cycle 7b | 508 (retry) | TBD | TBD | TBD | 🟡 TRAINING LIVE — LR=1.2e-6, 3 epochs, ~95 steps |
 
 **Gate thresholds:** weighted_avg ≥ 0.92 · voice ≥ 0.85 · identity ≥ 0.90 · evo-aware ≥ 0.80 · tool-use ≥ 0.85 · creative ≥ 0.80
 
