@@ -1,8 +1,22 @@
 # MASTER HANDOFF — MiganCore Project
 **Version:** 1.1  
 **Last Updated:** 2026-05-03 by Kimi Code CLI  
-**Status:** Day 4 Complete → Day 5 Pending (RLS + Tenant Safety)  
+**Status:** ⚠️ **OUTDATED — This document reflects Day 4 status. Actual: Day 64.**
 **Critical Rule:** AGENT YANG MELANJUTKAN WAJIB MEMBACA DOKUMEN INI SEBELUM MULAI KERJA.
+
+> 🚨 **ARCHIVE NOTICE (Day 64)**
+> 
+> Dokumen ini adalah **historical artifact** dari Day 4. Arsitektur dan keputusan di dalamnya masih valid,
+> tapi **status proyek sudah jauh melampaui Day 4** (sekarang Day 64, beta launched, Cycle 5 in progress).
+> 
+> **AGENT BARU — JANGAN pakai dokumen ini sebagai status terkini. Gunakan:**
+> 1. `docs/00_INDEX.md` — Peta navigasi
+> 2. `docs/AGENT_ONBOARDING.md` — Protocol permanen + lessons
+> 3. `docs/DAY64_PLAN.md` — Plan operational hari ini
+> 4. `CONTEXT.md` (root) — Live state (updated Day 64)
+> 
+> Dokumen ini tetap dipertahankan sebagai **strategic foundation record** (arsitektur, keputusan awal,
+> repo structure). Jangan hapus.
 
 ---
 

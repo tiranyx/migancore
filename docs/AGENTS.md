@@ -1,7 +1,17 @@
 # AGENTS.md — MiganCore Agent Directive
-**Version:** 1.0 | **Effective:** 2026-05-03  
-**Rule:** EVERY AGENT MUST READ THIS BEFORE ACTING.  
+**Version:** 1.1 | **Effective:** 2026-05-07 | **Updated by:** Kimi Code CLI (Day 64 Review)
+**Rule:** EVERY AGENT MUST READ THIS BEFORE ACTING.
 **Purpose:** Prevent context loss, duplication, and backtracking.
+
+> ⚠️ **THIS FILE IS PARTIALLY OUTDATED.** Section 4 ("What Has Been Done") stops at Day 4.
+> 
+> **AGENT BARU — BACA INI DULU (urutan wajib):**
+> 1. `docs/00_INDEX.md` — Peta navigasi semua dokumen
+> 2. `docs/AGENT_ONBOARDING.md` — Protocol permanen + 120+ lessons
+> 3. `docs/DAY64_PLAN.md` — Plan hari ini
+> 
+> File ini tetap berguna untuk: Stakeholder map, Golden Rules, VPS Awareness (Section 9).
+> Untuk status terkini dan lessons, lihat AGENT_ONBOARDING.md.
 
 ---
 
