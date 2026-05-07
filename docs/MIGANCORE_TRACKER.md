@@ -11,7 +11,8 @@
 | **Today** | Day 71c · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 7b Result** | ❌ ROLLBACK — voice 0.771 (+0.050), Q5=0.609, weighted_avg 0.8870 (gate 0.92). Root cause: Q5 brief gap |
-| **Cycle 7c Status** | 🟡 READY TO LAUNCH — 548 pairs (508+40 Q5), dataset on VPS, script synced, awaiting GO |
+| **Cycle 7c Result** | ❌ ROLLBACK — voice 0.789 (Δ+0.018), Q5=0.625 (Δ+0.016), w_avg 0.8829 (Δ-0.004 vs C7b WORSE). Lessons #172-175 |
+| **Frontend Sprint** | ✅ LIVE — Service Worker + PWA + ErrorBoundary + Offline UX deployed app.migancore.com (TTFB 318→45ms, -86%) |
 | **Baseline Fix** | ✅ `eval/baseline_day70_voice_fixed.json` — Q5 casual ref fixed (Kimi P0 Day 71b) |
 | **API Commit** | `8a575b7` (Day 71c: Cycle 7c plan + scripts committed) |
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
@@ -22,7 +23,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 172 (Day 71c adds #172: TRL ORPO string format requirement, smoke-test before upload) |
+| **Lessons Cumulative** | 173 (Day 71c adds #172: TRL ORPO string format · #173: HF roundtrip > SCP for adapter transfer) |
 
 ---
 
@@ -186,8 +187,13 @@
 - #170: Eval baseline reference must MATCH training target. Formal baseline punishes correctly casual model.
 - #171: Steps > pair count for ORPO voice absorption. C5: 80 pairs/119 steps → +0.155; C7: 120 pairs/63 steps → +0.016.
 - #172: TRL 0.9.6 ORPOTrainer expects STRING format for `chosen`/`rejected`, not ChatML message-list. Always smoke-test 1 pair through `tokenize_row()` BEFORE upload. Cycle 7c v1 wasted $0.02 on this. Defensive validator: `verify_c7c_format.py` (string-type check across all rows) blocks bad data at source.
+- #173: SCP timeout 300s TOO SHORT for 155MB safetensors over Vast.ai consumer hosts. Pattern fix: HF roundtrip (upload from training → download on inference host) — 5-10x faster (CDN+parallel chunks), resumable. Recovery cost: $0.10 burned during 18-min instance-still-alive window. Use Lesson #59 cost containment: HF push first, THEN delete instance, THEN pull from HF. Update `cycle7c_orpo_vast.py` Day 72 to make HF roundtrip default.
+- #174: 40 targeted pairs out of 548 (7.3% signal density) NOT ENOUGH for Q5-specific behavior change via ORPO. Q5 only +0.016 (vs +0.131 in C7→C7b). Worse: brevity pairs caused creative -0.193 + evolution-aware -0.199 regressions. Threshold rule: targeted ORPO pairs need ≥15% signal density OR pivot to SFT stage for narrow style targets.
+- #175: rewards/margins NEGATIVE throughout C7c training (-0.13). ORPO preference loss ineffective for "shorter casual" preference (model naturally prefers verbose explanations). For length-style targets, ORPO is wrong tool — pivot to SFT with brief examples or dataset-level filtering.
 
-**Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = in progress · Day 71+71c total ≈ $0.18
+**Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = $0.10 (incl. recovery) · Day 71+71c total ≈ **$0.27**
+
+**Cycle 7c verdict: ROLLBACK** — weighted_avg 0.8829 (gate 0.92), voice 0.789 (gate 0.85), Q5=0.625 (target 0.75+). migancore:0.3 STAYS as production.
 
 ---
 
