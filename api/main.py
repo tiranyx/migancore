@@ -390,6 +390,13 @@ app.include_router(speech_router.router)  # Day 38
 app.include_router(vision_router.router)   # Day 40
 app.include_router(license_router.router)  # Day 61
 
+# Day 71d Phase 2.1: system telemetry (status + metrics, public, no auth)
+try:
+    from routers import system as system_router
+    app.include_router(system_router.router)
+except Exception as _e:
+    logger.warning("system_router.import_failed", error=str(_e))
+
 # Day 26: Mount MCP Streamable HTTP server at /mcp
 # Degrades gracefully if `mcp` SDK is unavailable (e.g. dev container without rebuild).
 if _MCP_AVAILABLE:
