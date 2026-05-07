@@ -2618,10 +2618,12 @@
           const ext = (rec.mimeType || '').includes('webm') ? 'webm' : 'mp4';
           fd.append('file', blob, `mic_${Date.now()}.${ext}`);
           fd.append('lang_code', 'id');
+          const sttToken = LS.get('token');
           const resp = await fetch(`${API_BASE}/v1/speech/to-text`, {
             method: 'POST',
+            headers: sttToken ? { 'Authorization': `Bearer ${sttToken}` } : {},
             body: fd,
-            // Note: STT endpoint is currently open (rate-limited); no Bearer needed
+            // Codex C7 fix Day 70: STT now requires auth (cost-bearing endpoint)
           });
           const json = await resp.json();
           if (!resp.ok) {

@@ -12,7 +12,8 @@ Endpoint:
 
 Realtime WebSocket mode is DEFERRED to Day 40 (needs frontend mic streaming).
 
-Auth: open with rate limit (called pre-chat from public app); production may restrict.
+Auth: JWT required (Codex C7 fix Day 70) — ElevenLabs Scribe is a cost-bearing endpoint.
+  Rate limit: 10/minute per IP as second defense.
 
 Note: do NOT add `from __future__ import annotations` here — it turns FastAPI
 parameter type hints (e.g. UploadFile) into forward-ref strings, which
@@ -23,10 +24,12 @@ import os
 
 import httpx
 import structlog
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from config import settings
+from deps.auth import get_current_user
 from deps.rate_limit import limiter
+from models import User
 
 logger = structlog.get_logger()
 
@@ -53,6 +56,7 @@ async def speech_to_text(
     file: UploadFile = File(..., description="Audio file (wav, mp3, m4a, webm, ogg, flac, opus)"),
     lang_code: str = Form("auto", description="ISO-639-1 code or 'auto' for auto-detect (e.g. 'id', 'en')"),
     diarize: bool = Form(False, description="Speaker diarization (slower)"),
+    _current_user: User = Depends(get_current_user),  # Codex C7: auth required (cost-bearing endpoint)
 ):
     """Transcribe an audio file via ElevenLabs Scribe.
 
