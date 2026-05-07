@@ -1,7 +1,40 @@
 # ADO FOUNDATION V2 — Complete Baseline Capability
 **Dibuat:** 2026-05-09 | **Tujuan:** Satu dokumen untuk bangun ADO yang benar dari fondasi
-**Prinsip:** Build modular, scale later. Setiap piece bisa berdiri sendiri dan bisa di-extend.
+**Prinsip:** ADO adalah Sovereign AI — otak, orkestrasi, tools, MCP, memori semua milik ADO sendiri.
 **Timeline:** 5 sprint × 1 minggu = 35 hari (Day 68–103)
+
+---
+
+## PRINSIP ARSITEKTUR — SOVEREIGN AI
+
+```
+ADO SOVEREIGN CORE (tidak bisa dikompromikan):
+  Otak        = Qwen3 fine-tuned, milik ADO — TIDAK ada routing ke Claude/GPT untuk jawab user
+  Memori      = Qdrant episodic + semantic, self-hosted
+  Orkestrasi  = LangGraph director, milik ADO
+  Tools       = 35+ tools, ADO yang kontrol interface dan logika
+  MCP Server  = ADO MCP di Smithery, standar terbuka
+  Identitas   = license + persona system
+  KB          = Indonesia KB, auto-update setiap hari
+  Training    = ORPO/GRPO pipeline, autonomous nightly
+
+TEACHER API (Claude/Gemini/Kimi) — OFFLINE ONLY:
+  → Generate training pairs saat tidak ada user aktif
+  → Seperti buku pelajaran — ADO belajar DARI mereka
+  → Tidak pernah menjawab user, tidak pernah ada di runtime
+  → Pengetahuan masuk ke bobot model ADO, bukan diforward
+
+EXTERNAL RESOURCE (bukan otak, ADO tetap kontrol):
+  fal.ai  → render image  (ADO yang prompt + proses output)
+  Kling   → render video  (ADO yang prompt + proses output)
+  Suno    → render musik  (ADO yang prompt + proses output)
+  BPS/IDX → data feed     (ADO yang baca + analisa + jawab)
+  Slack/WA→ channel saja  (ADO yang jawab, bukan mereka)
+```
+
+**Analogi:** Seperti dokter ahli. Pengetahuan = miliknya sendiri.
+Stetoskop, X-Ray = tools. Lab eksternal = data feed.
+Yang menjawab pasien = tetap dokternya. Bukan mesin X-Ray-nya.
 
 ---
 
@@ -56,82 +89,46 @@ Fahmi mau ADO punya **baseline capability** yang solid dan scalable:
 
 ---
 
-## SPRINT F1 — HYBRID BRAIN (Fondasi Semua)
+## SPRINT F1 — BRAIN UPGRADE + ORCHESTRATION (Fondasi Semua)
 **Timeline:** Day 68–74 (1 minggu)
-**Kenapa pertama:** Semua capability lain bergantung pada ini.
+**Kenapa pertama:** Semua capability lain bergantung pada kualitas otak ADO sendiri.
+**Prinsip:** 100% ADO brain untuk runtime. Teacher API hanya offline untuk training.
 
 ### Yang Dibangun
 
-**1. Smart Router (`api/services/brain_router.py`)**
-
-```python
-class BrainRouter:
-    """
-    Routing logic:
-    - Privacy-sensitive → selalu local brain
-    - Simple/identity/domain KB → local brain
-    - Complex coding, math, physics, long creative → cloud brain
-    - Cost-aware: track usage, fallback jika API limit
-    """
-    
-    LOCAL_PATTERNS = [
-        "siapa kamu", "nama kamu", "cerita tentang", "kenang",
-        "data klien", "dokumen internal", "rekam medis"
-    ]
-    
-    CLOUD_PATTERNS = [
-        "buat kode", "debug", "fullstack", "hitung", "turunan",
-        "integral", "fisika", "analisa mendalam", "essay panjang"
-    ]
-    
-    async def route(self, message: str, context: dict) -> str:
-        # 1. PII check — jika ada PII, PAKSA local
-        if self.has_pii(message + str(context)):
-            return "local"
-        
-        # 2. Pattern matching
-        for pattern in self.CLOUD_PATTERNS:
-            if pattern in message.lower():
-                return "cloud"
-        
-        # 3. Length heuristic — pesan > 500 kata butuh cloud
-        if len(message.split()) > 500:
-            return "cloud"
-        
-        return "local"
-    
-    def has_pii(self, text: str) -> bool:
-        # NIK: 16 digit, nomor HP Indonesia, nama+alamat pattern
-        import re
-        patterns = [r'\b\d{16}\b', r'\b08\d{9,11}\b', r'NIK\s*:\s*\d+']
-        return any(re.search(p, text) for p in patterns)
-```
-
-**2. Cloud Brain Client (`api/services/cloud_brain.py`)**
-
-```python
-# Strategi: Claude Sonnet untuk coding/engineering, Gemini Flash untuk creative/speed
-# Fallback cascade: Claude → Gemini → Qwen3 lokal
-
-async def call_cloud_brain(prompt: str, task_type: str) -> str:
-    system = build_ado_system_prompt()  # Inject identitas ADO ke semua cloud calls
-    
-    if task_type in ["code", "engineering", "debug"]:
-        return await claude_sonnet(system, prompt)
-    elif task_type in ["creative", "image_desc", "fast"]:
-        return await gemini_flash(system, prompt)
-    else:
-        return await claude_sonnet(system, prompt)  # default Claude
-```
-
-**3. Upgrade base ke Qwen3-8B**
+**1. Upgrade ke Qwen3-8B — Thinking Mode**
 ```bash
+# Pull model baru
 docker exec ado-ollama-1 ollama pull qwen3:8b-q4_K_M
-# Test identitas: apakah Migan atau generic?
-# Jika generic → Cycle 7 fine-tune dengan Qwen3 sebagai base
+
+# Qwen3-8B keunggulan vs Qwen2.5-7B:
+# - Hybrid thinking mode: bisa berpikir step-by-step sebelum jawab
+# - MMLU: 74% → 81% (lebih pintar)
+# - HumanEval coding: 56% → 71% (lebih bisa coding)
+# - Math: 62% → 75%
+# - Context: 128K token (sama)
+# - VRAM: 4.5GB → 5.2GB (masih muat di VPS)
 ```
 
-**4. Intent Classifier (`api/services/intent_classifier.py`)**
+**Cara aktifkan thinking mode di Ollama:**
+```python
+# Di api/services/ollama_client.py
+async def generate_with_thinking(prompt: str, use_thinking: bool = False) -> str:
+    if use_thinking:
+        # Qwen3 thinking mode: tambahkan /think di awal
+        # Model akan "berpikir dulu" sebelum jawab
+        full_prompt = f"/think\n{prompt}"
+    else:
+        full_prompt = f"/no_think\n{prompt}"  # Cepat, untuk task sederhana
+    
+    return await ollama_generate(model="qwen3:8b-q4_K_M", prompt=full_prompt)
+
+# Kapan pakai thinking mode:
+# ON  → coding, math, analisa kompleks, debugging
+# OFF → greet, recall, simple Q&A, tool calls
+```
+
+**2. Intent Classifier (`api/services/intent_classifier.py`)**
 
 ```python
 INTENTS = {
@@ -525,24 +522,62 @@ Jika ada masalah, perbaiki jawaban.
         return check_result  # versi yang sudah diperbaiki
 ```
 
-**4. GRPO Training — Reasoning Supplement (200 pairs)**
+**4. GRPO Training — Reasoning via Teacher (200 pairs, offline)**
 
 ```
+Proses: Teacher API (Claude/Gemini) generate pairs saat tidak ada user
 Format GRPO:
-- Pertanyaan yang butuh multi-step reasoning
-- Math problems: step-by-step solution
-- Logic puzzles
-- Code debugging dengan chain-of-thought
-- Analisa bisnis: sebab-akibat
+- Math step-by-step: soal → langkah 1 → langkah 2 → jawaban
+- Code debugging: error → analisa → fix → penjelasan
+- Logic: pertanyaan → breakdown → kesimpulan
+- Bisnis analisa: situasi → faktor → rekomendasi
+
+ADO belajar POLA berpikir dari pairs ini
+→ knowledge masuk ke bobot model ADO sendiri
+→ bukan Claude yang jawab, tapi ADO yang sudah belajar cara berpikir Claude
 
 Target: reasoning gate ≥ 0.80 di eval Cycle 8
 ```
 
+**5. Nightly Teacher Curriculum (`scripts/nightly_teacher.py`)**
+
+```python
+# Jalan 23:00 UTC setiap malam, saat tidak ada user aktif
+# Teacher (Gemini Flash, murah) generate 30-50 pairs per topik
+
+CURRICULUM = [
+    # Minggu 1: Coding & Engineering
+    "python_async", "fastapi_patterns", "docker_compose", "sql_optimization",
+    "react_hooks", "typescript_patterns", "debugging_methods",
+    
+    # Minggu 2: Math & Logic  
+    "statistik_bisnis", "probabilitas", "logika_formal", "analisa_data",
+    
+    # Minggu 3: Creative & Writing
+    "copywriting_indonesia", "storytelling_brand", "proposal_bisnis",
+    
+    # Minggu 4: Domain Indonesia
+    "hukum_bisnis", "pajak_umkm", "regulasi_ojk", "standar_sni",
+    
+    # dst rotating...
+]
+
+async def run_nightly():
+    topic = get_todays_topic(CURRICULUM)
+    pairs = await teacher_api.generate_pairs(topic, count=40)
+    await store_pairs(pairs)
+    
+    # Jika sudah > 100 pairs baru → trigger micro-training
+    if await count_new_pairs() >= 100:
+        await trigger_micro_training()
+```
+
 **Gate Sprint F5:**
 - [ ] Intent classifier 95%+ accuracy (50 test messages)
-- [ ] Self-correction: 3 dari 5 test — jawaban meningkat setelah self-check
-- [ ] Context-aware system prompt: respons beda untuk coding mode vs creative mode
-- [ ] Tool proaktif: "buat gambar logo" langsung trigger generate_image tanpa user ketik /tool
+- [ ] Self-correction via thinking mode: jawaban membaik untuk 3/5 test
+- [ ] Context-aware system prompt: respons beda untuk coding vs creative
+- [ ] Tool proaktif: "buat gambar logo" langsung trigger generate_image
+- [ ] Nightly teacher script berjalan sekali tanpa error
 
 ---
 
@@ -577,11 +612,17 @@ Target: reasoning gate ≥ 0.80 di eval Cycle 8
 
 ## TRAINING CYCLES UNTUK FOUNDATION V2
 
-| Cycle | Pairs | Focus | Gate Baru |
-|-------|-------|-------|-----------|
-| Cycle 7 | 700 | Tool-use +200 (diverse), Coding +200, Creative +100, Voice maintenance | tool-use ≥ 0.88 |
-| Cycle 8 | 900 | GRPO reasoning +200, Data analysis +150, Report +100, Hybrid routing pairs | reasoning ≥ 0.80 |
-| Cycle 9 | 600 | Per-domain specialization (hukum, keuangan, medis) | domain accuracy ≥ 0.90 |
+Semua pairs di-generate oleh Teacher API (offline, saat tidak ada user aktif).
+ADO belajar dari pairs tersebut — knowledge masuk ke bobot model ADO sendiri.
+
+| Cycle | Base Model | Pairs | Focus | Gate Baru |
+|-------|-----------|-------|-------|-----------|
+| Cycle 7 | Qwen3-8B | 800 | Tool-use +200 (diverse scenarios), Coding +200 (Python/JS/SQL), Creative +100, Voice maintenance +100 | tool-use ≥ 0.88 |
+| Cycle 8 | Qwen3-8B | 900 | GRPO reasoning +200 (thinking mode pairs), Data analysis +150, Report +100, Domain Indonesia +150 | reasoning ≥ 0.80 |
+| Cycle 9 | Qwen3-8B | 700 | Specialization: hukum +150, keuangan +150, medis +100, engineering +150 | domain accuracy ≥ 0.90 |
+| Cycle 10+ | Qwen3-14B? | 1000+ | Nightly curriculum (rotating topics, autonomous) | semua gates naik 0.02 |
+
+**Nightly micro-training:** 50 pairs/hari × 7 hari = 350 pairs → micro cycle mingguan otomatis
 
 ---
 
@@ -614,9 +655,11 @@ Target: reasoning gate ≥ 0.80 di eval Cycle 8
 
 ## DECISION YANG PERLU FAHMI JAWAB SEBELUM MULAI
 
-**D1 — Hybrid Routing: YES atau NO?**
-Ini fondasi semua. Jika NO, coding/math tetap lemah sampai ganti ke 30B+ model.
-*Rekomendasi: YES — dengan PII guard wajib.*
+**D1 — Base Model Upgrade Kapan?**
+- Qwen3-8B: bisa langsung (5.2GB VRAM, masih muat di VPS) → reasoning naik signifikan
+- Qwen3-14B: butuh ~10GB VRAM, mungkin butuh upgrade VPS RAM
+- Qwen3-32B: butuh dedicated GPU server ($50-100/bulan)
+*Rekomendasi: Qwen3-8B sekarang, evaluate setelah 2 cycle.*
 
 **D2 — Video Generation Provider:**
 - Kling AI ($0.14/video 5s) — terbaik sekarang, ada API
