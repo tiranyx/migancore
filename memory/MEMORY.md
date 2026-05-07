@@ -6,18 +6,20 @@
 
 ---
 
-## QUICK STATE (Day 64)
+## QUICK STATE (Day 65)
 
 | Item | Value |
 |------|-------|
-| Day | 64 |
-| Phase | Cycle 5 Training (post-Cycle 4 rollback) |
+| Day | 65 |
+| Phase | Cycle 5 Eval (training done, eval running) |
 | Production Brain | migancore:0.3 (Cycle 3, weighted_avg 0.9082) |
+| Cycle 5 Candidate | migancore:0.5 (877 pairs ORPO, eval PENDING) |
 | API Version | v0.5.19 LIVE |
 | Beta Status | Launched Day 51, 3-5 testers |
-| DPO/ORPO Pairs | ~2,530 |
-| Lessons Documented | 120+ (in AGENT_ONBOARDING.md) |
-| GPU Budget | Vast.ai ~$6.90, RunPod $0.16 |
+| DPO/ORPO Pairs | ~2,390+ |
+| Lessons Documented | 133 (see AGENT_ONBOARDING.md) |
+| GPU Budget | Vast.ai ~$7.06 spent, RunPod $16.69 saldo |
+| VPS Ollama | 4-core cap added (OLLAMA_NUM_THREAD=4, cpus:4.0) — Lesson #133 |
 
 ---
 
@@ -62,13 +64,29 @@
 
 | Need | File |
 |------|------|
-| Today's plan | `docs/DAY64_PLAN.md` |
+| Today's plan | `docs/DAY64_PLAN.md` (still valid, Day 65 continues) |
 | Current status | `CONTEXT.md` (root) |
 | Available tasks | `TASK_BOARD.md` (root) |
 | Strategic review | `docs/DAY64_STATUS_REVIEW_KIMI.md` |
 | All lessons | `docs/AGENT_ONBOARDING.md` |
 | VPS safety | `docs/ENVIRONMENT_MAP.md` |
-| Vision compass | `docs/VISION_DISTINCTIVENESS_2026.md` |
+| Vision compass | `docs/VISION_2026_2027_COGNITIVE_TRENDS.md` ← NEWEST (Day 65) |
+| Previous vision | `docs/VISION_DISTINCTIVENESS_2026.md` (Day 45) |
+
+### New Lessons Day 65 (#131-133)
+- **#131**: Voice/evo seed dedup — seed pool size must ≥ target pairs (30 seeds × 4 repeats = 30 unique only)
+- **#132**: NEVER `scp -r` full adapter dir — only SCP adapter_model.safetensors + adapter_config.json (checkpoints = 700MB+)
+- **#133**: Ollama using all 8 cores → hypervisor throttle → 93.8% steal → inference 16x slower than expected. Fix: `OLLAMA_NUM_THREAD: "4"` + `cpus: "4.0"` in docker-compose. 4 dedicated cores faster than 8 throttled.
+
+### Day 65 Events
+- Cycle 5 ORPO training COMPLETE on Vast.ai (877 pairs, 17.9min, RTX 5880 Ada, train_loss 2.5103)
+- SCP timeout bug FIXED in cycle5_orpo_vast.py (Lesson #132)
+- Stuck Ollama runner (692% CPU since 04:56) discovered and killed → VPS recovered
+- Ollama 4-core cap deployed (OLLAMA_NUM_THREAD=4, cpus:4.0) → steal 93.8%→29%
+- Cycle 5 adapter uploaded to HF: `Tiranyx/migancore-7b-soul-v0.5`
+- Eval running against 20 prompts with 600s timeout (PENDING result)
+- Vision doc written: `docs/VISION_2026_2027_COGNITIVE_TRENDS.md` (7 tren 2026-2027, Fahmi ideas structured)
+- Ollama runner watchdog cron created (`*/15 * * * *`)
 
 ---
 
