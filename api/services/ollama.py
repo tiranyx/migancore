@@ -17,6 +17,11 @@ DEFAULT_TIMEOUT = httpx.Timeout(180.0, connect=5.0, read=180.0)  # Day 71c: bump
 # Streaming: no total timeout (response can be long), but 60s between chunks
 STREAM_TIMEOUT = httpx.Timeout(None, connect=5.0, read=60.0)
 
+# Day 71d Phase 1.3: Keep model loaded in Ollama memory for 30 min after last call.
+# Eliminates 5-15s cold-start latency on chat. Acceptable RAM cost (~5GB for Q4_K_M).
+# Default Ollama keep_alive is 5 min — too short for sporadic beta traffic.
+KEEP_ALIVE_DEFAULT = "30m"
+
 
 class OllamaError(Exception):
     """Raised when Ollama returns an error or cannot be reached."""
@@ -95,6 +100,7 @@ class OllamaClient:
             "model": model,
             "messages": messages,
             "stream": stream,
+            "keep_alive": KEEP_ALIVE_DEFAULT,  # Day 71d: warm model in memory
         }
         if options:
             payload["options"] = options
@@ -134,6 +140,7 @@ class OllamaClient:
             "model": model,
             "messages": messages,
             "stream": True,
+            "keep_alive": KEEP_ALIVE_DEFAULT,  # Day 71d: warm model in memory
         }
         if options:
             payload["options"] = options
@@ -197,6 +204,7 @@ class OllamaClient:
             "model": model,
             "messages": messages,
             "stream": False,  # Ollama tool calling requires stream=false
+            "keep_alive": KEEP_ALIVE_DEFAULT,  # Day 71d: warm model in memory
         }
         if tools:
             payload["tools"] = tools
