@@ -66,16 +66,22 @@ import sys
 sys.path.insert(0, "/app")
 
 # ─── Include sources ───────────────────────────────────────────────────────
+# identity_anchor_v2 uses subcategory suffixes (identity_anchor_v2:creator, :voice, etc.)
+# These are matched via LIKE 'identity_anchor_v2%' in the query (IDENTITY_PREFIX_SOURCES).
 INCLUDE_SOURCES = [
-    # Pillar (always include)
-    "identity_anchor_v2",
+    # Pillar (exact match)
     "cai_pipeline",
-    # Cycle 7 targeted
+    # Cycle 7 targeted (exact match)
     "voice_anchor_v1:cycle7",
     "voice_style_v1:cycle7",
     "tool_use_v2:cycle7",
     "creative_v3:cycle7",
     "honesty_v1:cycle7",
+]
+
+# Pillar sources matched by LIKE prefix (subcategory suffix variants)
+IDENTITY_PREFIX_SOURCES = [
+    "identity_anchor_v2",  # matches identity_anchor_v2:*, identity_anchor_v2 (exact)
 ]
 
 # ─── Exclude sources (domain moratorium) ──────────────────────────────────
@@ -120,16 +126,23 @@ async def export_async(args):
 
     async with _base.AsyncSessionLocal() as db:
         # Build query — filter by source_method only (no category/is_validated columns)
+        # identity_anchor_v2 uses subcategory suffixes, matched via LIKE prefix
         source_placeholders = ", ".join(f":s{i}" for i in range(len(INCLUDE_SOURCES)))
         exclude_placeholders = ", ".join(f":e{i}" for i in range(len(EXCLUDE_SOURCES)))
+        # LIKE conditions for prefix-match pillar sources
+        like_conditions = " OR ".join(f"source_method LIKE :p{i} || '%'" for i in range(len(IDENTITY_PREFIX_SOURCES)))
 
         source_params = {f"s{i}": v for i, v in enumerate(INCLUDE_SOURCES)}
         exclude_params = {f"e{i}": v for i, v in enumerate(EXCLUDE_SOURCES)}
+        prefix_params = {f"p{i}": v for i, v in enumerate(IDENTITY_PREFIX_SOURCES)}
 
         query = text(f"""
             SELECT prompt, chosen, rejected, source_method
             FROM preference_pairs
-            WHERE source_method IN ({source_placeholders})
+            WHERE (
+                source_method IN ({source_placeholders})
+                OR {like_conditions}
+            )
               AND source_method NOT IN ({exclude_placeholders})
               AND LENGTH(chosen) > 20
               AND LENGTH(rejected) > 20
@@ -137,7 +150,7 @@ async def export_async(args):
             ORDER BY created_at ASC
         """)
 
-        result = await db.execute(query, {**source_params, **exclude_params})
+        result = await db.execute(query, {**source_params, **exclude_params, **prefix_params})
         rows = result.fetchall()
 
     # Stats
@@ -150,7 +163,9 @@ async def export_async(args):
     print(f"Total pairs: {len(rows)}")
     print(f"\nBy source:")
     for src, count in sorted(source_counts.items(), key=lambda x: -x[1]):
-        included = "[include]" if any(src.startswith(s) for s in INCLUDE_SOURCES) else "[?]"
+        exact_match = src in INCLUDE_SOURCES
+        prefix_match = any(src.startswith(p) for p in IDENTITY_PREFIX_SOURCES)
+        included = "[include]" if (exact_match or prefix_match) else "[?]"
         print(f"  {included} {count:4d}  {src}")
 
     if args.dry_run:
