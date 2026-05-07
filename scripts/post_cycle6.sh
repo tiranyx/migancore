@@ -65,7 +65,7 @@ info "  f16 GGUF: $GGUF_F16 ($F16_SIZE)"
 
 # Quantize to Q4_K_M (smaller, faster for inference)
 info "  Quantizing to Q4_K_M..."
-"$LLAMA_CPP/llama-quantize" "$GGUF_F16" "$GGUF_Q4" Q4_K_M 2>&1 | tee -a "$LOG"
+LD_LIBRARY_PATH=/opt/llama.cpp/build/bin "$LLAMA_CPP/llama-quantize" "$GGUF_F16" "$GGUF_Q4" Q4_K_M 2>&1 | tee -a "$LOG"
 
 if [[ -f "$GGUF_Q4" ]]; then
     Q4_SIZE=$(du -sh "$GGUF_Q4" | cut -f1)
