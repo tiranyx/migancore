@@ -8,21 +8,21 @@
 <!-- Section tag: QUICK_STATUS — auto-updated by tracker.py update -->
 | Key | Value |
 |-----|-------|
-| **Today** | Day 71 · 2026-05-08 |
+| **Today** | Day 71c · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
-| **Cycle 7 Result** | ❌ ROLLBACK — voice 0.721 (gate 0.85), weighted_avg 0.8814 (gate 0.92). Root cause: under-training 63 steps |
-| **Cycle 7b Status** | 🟡 TRAINING LIVE — A40 $0.322/hr, LR=1.2e-6, epochs=3 (~95 steps) — est. completion 21:51-22:01 UTC |
+| **Cycle 7b Result** | ❌ ROLLBACK — voice 0.771 (+0.050), Q5=0.609, weighted_avg 0.8870 (gate 0.92). Root cause: Q5 brief gap |
+| **Cycle 7c Status** | 🟡 READY TO LAUNCH — 548 pairs (508+40 Q5), dataset on VPS, script synced, awaiting GO |
 | **Baseline Fix** | ✅ `eval/baseline_day70_voice_fixed.json` — Q5 casual ref fixed (Kimi P0 Day 71b) |
-| **API Commit** | `26eba3a` (Day 71b: Kimi+Codex 71b reviews + RECAP committed) |
+| **API Commit** | `8a575b7` (Day 71c: Cycle 7c plan + scripts committed) |
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
 | **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 fix deployed Day 69 |
-| **Total Pairs** | ~3,004 in DB (same as C7 — no new pairs for C7b retry) |
+| **Total Pairs** | ~3,044 in DB (40 Q5 casual pairs added for Cycle 7c) |
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 171 (Day 71 adds #162-171) |
+| **Lessons Cumulative** | 171 (Day 71 adds #162-171; Day 71c = no new lessons, implementation) |
 
 ---
 
