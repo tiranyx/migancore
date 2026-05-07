@@ -6,22 +6,22 @@
 
 ---
 
-## QUICK STATE (Day 65)
+## QUICK STATE (Day 67)
 
 | Item | Value |
 |------|-------|
-| Day | 65 |
-| Phase | Cycle 5 **PROMOTED** → VPS Migration (SIDIX → KVM 4) |
+| Day | 67 |
+| Phase | Cycle 6 training on Vast.ai (ORPO, 954 pairs) → PROMOTE/ROLLBACK pending |
 | Production Brain | migancore:0.3 (Cycle 3, weighted_avg 0.9082) |
-| Cycle 5 Candidate | migancore:0.5 (877 pairs ORPO, **eval PROMOTE 0.8453**) |
-| API Version | v0.5.19 LIVE |
-| Beta Status | Launched Day 51, 3-5 testers |
-| DPO/ORPO Pairs | ~2,570+ |
-| Lessons Documented | 134 (see AGENT_ONBOARDING.md) |
-| GPU Budget | Vast.ai ~$6.90, RunPod $0.16 (nearly depleted) |
-| VPS Existing | 72.62.125.6 — MiganCore + Ixonomic + MighanWorld (no SIDIX) |
-| VPS New (SIDIX) | 187.77.116.139 — SIDIX + Ollama + Nginx + Docker ✅ |
-| Infrastructure | Migration COMPLETE — scripts deployed & tested |
+| Cycle 6 Status | Training complete → post_cycle6.sh auto-trigger pending |
+| API Version | v0.5.16 LIVE (Day 67 fixes in GitHub, deploy pending SSH) |
+| Beta Status | 53 users, 65 conversations, 0 feedback signals (fixing now) |
+| DPO/ORPO Pairs | 3,004 |
+| Lessons Documented | 144 (#138-144 today) |
+| GPU Budget | Vast.ai total ~$0.80, RunPod $6.80 spent |
+| VPS Main | 72.62.125.6 — MiganCore + Ixonomic + SIDIX (merged) |
+| SSH Status | SSH port 22 blocked from Windows env — use VPS terminal |
+| GitHub | Commit f80bb58 — deploy cmd: cd /opt/ado && git pull && docker compose build api && docker compose up -d api |
 
 ---
 
@@ -40,6 +40,8 @@
 | 56–60 | Cycle 3 promote, ORPO switch, identity eval | `docs/DAY60_MANDATORY_PROTOCOL.md` | `docs/DAY60_RETRO.md` | — |
 | 61–63 | Cycle 4 attempt → ROLLBACK | `docs/DAY63_CYCLE4_ROLLBACK.md` | `docs/DAY62_MANDATORY_PROTOCOL.md` | — |
 | 64 | **Cycle 5 prep + Kimi review** | `docs/DAY64_PLAN.md` | — | `docs/DAY64_STATUS_REVIEW_KIMI.md` |
+| 65 | Cycle 5 PROMOTE (0.8453) → migancore:0.5 candidate | — | — | MEMORY.md |
+| 67 | Cycle 6 training launched + frontend fixes | `docs/DAY67_MANDATORY_PROTOCOL.md` | — | `docs/ACHIEVEMENT_WRAP.md` |
 
 ---
 
@@ -59,6 +61,8 @@
 | 89–93 | SLM revolution, self-improvement, agent economy |
 | 94–104 | Identity preservation, eval gates, data curation |
 | 105–120 | Training pipeline mastery, ORPO, GGUF LoRA deploy |
+| 121–130 | License system, clone mechanism, gate thresholds single source |
+| 131–144 | Voice/evo seed dedup, SSH timeout, break vs continue monitoring loop |
 
 ---
 
@@ -66,14 +70,24 @@
 
 | Need | File |
 |------|------|
-| Today's plan | `docs/DAY64_PLAN.md` (still valid, Day 65 continues) |
-| Current status | `CONTEXT.md` (root) |
-| Available tasks | `TASK_BOARD.md` (root) |
-| Strategic review | `docs/DAY64_STATUS_REVIEW_KIMI.md` |
-| All lessons | `docs/AGENT_ONBOARDING.md` |
+| Today's plan | `docs/DAY67_MANDATORY_PROTOCOL.md` |
+| Current status | `docs/ACHIEVEMENT_WRAP.md` (milestone-based, Day 1-67) |
+| All lessons | `docs/AGENT_ONBOARDING.md` (lessons #1-137) |
 | VPS safety | `docs/ENVIRONMENT_MAP.md` |
-| Vision compass | `docs/VISION_2026_2027_COGNITIVE_TRENDS.md` ← NEWEST (Day 65) |
-| Previous vision | `docs/VISION_DISTINCTIVENESS_2026.md` (Day 45) |
+| Vision compass | `docs/VISION_2026_2027_COGNITIVE_TRENDS.md` |
+| Resource audit | `docs/RESOURCE_AUDIT_DAY67.md` |
+| Qwen3 upgrade | `docs/QWEN3_UPGRADE_PLAN.md` |
+
+### New Lessons Day 67 (#138-144)
+- **#138**: nohup fork verification — `ps aux | grep [script]` after every nohup launch, kill duplicate
+- **#139**: Vast.ai duplicate instance = ganda cost. Kill dalam <5 menit = $0 wasted
+- **#140**: Gate thresholds single source of truth — mismatch = false rollback atau false promote
+- **#141**: dry_run=True pattern mandatory untuk setiap deploy script yang touch client VPS
+- **#142**: Baca function signature sebelum integrate, jangan asumsi class interface
+- **#143**: SSH timeout harus melebihi training time (training 3.5hr → timeout ≥ 7200s minimum)
+- **#144**: `break` vs `continue` di monitoring loop — `break` = silent stop, audit setiap exit point
+- **#145 (Day 67 frontend)**: thumbs_up feedback was no-op (returned 200 but stored nothing) — always verify DB write with a SELECT after first feedback test
+- **#146 (Day 67 frontend)**: Hardcoded static strings in React (model label, streaming status) = invisible bugs. Always use state vars fetched from API
 
 ### New Lessons Day 65 (#131-133)
 - **#131**: Voice/evo seed dedup — seed pool size must ≥ target pairs (30 seeds × 4 repeats = 30 unique only)
