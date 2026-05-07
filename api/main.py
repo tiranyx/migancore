@@ -366,13 +366,11 @@ else:
 @app.get("/health", tags=["system"])
 async def health_check():
     """Liveness probe for orchestrators and load balancers."""
-    from config import get_settings as _get_settings
-    _cfg = _get_settings()
     return {
         "status": "healthy",
         "service": "migancore-api",
         "version": app.version,
-        "model": _cfg.DEFAULT_MODEL,
+        "model": settings.DEFAULT_MODEL,
     }
 
 
