@@ -660,3 +660,112 @@ async def admin_genealogy(db: AsyncSession = Depends(get_db)):
             logger.warning("admin.genealogy.tenant_failed", tenant_id=tenant_id, error=str(exc))
 
     return all_agents
+
+
+# ---------------------------------------------------------------------------
+# Clone mechanism (Day 67, GAP-01) — P0 for first paid client
+# ---------------------------------------------------------------------------
+
+class CloneRequestBody(BaseModel):
+    """HTTP request body for POST /v1/admin/clone."""
+    client_name: str = Field(..., description="Legal name of client organization")
+    ado_display_name: str = Field(..., description="White-label ADO name, e.g. SARI or LEX")
+    tier: str = Field("PERAK", description="BERLIAN / EMAS / PERAK / PERUNGGU")
+    language_pack: list[str] = Field(["id", "en"])
+    vps_ip: str = Field(..., description="Client VPS IP address")
+    vps_ssh_port: int = Field(22)
+    vps_ssh_key_path: str = Field(..., description="Path to SSH key on THIS server")
+    ado_domain: Optional[str] = Field(None)
+    ollama_model: str = Field("qwen2.5:7b-instruct-q4_K_M")
+    admin_email: str = Field(...)
+    admin_password: str = Field(...)
+    deploy_dir: str = Field("/opt/ado-client")
+    dry_run: bool = Field(False, description="Simulate only — no real SSH/deploy")
+
+
+@router.post("/clone", dependencies=[Depends(require_admin_key)])
+async def admin_clone(body: CloneRequestBody):
+    """
+    Launch ADO clone pipeline for a client VPS.
+
+    Steps (async, returns immediately with result after all steps complete):
+      1. Detect client VPS spec (RAM, CPU, disk)
+      2. Mint license (requires LICENSE_ISSUER_MODE=true)
+      3. Render docker-compose.yml + setup_ado.sh from templates
+      4. Deploy: SCP files to client VPS + run setup wizard
+      5. Verify /health on deployed instance
+
+    Use dry_run=true to simulate all steps without real SSH.
+
+    Auth: X-Admin-Key required.
+    """
+    from services.clone_manager import CloneManager, CloneRequest
+
+    req = CloneRequest(
+        client_name=body.client_name,
+        ado_display_name=body.ado_display_name,
+        tier=body.tier,
+        language_pack=body.language_pack,
+        vps_ip=body.vps_ip,
+        vps_ssh_port=body.vps_ssh_port,
+        vps_ssh_key_path=body.vps_ssh_key_path,
+        ado_domain=body.ado_domain,
+        ollama_model=body.ollama_model,
+        admin_email=body.admin_email,
+        admin_password=body.admin_password,
+        deploy_dir=body.deploy_dir,
+        dry_run=body.dry_run,
+    )
+
+    manager = CloneManager()
+    result = await manager.clone(req)
+
+    http_status = 200 if result.status.value in ("LIVE",) else 422
+    if result.status.value == "FAILED":
+        http_status = 500
+
+    return {
+        "clone_id":        result.clone_id,
+        "status":          result.status.value,
+        "client_name":     result.client_name,
+        "ado_display_name": result.ado_display_name,
+        "license_id":      result.license_id,
+        "vps_ip":          result.vps_ip,
+        "api_url":         result.api_url,
+        "health_status":   result.health_status,
+        "error":           result.error,
+        "created_at":      result.created_at,
+        "log":             result.log,
+    }
+
+
+@router.get("/clone/dry-run", dependencies=[Depends(require_admin_key)])
+async def admin_clone_dry_run(
+    client_name: str = Query("Test Client"),
+    ado_display_name: str = Query("TEST"),
+    tier: str = Query("PERAK"),
+    vps_ip: str = Query("127.0.0.1"),
+    vps_ssh_key_path: str = Query("/opt/secrets/migancore/id_ed25519_client"),
+    admin_email: str = Query("admin@test.com"),
+    admin_password: str = Query("TestPass123!"),
+):
+    """
+    Quick dry-run test for clone pipeline. Uses query params for convenience.
+    Does NOT SSH anywhere — validates templates + license minting only.
+    """
+    from services.clone_manager import CloneManager, CloneRequest
+
+    req = CloneRequest(
+        client_name=client_name,
+        ado_display_name=ado_display_name,
+        tier=tier,
+        vps_ip=vps_ip,
+        vps_ssh_key_path=vps_ssh_key_path,
+        admin_email=admin_email,
+        admin_password=admin_password,
+        dry_run=True,
+    )
+
+    manager = CloneManager()
+    result = await manager.clone(req)
+    return result.model_dump()

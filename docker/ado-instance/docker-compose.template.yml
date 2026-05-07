@@ -1,0 +1,122 @@
+# ============================================================
+# ADO Instance Docker Compose Template
+# ============================================================
+# This file is a TEMPLATE — it is rendered by Migancore Clone Manager.
+# Placeholder variables: {client_name}, {ado_display_name}, etc.
+#
+# DO NOT deploy this template directly.
+# Use: POST /v1/admin/clone or run CloneManager.clone()
+#
+# Generated: {generated_at}
+# Client: {client_name}
+# License: {license_id}
+# Powered by: Migancore × PT Tiranyx Digitalis Nusantara
+# ============================================================
+
+version: "3.9"
+
+services:
+  # ─── Core ADO API ────────────────────────────────────────────────────────
+  api:
+    image: migancore/ado-api:latest   # Built from /opt/ado, versioned
+    container_name: ado-api-1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18000:8000"       # Exposed only locally — nginx proxies
+    environment:
+      # ── White-label Identity (customizable per client) ────────────────────
+      ADO_DISPLAY_NAME: "{ado_display_name}"
+      ADO_LANGUAGE_PACK: "{language_pack}"
+      DEFAULT_MODEL: "{ollama_model}"
+      ADMIN_EMAIL: "{admin_email}"
+      ADMIN_PASSWORD: "{admin_password}"
+
+      # ── License (DO NOT MODIFY — tampering detected on startup) ──────────
+      ADO_LICENSE_ID: "{license_id}"
+      ADO_LICENSE_SIGNATURE: "{license_signature}"
+      ADO_LICENSE_TIER: "{license_tier}"
+      ADO_LICENSE_CLIENT: "{client_name}"
+      ADO_LICENSE_EXPIRY: "{license_expiry}"
+
+      # ── Internal Service URLs ─────────────────────────────────────────────
+      DATABASE_URL: "postgresql+asyncpg://ado:{db_password}@postgres:5432/ado"
+      REDIS_URL: "redis://redis:6379/0"
+      OLLAMA_URL: "http://ollama:11434"
+      QDRANT_URL: "http://qdrant:6333"
+
+      # ── Privacy Vault — zero external calls by default ────────────────────
+      ALLOW_EXTERNAL_API_CALLS: "false"    # MCP tools can still call external APIs
+      TELEMETRY_ENABLED: "false"           # No phone-home telemetry
+
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+      - qdrant
+    volumes:
+      - ./data:/app/data               # Conversation history, session data
+      - ./knowledge:/app/knowledge     # Client knowledge base (RAG)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─── LLM Inference Engine ─────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ado-ollama-1
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama      # Model weights persisted
+    environment:
+      OLLAMA_NUM_THREAD: "4"           # Thread count — tune to VPS CPU
+      OLLAMA_MAX_LOADED_MODELS: "1"    # Single model loaded = less RAM
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 10G
+
+  # ─── Vector Database (Episodic + Semantic Memory) ─────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.12.0
+    container_name: ado-qdrant-1
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__STORAGE__STORAGE_PATH: "/qdrant/storage"
+
+  # ─── PostgreSQL (Structured Data + Auth) ──────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ado-postgres-1
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ado
+      POSTGRES_PASSWORD: "{db_password}"
+      POSTGRES_DB: ado
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ado"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (Session Cache + Rate Limiting) ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ado-redis-1
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+
+volumes:
+  ollama_data:      # LLM model weights (~5-15GB depending on model)
+  qdrant_data:      # Vector embeddings (grows with usage)
+  postgres_data:    # Relational data (users, sessions, pairs)
+  redis_data:       # Cache (ephemeral, safe to lose on restart)
