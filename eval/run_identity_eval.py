@@ -73,9 +73,15 @@ def load_eval_set():
 
 
 async def generate_response(prompt: str, model: str = None) -> str:
-    """Run prompt through MiganCore via Ollama (current default model)."""
+    """Run prompt through MiganCore via Ollama (current default model).
+
+    Lesson #137: ALWAYS retry on Ollama HTTP 500 (CPU steal causes transient 500s).
+    Without retry, 3 errors cost -0.099 on weighted_avg → unfair ROLLBACK in Cycle 5.
+    Max 3 attempts, 10s sleep between attempts.
+    """
     from services.ollama import OllamaClient
     from config import settings
+    import httpx as _httpx
 
     use_model = model or settings.DEFAULT_MODEL
     system = (
@@ -87,15 +93,31 @@ async def generate_response(prompt: str, model: str = None) -> str:
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
-    import httpx as _httpx
     _eval_timeout = _httpx.Timeout(600.0, connect=10.0, read=600.0)
-    async with OllamaClient(timeout=_eval_timeout) as client:
-        resp = await client.chat(
-            model=use_model,
-            messages=messages,
-            options={"num_predict": 300, "temperature": 0.3, "num_ctx": 4096},
-        )
-    return resp.get("message", {}).get("content", "").strip()
+
+    max_attempts = 3
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with OllamaClient(timeout=_eval_timeout) as client:
+                resp = await client.chat(
+                    model=use_model,
+                    messages=messages,
+                    options={"num_predict": 300, "temperature": 0.3, "num_ctx": 4096},
+                )
+            return resp.get("message", {}).get("content", "").strip()
+        except Exception as exc:
+            last_exc = exc
+            is_500 = "500" in str(exc) or "Internal Server Error" in str(exc)
+            if is_500 and attempt < max_attempts:
+                print(f"  [retry {attempt}/{max_attempts-1}] Ollama 500 on attempt {attempt}, sleeping 10s...",
+                      file=sys.stderr, flush=True)
+                import asyncio
+                await asyncio.sleep(10)
+            else:
+                raise
+
+    raise last_exc  # unreachable but satisfies type checker
 
 
 async def embed_text(text: str):
