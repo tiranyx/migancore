@@ -640,6 +640,276 @@
       ],
       "npc_assignable": true,
       "cost_estimate": "free (MCP stdio)"
+    },
+    {
+      "id": "tavily_search",
+      "name": "Tavily Search",
+      "description": "MANDATORY untuk pencarian fakta real-time terpercaya. Lebih akurat dari onamix untuk pertanyaan faktual dan berita terkini.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Pertanyaan atau topik yang dicari"
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Jumlah hasil (default 5)",
+            "default": 5
+          },
+          "search_depth": {
+            "type": "string",
+            "description": "basic atau advanced",
+            "default": "basic"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "id": "serper_search",
+      "name": "Google Search (Serper)",
+      "description": "Cari di Google via Serper API. Backup untuk tavily_search.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Pertanyaan untuk dicari di Google"
+          },
+          "num": {
+            "type": "integer",
+            "description": "Jumlah hasil (default 5)",
+            "default": 5
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "id": "think",
+      "name": "Think (Structured Reasoning)",
+      "description": "MANDATORY untuk analisis kompleks dan keputusan multi-faktor. ADO berpikir step-by-step. Mode: analyze|decide|debug|plan|critique.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "problem": {
+            "type": "string",
+            "description": "Masalah yang perlu dianalisis mendalam"
+          },
+          "mode": {
+            "type": "string",
+            "description": "analyze|decide|debug|plan|critique",
+            "default": "analyze"
+          }
+        },
+        "required": [
+          "problem"
+        ]
+      }
+    },
+    {
+      "id": "synthesize",
+      "name": "Synthesize (Multi-source)",
+      "description": "Sintesis dari beberapa sumber menjadi insight. Auto-search jika topic diberikan tanpa sources.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Topik yang ingin disintesis"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Opsional: teks dari sumber yang sudah ada"
+          },
+          "goal": {
+            "type": "string",
+            "description": "Tujuan sintesis"
+          },
+          "output_format": {
+            "type": "string",
+            "description": "insight|summary|comparison|report",
+            "default": "insight"
+          }
+        },
+        "required": [
+          "topic"
+        ]
+      }
+    },
+    {
+      "id": "teacher_ask",
+      "name": "Ask Teacher AI",
+      "description": "Tanya teacher AI secara langsung: claude, kimi, gpt, atau gemini. Gunakan untuk second opinion atau validasi.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "teacher": {
+            "type": "string",
+            "description": "claude|kimi|gpt|gemini",
+            "default": "gemini"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Pertanyaan untuk teacher"
+          },
+          "system": {
+            "type": "string",
+            "description": "Opsional: system prompt"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "Panjang jawaban (default 800)",
+            "default": 800
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "id": "multi_teacher",
+      "name": "Multi-Teacher Consultation",
+      "description": "Tanya 2-4 teacher sekaligus dan bandingkan jawaban. Untuk validasi dan perspektif beragam.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Pertanyaan untuk semua teacher"
+          },
+          "teachers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Daftar teacher",
+            "default": [
+              "gemini",
+              "claude"
+            ]
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "Panjang jawaban per teacher",
+            "default": 500
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "id": "calculate",
+      "name": "Calculator",
+      "description": "MANDATORY untuk perhitungan matematika. Mendukung: +,-,*,/,**,%, sqrt, sin, cos, log, factorial, pi, e.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "expression": {
+            "type": "string",
+            "description": "Ekspresi matematika: misal 2**10 atau sqrt(144)"
+          }
+        },
+        "required": [
+          "expression"
+        ]
+      }
+    },
+    {
+      "id": "run_python",
+      "name": "Python Runner (Sandboxed)",
+      "description": "Jalankan kode Python dalam sandbox aman. Bisa: loop, list, string, math, json, datetime. Tidak bisa: os/sys/network.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Kode Python yang ingin dijalankan"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Timeout detik (max 15)",
+            "default": 8
+          }
+        },
+        "required": [
+          "code"
+        ]
+      }
+    },
+    {
+      "id": "extract_insights",
+      "name": "Extract Insights",
+      "description": "Ekstrak insight dan fakta kunci dari teks panjang. Gunakan setelah web_read atau onamix_get.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Teks yang ingin dianalisis"
+          },
+          "focus": {
+            "type": "string",
+            "description": "Opsional: topik yang difokuskan"
+          },
+          "n_insights": {
+            "type": "integer",
+            "description": "Jumlah insight (default 7)",
+            "default": 7
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "id": "knowledge_discover",
+      "name": "Knowledge Discovery (Self-Education)",
+      "description": "ADO belajar sendiri: cari topik, riset, sintesis, opsional simpan ke KB. Untuk ekspansi pengetahuan otomatis.",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Topik yang ingin dipelajari"
+          },
+          "save_to_kb": {
+            "type": "boolean",
+            "description": "Simpan ke KB (default false)",
+            "default": false
+          },
+          "depth": {
+            "type": "string",
+            "description": "quick|standard|deep",
+            "default": "standard"
+          }
+        },
+        "required": [
+          "topic"
+        ]
+      }
     }
   ]
 }

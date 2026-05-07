@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None       # GPT (alt teacher)
     KIMI_API_KEY: Optional[str] = None         # Moonshot Kimi K2 (primary teacher — bilingual ID)
     GEMINI_API_KEY: Optional[str] = None       # Google Gemini (cheap teacher)
+    # Day 67: Search API keys for cognitive tools
+    TAVILY_API_KEY: Optional[str] = None       # Tavily real-time search (tavily_search tool)
+    SERPER_API_KEY: Optional[str] = None       # Serper Google search (serper_search tool)
+
 
     # Distillation budget caps
     DISTILL_BUDGET_USD_HARD_CAP: float = 10.0  # Pipeline aborts if estimated spend > this
