@@ -8,19 +8,20 @@
 <!-- Section tag: QUICK_STATUS — auto-updated by tracker.py update -->
 | Key | Value |
 |-----|-------|
-| **Today** | Day 69 · 2026-05-08 |
+| **Today** | Day 70 · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
-| **API Commit** | `4cfdd4e` (Day 69: feedback race condition + fbSent lock fix — DEPLOYED) |
-| **API Version** | v0.5.16 (rebuilt + restarted — race condition fix live, 0 feedback → unblocked) |
+| **Cycle 7 Status** | 🔄 GENERATING — 20/260 pairs stored, full run in progress on VPS |
+| **API Commit** | `1b58d57` (Day 70: schema fix + gemini model fix, day=Day 70 live) |
+| **API Version** | v0.5.16 — BUILD_DAY=Day 70, `/health` verified ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
-| **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 |
-| **Total Pairs** | ~3,004 in DB · 954 exported Cycle 6 |
+| **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 fix deployed Day 69 |
+| **Total Pairs** | ~3,004 + 20 honesty (cycle7) in DB |
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.20 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 157 (Day 69 adds #153-157) |
+| **Lessons Cumulative** | 159 (Day 70 adds #158-159) |
 
 ---
 
@@ -73,7 +74,7 @@
 | A-09 | Codex C5: OpenAPI schema (admin/license routes open) | P2 | ❌ PENDING | Claude | Day 70 |
 | A-10 | Codex C6: Admin key in localStorage (XSS risk) | P2 | ❌ PENDING | Claude | Day 70 |
 | A-11 | Codex C7: /v1/speech/to-text open (cost-bearing endpoint) | P2 | ❌ PENDING | Claude | Day 70 |
-| A-12 | Day 69 BUILD_DAY env still shows "Day 68" (cosmetic) | P3 | ❌ PENDING | Claude | Day 69 |
+| A-12 | BUILD_DAY env update | P3 | ✅ DONE Day 70 | Claude | Day 70 |
 
 **Phase A Exit Gate:** Feedback signals ≥10 in 7 days post-fix + Hafidz endpoint live + Cycle 6 resolved.
 
@@ -123,7 +124,7 @@
 
 ### P0 — Must Fix Now
 - [x] **Cycle 6 ROLLBACK** — Done. migancore:0.3 stays. Root cause documented → Cycle 7 plan locked.
-- [ ] **Cycle 7 dataset** — 100 voice-anchor pairs + 80 tool-use pairs + 60 creative pairs. STOP domain pairs. Generate → Vast.ai → eval.
+- [ ] **Cycle 7 dataset** — 260 pairs voice-first. 20/260 stored (honesty). Full generation running Day 70. → Vast.ai → eval.
 - [x] **Fix eval script threshold** — `run_identity_eval.py` 0.8 → 0.92. Retry expansion (Lesson #156). DEPLOYED commit `4cfdd4e`.
 - [x] **Feedback race condition + fbSent lock** — P0 Kimi bugs FIXED + DEPLOYED. Persist before SSE done. fbSent unlocks on error. Gate: 1st real signal in <72h.
 - [ ] **Admin key in password manager** — Fahmi action, cannot be delegated.
@@ -135,7 +136,7 @@
 - [ ] **KB weekly cron** — kb_auto_update.py exists, cron not installed.
 - [ ] **Sleep-time consolidator** — episodic → semantic nightly at 03:00 WIB.
 - [ ] **Codex C5/C6/C7** — OpenAPI, localStorage XSS, STT auth.
-- [ ] **BUILD_DAY env** — update to "Day 69" in docker-compose + rebuild.
+- [x] **BUILD_DAY env** — Day 70 live in docker-compose + /health. ✅
 
 ### P2 — Nice to Have
 - [ ] **SIDIX 1,458 pair audit** — bridge to training pipeline Phase B.
@@ -154,40 +155,46 @@
 ## 📅 DAILY LOG
 <!-- Append new entry with: python scripts/tracker.py day-end N -->
 
-### Day 69 — 2026-05-08
+### Day 70 — 2026-05-08 (IN PROGRESS)
 **Status:** IN PROGRESS
 
 **Delivered:**
-- [x] MIGANCORE_TRACKER.md created (this file) — living single source of truth
-- [x] scripts/tracker.py CLI — status, day-start, day-end, agent-sync, lesson, align, update
-- [x] scripts/watch_agent_sync.py — file-based ping watcher (spawned in background PowerShell)
-- [x] docs/AGENT_SYNC/BRIEF_UNTUK_KIMI.md + BRIEF_UNTUK_CODEX.md — copy-paste onboarding
-- [x] docs/AGENT_SYNC/CLAUDE_PLAN_69_CYCLE6_AND_FEEDBACK.md — first real agent sync plan
-- [x] **Cycle 6 eval COMPLETE → ROLLBACK** — migancore:0.3 stays production
-  - Recovered stuck pipeline: GGUF copied to ollama mount, ollama create via container
-  - Eval ran in 3 min (CPU steal=0% — clean condition)
-  - Result: weighted_avg 0.8661, voice 0.705, tool-use 0.733, creative 0.771
-  - 2/6 gates pass against real thresholds (eval script uses wrong threshold 0.8)
-
-**Delivered (continued):**
-- [x] **Kimi P0 bugs FIXED + DEPLOYED** — `api/routers/chat.py` race condition (await before done) + `frontend/chat.html` fbSent unlock on error + copywriting. Commit `4cfdd4e`. Container rebuilt, API healthy, frontend deployed.
-- [x] **Eval retry expansion** — timeout+connect errors now retried (not only HTTP 500). Unfair 0.000 scores from transient failures eliminated.
-- [x] **CYCLE7_DATASET_PLAN.md** — 260 pairs, zero domain pairs, voice-first strategy committed.
-
-**Still pending:**
-- [ ] Cycle 7 dataset generation (`generate_cycle7_dataset.py`)
-- [ ] BUILD_DAY env update to "Day 69"
+- [x] **Docs committed + VPS synced** — CLAUDE_PLAN_70, KIMI_REVIEW_70, CODEX_QA_69, KIMI_REVIEW_69 committed (3a2f83d). VPS HEAD aligned.
+- [x] **BUILD_DAY=Day 70** — docker-compose.yml updated, API restarted. `/health` returns `"day":"Day 70"` ✅
+- [x] **Cycle 7 dataset generator** — `training/generate_cycle7_dataset.py` 260 pairs (80 voice-casual, 40 voice-style, 50 tool-write, 30 tool-image, 40 creative, 20 honesty). Zero domain pairs.
+- [x] **Cycle 7 export** — `training/export_cycle7_dataset.py` with correct INCLUDE/EXCLUDE filters.
+- [x] **Schema audit** — preference_pairs has NO category/is_validated/quality_score. Scripts fixed to use judge_score + ON CONFLICT DO NOTHING. Commit 1b58d57.
+- [x] **Gemini model fix** — gemini-2.0-flash deprecated (404). Updated to gemini-2.5-flash. Commit d5d0d31.
+- [x] **honesty 20/20 pairs** — smoke test pass. DB insert pipeline verified end-to-end.
+- [ ] **Full generation 240 pairs running** — nohup on VPS /tmp/cycle7_full.log
+- [ ] Cycle 7 export JSONL
+- [ ] Letta audit findings documented
 - [ ] Codex C5/C6/C7
 - [ ] Admin key in password manager (Fahmi)
 - [ ] Hafidz Ledger Phase A
 
 **Lessons:**
-- #153: Tracker alongside code — agents read context as files, not narrative
-- #154: File-based async agent sync beats real-time protocol
-- #155: Eval script threshold 0.8 ≠ real gate 0.92 — THIRD TIME. Fix the source permanently.
-- #156: `asyncio.create_task` after SSE `done` = race condition. Feedback 404 for 16 days. Always `await` before yielding done when downstream needs DB row.
-- #157: Frontend fbSent permanent lock on any API error = user can never retry. Error handlers MUST rollback UI state.
+- #158: `gemini-2.0-flash` deprecated → 404. Always use `gemini-2.5-flash`. Check model name each new cycle script.
+- #159: preference_pairs schema ≠ what scripts assumed. Real columns: id, prompt, chosen, rejected, judge_score, judge_model, source_method, source_message_id, created_at, used_in_training_run_id. No category/quality_score/is_validated. Always verify schema before writing insert scripts.
 
+**Costs:** $0
+
+---
+
+### Day 69 — 2026-05-08 ✅ COMPLETE
+
+**Delivered:**
+- [x] MIGANCORE_TRACKER.md created (this file) — living single source of truth
+- [x] scripts/tracker.py CLI — status, day-start, day-end, agent-sync, lesson, align, update
+- [x] scripts/watch_agent_sync.py — file-based ping watcher
+- [x] docs/AGENT_SYNC/BRIEF_UNTUK_KIMI.md + BRIEF_UNTUK_CODEX.md — agent onboarding
+- [x] docs/AGENT_SYNC/CLAUDE_PLAN_69_CYCLE6_AND_FEEDBACK.md
+- [x] **Cycle 6 eval COMPLETE → ROLLBACK** — weighted_avg 0.8661, voice 0.705, tool-use 0.733
+- [x] **Kimi P0 bugs FIXED + DEPLOYED** — race condition + fbSent lock. Commit `4cfdd4e`.
+- [x] **Eval retry expansion** — timeout+connect errors retried.
+- [x] **CYCLE7_DATASET_PLAN.md** — 260 pairs, voice-first strategy.
+
+**Lessons:** #153–157 (tracker, file-sync, eval threshold, SSE race condition, fbSent lock)
 **Costs:** $0
 
 ---
