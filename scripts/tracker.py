@@ -69,7 +69,7 @@ def _fetch_ready(base: str, timeout: int = 5) -> dict | None:
 
 
 def _today() -> str:
-    return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def _ensure_sync_dir():
@@ -121,17 +121,17 @@ def cmd_status(args):
     behind = _git(["rev-list", "--count", "origin/main..HEAD"]) or "?"
     recent = _git(["log", "--oneline", "-5"])
 
-    print(f"\n📦 GIT")
+    print("\n[GIT]")
     print(f"  Branch : {branch}")
     print(f"  SHA    : {sha}")
-    print(f"  Dirty  : {'YES — uncommitted changes' if dirty else 'clean'}")
+    print(f"  Dirty  : {'YES -- uncommitted changes' if dirty else 'clean'}")
     print(f"  Status : {ahead} ahead / {behind} behind origin/main")
-    print(f"\n  Recent commits:")
+    print("\n  Recent commits:")
     for line in recent.splitlines():
         print(f"    {line}")
 
     # API — try local first
-    print(f"\n🌐 API")
+    print("\n[API]")
     health = _fetch_health(API_LOCAL) or _fetch_health(API_PUBLIC)
     ready = _fetch_ready(API_LOCAL) or _fetch_ready(API_PUBLIC)
 
@@ -147,21 +147,31 @@ def cmd_status(args):
 
         # SHA drift check
         if sha and health.get("commit_sha") and sha != health.get("commit_sha"):
-            print(f"\n  ⚠️  DRIFT DETECTED: local={sha} vs API={health.get('commit_sha')}")
+            print(f"\n  !! DRIFT DETECTED: local={sha} vs API={health.get('commit_sha')}")
             print(f"     Run: BUILD_COMMIT_SHA={sha} docker compose up -d api")
         elif sha and health.get("commit_sha"):
-            print(f"\n  ✅ No drift: local SHA matches API")
+            print(f"\n  OK No drift: local SHA matches API")
     else:
-        print("  ❌ API unreachable (tried local + public)")
+        print("  FAIL: API unreachable (tried local + public)")
 
     if ready:
-        print(f"\n🔧 DOWNSTREAM SERVICES")
-        for svc, status in ready.items():
-            icon = "✅" if "ok" in str(status).lower() or status is True else "❌"
-            print(f"  {icon} {svc}: {status}")
+        print("\n[DOWNSTREAM SERVICES]")
+        # /ready returns {status: "ready", checks: {postgres: {status:ok}, ...}} or flat dict
+        checks = ready.get("checks", ready)
+        overall = ready.get("status", "?")
+        print(f"  Overall: {overall}")
+        for svc, info in checks.items():
+            if isinstance(info, dict):
+                s = info.get("status", "?")
+                detail = info.get("detail", "")
+                icon = "OK" if s == "ok" else "FAIL"
+                print(f"  [{icon}] {svc}: {s} — {detail}")
+            else:
+                icon = "OK" if "ok" in str(info).lower() or info is True else "FAIL"
+                print(f"  [{icon}] {svc}: {info}")
 
     # TRACKER quick reference
-    print(f"\n📋 TRACKER")
+    print("\n[TRACKER]")
     print(f"  File: {TRACKER}")
     print(f"  Agent sync dir: {AGENT_SYNC_DIR}")
     if AGENT_SYNC_DIR.exists():
