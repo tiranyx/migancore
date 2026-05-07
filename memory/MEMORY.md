@@ -20,8 +20,8 @@
 | Lessons Documented | 134 (see AGENT_ONBOARDING.md) |
 | GPU Budget | Vast.ai ~$6.90, RunPod $0.16 (nearly depleted) |
 | VPS Existing | 72.62.125.6 — MiganCore + Ixonomic + MighanWorld (no SIDIX) |
-| VPS New (SIDIX) | Hostinger KVM 4 ordered, provisioning 2% |
-| Infrastructure | `infrastructure/vps-sidix-setup.sh` ready for deploy |
+| VPS New (SIDIX) | 187.77.116.139 — SIDIX + Ollama + Nginx + Docker ✅ |
+| Infrastructure | Migration COMPLETE — scripts deployed & tested |
 
 ---
 
@@ -86,8 +86,10 @@
 - **Cycle 5 EVAL PROMOTE** — weighted_avg 0.8453 (threshold 0.8), identity 0.938, voice 0.895 ✅
 - **3× Ollama 500 errors** discovered during eval (prompts #3, #7, #12) — LoRA compatibility issue
 - **SIDIX CPU contention investigation** — ternyata BUKAN SIDIX, tapi MiganCore container Ollama (349% CPU)
-- **Hostinger KVM 4 ordered** ($12.99/mo) untuk SIDIX + web apps — VPS existing dedicated MiganCore
-- **Migration scripts prepared**: `vps-sidix-setup.sh`, `docker-compose.sidix.yml`, `SIDIX_MIGRATION_PLAN.md`
+- **Hostinger KVM 4 DEPLOYED** (187.77.116.139) — SIDIX stack live
+- **SIDIX migrated** dari VPS existing → VPS baru — host Ollama stopped & disabled
+- **sidix-lora model** recreated & tested di VPS baru — inference responding
+- **Migration scripts**: `vps-sidix-setup.sh`, `docker-compose.sidix.yml`, `SIDIX_MIGRATION_PLAN.md`
 - SCP timeout bug FIXED in cycle5_orpo_vast.py (Lesson #132)
 - Stuck Ollama runner (692% CPU) discovered and killed → VPS recovered
 - Ollama 4-core cap deployed (OLLAMA_NUM_THREAD=4, cpus:4.0) → steal 93.8%→29%
