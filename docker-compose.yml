@@ -127,6 +127,10 @@ services:
       JUDGE_QUORUM_REQUIRE_CONSENSUS: ${JUDGE_QUORUM_REQUIRE_CONSENSUS:-true}
       JWT_PRIVATE_KEY_PATH: /etc/ado/keys/private.pem
       JWT_PUBLIC_KEY_PATH: /etc/ado/keys/public.pem
+      # Day 68 (Codex C4): build metadata for /health endpoint
+      # Set at deploy time: BUILD_COMMIT_SHA=$(git rev-parse --short HEAD) docker compose up -d api
+      BUILD_COMMIT_SHA: ${BUILD_COMMIT_SHA:-unknown}
+      BUILD_DAY: ${BUILD_DAY:-Day 68}
     volumes:
       - /etc/ado/keys:/etc/ado/keys:ro
       - ./config:/app/config:ro
