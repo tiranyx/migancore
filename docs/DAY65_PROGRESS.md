@@ -1,8 +1,8 @@
 # DAY 65 PROGRESS — MiganCore
 **Date:** 2026-05-07 (Thursday)
-**Status:** Cycle 5 eval RUNNING → PENDING result
-**Production Brain:** migancore:0.3 (weighted_avg 0.9082, Cycle 3)
-**Candidate Brain:** migancore:0.5 (877 pairs ORPO, eval in progress)
+**Status:** Cycle 5 eval COMPLETE → ROLLBACK
+**Production Brain:** migancore:0.3 (weighted_avg 0.9082, Cycle 3) — STAYS
+**Candidate Brain:** migancore:0.5 — ROLLBACK (4/6 gates failed)
 
 ---
 
@@ -107,36 +107,42 @@ ollama:
 
 ---
 
-## CYCLE 5 EVAL — IN PROGRESS ⏳
+## CYCLE 5 EVAL — COMPLETE ✅ → ROLLBACK ❌
 
-### Eval Setup
-- **Script**: `/opt/ado/data/workspace/run_identity_eval.py`
-- **Mode**: `--mode eval`
-- **Model**: `migancore:0.5`
-- **Reference**: `/app/eval/baseline_day58.json`
-- **Output**: `/opt/ado/data/workspace/eval_result_migancore-7b-soul-cycle5.json`
-- **Log**: `/opt/ado/data/workspace/cycle5_eval_stdout.log`
-- **Process**: Detached `docker exec ado-api-1 bash -c ...` (persists through session)
+### Eval Result (eval_result_migancore-7b-soul-cycle5.json)
+- **simple_avg**: 0.735 | **weighted_avg**: 0.8453
+- **Passed**: 12/20 | **Failed**: 8/20 (3 from Ollama 500 errors!)
 
-### Gates Required for PROMOTE
-| Category | Gate | Cycle 3 (production) |
-|----------|------|----------------------|
-| weighted_avg | ≥ 0.92 | 0.9082 |
-| identity | ≥ 0.90 | 0.953 |
-| voice | ≥ 0.85 | 0.817 |
-| evo-aware | ≥ 0.80 | ~~0.537~~ (fixed with 60 pairs) |
-| tool-use | ≥ 0.85 | 0.768 |
-| creative | ≥ 0.80 | 0.829 |
+| Category | Score | Gate | Status | Notes |
+|----------|-------|------|--------|-------|
+| identity | 0.9376 | ≥ 0.90 | ✅ PASS | Excellent |
+| voice | 0.8946 | ≥ 0.85 | ✅ PASS | Improved from 0.817 (80 pairs worked!) |
+| weighted_avg | 0.8453 | ≥ 0.92 | ❌ FAIL | 3 Ollama 500 errors cost ~0.099 |
+| evolution-aware | 0.7502 | ≥ 0.80 | ❌ FAIL | Improved from 0.537 (+0.213) but below gate |
+| tool-use | 0.7439 | ≥ 0.85 | ❌ FAIL | No targeted pairs added |
+| creative | 0.7278 | ≥ 0.80 | ❌ FAIL | Regressed from 0.829 (Cycle 4) |
 
-### Eval Issues Encountered Today
-1. Task `bopmyo9it` killed when API container restarted (ExitCode=0, restart #1)
-2. Re-launched as detached process (nohup docker exec) — survives API restarts
-3. Synthetic gen auto-resumed on API restart → 60% CPU → stopped via admin API
-4. CPU steal still 40-63% despite 4-core cap (shared hypervisor loads vary)
+### Root Cause Analysis
+- **Ollama 500 errors** (Q3 values, Q7 anti-pattern, Q12 reasoning): caused by CPU steal (58-65%). Each 500 → 0.000 score. Combined impact: -0.099 on weighted_avg. Without 500 errors: est. weighted_avg ~0.944 → PASS 0.92 gate.
+- **Tool-use**: No tool-use pairs in Cycle 5 supplement (only voice+evo-aware). Score similar to Cycle 4 (0.768). Q10 "write notes.md" failed because model wrote only the file content, not the "file written" confirmation sentence.
+- **Creative**: Regressed 0.829→0.728. Domain pairs (engineering, UMKM, etc.) diluted creative style.
+- **Evolution-aware**: Improved (+0.213) but 60 pairs not enough for gate.
+
+### Cycle 6 Plan
+1. Tool-use supplement: 60+ pairs (image gen description, file write confirmation format, tool invocation patterns)
+2. Creative supplement: 60+ pairs (restore tagline, name generation, creative writing style)
+3. Evolution-aware: 40+ more pairs (total 100)
+4. Eval infrastructure: add retry on 500 errors (max 3 retries per question)
+
+### Eval Infrastructure Issues
+1. Eval task `bopmyo9it` killed when API container restarted
+2. Re-launched as detached nohup process (persists through SSH disconnect)
+3. Synthetic gen auto-resumed on API restart → stopped via admin API
+4. CPU steal 58-65% → 3 Ollama 500 errors → score 0.000 on 3 questions
 
 ---
 
-## LESSONS DAY 65 (#131-133)
+## LESSONS DAY 65 (#131-136)
 
 ### #131: Voice/Evo Seed Dedup
 - **Problem**: seed pool must be ≥ target pairs
@@ -153,6 +159,21 @@ ollama:
 - **Symptom**: `%st` in top shoots to 85-93% → inference 16× slower than expected
 - **Fix**: `OLLAMA_NUM_THREAD: "4"` + `cpus: "4.0"` in docker-compose
 - **Result**: steal 93.8% → 29-40% on 8-vCPU shared host
+
+### #134: SSE message_id — Pre-Generate UUID Before Stream
+- **Problem**: Feedback endpoint needs server DB UUID, but SSE `done` fires BEFORE `_persist_assistant_message` task completes
+- **Solution**: `assistant_msg_id = uuid.uuid4()` at top of `generate()` → include in all `done` events → pass `message_id=assistant_msg_id` to persist function → Message ORM uses it
+- **Pattern**: pre-assign UUID → stream → pass UUID to persist → no extra round-trip needed
+
+### #135: Frontend Message serverId vs id
+- **Problem**: Frontend messages use `Date.now()` as local `id` (React key). Replacing `id` with server UUID causes React key change → component re-mount (state reset = bad)
+- **Solution**: Add `serverId` field (separate from `id`). `onDone(cid, serverMsgId)` sets `m.serverId`. Feedback buttons check `msg.serverId && convId`.
+- **Applies to**: any pattern where frontend needs server-assigned ID post-stream
+
+### #136: promote_cycle5.sh JSON Key Bug — Always Validate Against Actual Schema
+- **Problem**: Script read `d.get('eval_summary', {}).get('weighted_avg')` but eval JSON uses flat structure: `d['weighted_avg_cosine_sim']` and `d['category_means']`
+- **Fix**: Support both formats (nested eval_summary + flat) with fallback
+- **Lesson**: When writing gate scripts, always run against sample output JSON first. "Written against spec" ≠ "matches actual JSON output"
 
 ---
 
