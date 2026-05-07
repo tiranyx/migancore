@@ -80,7 +80,7 @@ User's exact words yang HARUS diikuti tiap sprint:
 
 ## 🚨 CRITICAL FAILURE MODES (LESSONS PAST)
 
-Top 6 yang HARUS diingat (137 lessons total — semua di MEMORY.md per-day notes):
+Top 6 yang HARUS diingat (144 lessons total — semua di MEMORY.md per-day notes):
 
 | # | Lesson | Forever-rule |
 |---|--------|--------------|
@@ -171,6 +171,11 @@ Top 6 yang HARUS diingat (137 lessons total — semua di MEMORY.md per-day notes
 | **135** | **React message state: add serverId separate from local id** | Day 65: Frontend messages use `Date.now()` as local `id` (React key). Server uses UUID. CANNOT replace `id` with server UUID → React key change → component re-mount → state reset (bad). Fix: add `serverId: null` to initial message state; `onDone(cid, serverMsgId)` sets `msg.serverId = serverMsgId`. Feedback buttons check `msg.serverId && convId` before rendering. Applies to any pattern where frontend needs server-assigned ID post-stream. |
 | **136** | **promote_cycle5.sh: always test gate scripts against actual JSON schema** | Day 65: Script read `d.get('eval_summary', {}).get('weighted_avg')` but eval JSON uses flat `d['weighted_avg_cosine_sim']` and `d['category_means']` at top level. Fix: support both formats with format detection. Rule: when writing gate/promote scripts, run against sample output JSON first. "Written against spec" ≠ "matches actual JSON output". |
 | **137** | **Eval MUST have retry logic for Ollama 500 — no retry = unfair rollback** | Day 65: 3 Ollama HTTP 500 errors during Cycle 5 eval (CPU steal 58-65%) → scored 0.000 each → -0.099 on weighted_avg → ROLLBACK. Est. weighted_avg without errors: 0.944 → PROMOTE. Fix: all eval scripts must wrap each Ollama call with max 3 retries, 10s sleep. Without this, infrastructure noise causes unfair rollbacks that waste Vast.ai credits + training time. |
+| **138** | **Supplement dedup = seed diversity problem, not generation bug** | Day 66: generate_cycle6_supplement.py generated 160 tool-use/creative/evo-aware pairs but export dedup left only 77 unique (120-char prefix dedup removes same-prompt duplicates). Root cause: generator reused 28-30 seed prompts × 3-4 repeats = many same-prompt pairs. Fix for Cycle 7: per-call prompt VARIATION — generate 60 UNIQUE scenarios (different filenames, content, contexts) instead of repeating same 5 seeds × 12 times. |
+| **139** | **Kimi CAI fallback — graceful degradation is acceptable** | Day 67: Kimi API unreachable → CAI pipeline falls back to Gemini-only single teacher. Quorum (2-teacher) is ideal but single-teacher fallback is acceptable. Both fail = Ollama fallback. Never block training on teacher availability. Monitor Kimi failure rate weekly; if consistently fails, swap to GPT-4o or Claude API as secondary teacher. |
+| **140** | **interactions_feedback = 0 is expected, not a bug (test with real user first)** | Day 67 audit: 0 rows in interactions_feedback despite 65 conversations + thumbs UI deployed. Root cause: 53 registered users are mostly automated test accounts from early development (Day 1-30). Real beta users = minimal. Frontend thumbs requires `msg.serverId && convId` which only works post-SSE-done-event. Rule: ZERO rows = "no real users triggered it yet", not "it's broken". Always E2E test flywheel manually (real login → chat → 👎 → verify DB row) before declaring broken. |
+| **141** | **Delete rollbacked models same session — 4.8GB each** | Day 67: Found migancore:0.1, 0.2, 0.4, 0.5 still in Ollama = ~19GB wasted. After ROLLBACK decision, delete candidate model within same session. Only keep: production model + base qwen2.5. Protocol: post every ROLLBACK = `docker exec ado-ollama-1 ollama rm migancore:0.X` immediately. |
+| **142** | **Resource audit pattern — run before every cycle plan** | Day 67: 30-second audit revealed 3 actionable findings: interactions_feedback=0, 68% preference_pairs unused, SIDIX 1,458 free pairs. Commands: `SELECT COUNT(*) FROM preference_pairs; SELECT COUNT(*) FROM interactions_feedback;` + `df -h` + `ollama list`. Create RESOURCE_AUDIT_DAY{N}.md as standard checkpoint doc every cycle. |
 
 ---
 
