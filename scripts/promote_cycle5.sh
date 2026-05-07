@@ -29,13 +29,21 @@ import json, sys
 with open('$EVAL_RESULT') as f:
     d = json.load(f)
 
+# Support both old format (eval_summary nested) and new flat format
+if 'eval_summary' in d:
+    wavg = d['eval_summary'].get('weighted_avg', 0)
+    cats = d['eval_summary'].get('category_means', {})
+else:
+    wavg = d.get('weighted_avg_cosine_sim', 0)
+    cats = d.get('category_means', {})
+
 gates = {
-    'weighted_avg': (d.get('eval_summary', {}).get('weighted_avg', 0), 0.92),
-    'identity': (d.get('eval_summary', {}).get('category_means', {}).get('identity', 0), 0.90),
-    'voice': (d.get('eval_summary', {}).get('category_means', {}).get('voice', 0), 0.85),
-    'evolution-aware': (d.get('eval_summary', {}).get('category_means', {}).get('evolution-aware', 0), 0.80),
-    'tool-use': (d.get('eval_summary', {}).get('category_means', {}).get('tool-use', 0), 0.85),
-    'creative': (d.get('eval_summary', {}).get('category_means', {}).get('creative', 0), 0.80),
+    'weighted_avg': (wavg, 0.92),
+    'identity': (cats.get('identity', 0), 0.90),
+    'voice': (cats.get('voice', 0), 0.85),
+    'evolution-aware': (cats.get('evolution-aware', 0), 0.80),
+    'tool-use': (cats.get('tool-use', 0), 0.85),
+    'creative': (cats.get('creative', 0), 0.80),
 }
 
 all_pass = True
