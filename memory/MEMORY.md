@@ -6,22 +6,23 @@
 
 ---
 
-## QUICK STATE (Day 67)
+## QUICK STATE (Day 68)
 
 | Item | Value |
 |------|-------|
-| Day | 67 |
-| Phase | Cycle 6 training on Vast.ai (ORPO, 954 pairs) → PROMOTE/ROLLBACK pending |
+| Day | 68 |
+| Phase | Phase A Stabilization — Codex P1/P2 fixes (C1, C2, C3, C4, C8 RESOLVED Day 68 pagi) |
 | Production Brain | migancore:0.3 (Cycle 3, weighted_avg 0.9082) |
-| Cycle 6 Status | Training complete → post_cycle6.sh auto-trigger pending |
-| API Version | v0.5.16 LIVE (Day 67 fixes in GitHub, deploy pending SSH) |
-| Beta Status | 53 users, 65 conversations, 0 feedback signals (fixing now) |
+| Cycle 6 Status | Training step 107/118 (91%), ETA ~22min — recovery scripts auto-handle |
+| API Version | Day 68, commit 14a414e LIVE — /health expose commit_sha+build_time+day |
+| Beta Status | 53 users, 65 conv (cuma ~3 external active!), 0 feedback signals — UI fixed Day 68 |
 | DPO/ORPO Pairs | 3,004 |
-| Lessons Documented | 144 (#138-144 today) |
-| GPU Budget | Vast.ai total ~$0.80, RunPod $6.80 spent |
-| VPS Main | 72.62.125.6 — MiganCore + Ixonomic + SIDIX (merged) |
-| SSH Status | SSH port 22 blocked from Windows env — use VPS terminal |
-| GitHub | Commit f80bb58 — deploy cmd: cd /opt/ado && git pull && docker compose build api && docker compose up -d api |
+| Lessons Documented | 150 (#138-147 Day 67, #148-150 Day 68) |
+| GPU Budget | Vast.ai total ~$0.95, RunPod $6.80 spent |
+| VPS Main | 72.62.125.6 — MiganCore + Ixonomic + Mighan only (sidix/tiranyx/abrabriket archived Day 67) |
+| Server tree | /opt/ado clean (174→0 untracked, 4.5GB archived to /opt/ado-artifacts/day68_archive/) |
+| SSH Status | Direct SSH OK from Windows via ~/.ssh/sidix_session_key |
+| GitHub | Commit 14a414e — deploy: BUILD_COMMIT_SHA=$(git rev-parse --short HEAD) docker compose up -d api |
 
 ---
 
@@ -42,6 +43,7 @@
 | 64 | **Cycle 5 prep + Kimi review** | `docs/DAY64_PLAN.md` | — | `docs/DAY64_STATUS_REVIEW_KIMI.md` |
 | 65 | Cycle 5 PROMOTE (0.8453) → migancore:0.5 candidate | — | — | MEMORY.md |
 | 67 | Cycle 6 training launched + frontend fixes | `docs/DAY67_MANDATORY_PROTOCOL.md` | — | `docs/ACHIEVEMENT_WRAP.md` |
+| 68 | Codex P1/P2 audit fixes (conv history E2E + mobile + version + favicon + server hygiene) + master roadmap + sprint plan | `docs/DAY68_SPRINT_PLAN.md` + `docs/ROADMAP_DAY67_MASTER.md` | (this entry) | — |
 
 ---
 
@@ -78,7 +80,13 @@
 | Resource audit | `docs/RESOURCE_AUDIT_DAY67.md` |
 | Qwen3 upgrade | `docs/QWEN3_UPGRADE_PLAN.md` |
 
-### New Lessons Day 67 (#138-144)
+### New Lessons Day 68 (#147-150)
+- **#147**: Auto-resume hanya untuk status `{running, error, starting}` — JANGAN auto-resume `cancelled` (admin /stop = intentional). Sebelumnya: cancelled diauto-resume krn dianggap deploy-kill, mismatch dengan user intent.
+- **#148**: 53 beta user ≠ 53 active. Audit DB → cuma ~3 external. Self-improving flywheel butuh real user signal source, bukan total registration count. Lesson: setiap "user count" claim wajib qualified by activity tier (last_active_at).
+- **#149**: Build metadata (commit_sha, day) PERLU di /health endpoint. Hardcoded version string di frontend = invisible drift. Pattern: `_resolve_build_metadata()` at import, env var fallback (`BUILD_COMMIT_SHA=$(git rev-parse --short HEAD) docker compose up`). Codex C4 auto-resolved.
+- **#150**: PowerShell heredoc `@'..'@` choke pada `()` dan `:` di body. Fix: tulis ke `.commit_msg.tmp` lalu `git commit -F`. Faster than escape gymnastics.
+
+### New Lessons Day 67 (#138-146)
 - **#138**: nohup fork verification — `ps aux | grep [script]` after every nohup launch, kill duplicate
 - **#139**: Vast.ai duplicate instance = ganda cost. Kill dalam <5 menit = $0 wasted
 - **#140**: Gate thresholds single source of truth — mismatch = false rollback atau false promote

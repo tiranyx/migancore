@@ -1,5 +1,7 @@
 # MiganCore — User Guide & Credentials
-**Versi:** v0.4.1 · **Update:** 2026-05-03 · **Fahmi Wol (Private)**
+**Versi:** Day 68 · **Update:** 2026-05-08 · **Fahmi Wol (Private)**
+
+> **Day 68 changes:** Conversation history E2E hidup (UI baca dari server, bukan localStorage), mobile drawer nav (sidebar slide-in via hamburger ☰), feedback buttons visible per assistant message (👍/👎), build metadata di /health. Codex C1/C3/C4/C8 RESOLVED.
 
 ---
 
