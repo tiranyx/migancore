@@ -11,8 +11,8 @@
 | **Today** | Day 69 · 2026-05-08 |
 | **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
 | **Cycle 6 Result** | ❌ ROLLBACK — 2/6 gates pass (voice 0.705, tool-use 0.733, creative 0.771) |
-| **API Commit** | `7243161` (Day 69: tracker + watcher + agent briefs) |
-| **API Version** | v0.5.16 (container still at `ebd7ded` — docs-only drift, no rebuild needed) |
+| **API Commit** | `4cfdd4e` (Day 69: feedback race condition + fbSent lock fix — DEPLOYED) |
+| **API Version** | v0.5.16 (rebuilt + restarted — race condition fix live, 0 feedback → unblocked) |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
 | **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 |
@@ -20,7 +20,7 @@
 | **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.20 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 155 (Day 69 adds #153-155) |
+| **Lessons Cumulative** | 157 (Day 69 adds #153-157) |
 
 ---
 
@@ -124,8 +124,8 @@
 ### P0 — Must Fix Now
 - [x] **Cycle 6 ROLLBACK** — Done. migancore:0.3 stays. Root cause documented → Cycle 7 plan locked.
 - [ ] **Cycle 7 dataset** — 100 voice-anchor pairs + 80 tool-use pairs + 60 creative pairs. STOP domain pairs. Generate → Vast.ai → eval.
-- [ ] **Fix eval script threshold** — `run_identity_eval.py` uses 0.8 internally but real gate = 0.92. Fix to prevent future false PROMOTE. (Lesson #155)
-- [ ] **Feedback signals = 0** — Verify thumbs UI wired to POST /v1/conversations/{id}/messages/{id}/feedback + store in DB. Gate: 1st signal in <72h.
+- [x] **Fix eval script threshold** — `run_identity_eval.py` 0.8 → 0.92. Retry expansion (Lesson #156). DEPLOYED commit `4cfdd4e`.
+- [x] **Feedback race condition + fbSent lock** — P0 Kimi bugs FIXED + DEPLOYED. Persist before SSE done. fbSent unlocks on error. Gate: 1st real signal in <72h.
 - [ ] **Admin key in password manager** — Fahmi action, cannot be delegated.
 - [ ] **Hafidz Ledger Phase A** — hafidz_contributions table + POST endpoint + genealogy link.
 
@@ -169,17 +169,24 @@
   - Result: weighted_avg 0.8661, voice 0.705, tool-use 0.733, creative 0.771
   - 2/6 gates pass against real thresholds (eval script uses wrong threshold 0.8)
 
+**Delivered (continued):**
+- [x] **Kimi P0 bugs FIXED + DEPLOYED** — `api/routers/chat.py` race condition (await before done) + `frontend/chat.html` fbSent unlock on error + copywriting. Commit `4cfdd4e`. Container rebuilt, API healthy, frontend deployed.
+- [x] **Eval retry expansion** — timeout+connect errors now retried (not only HTTP 500). Unfair 0.000 scores from transient failures eliminated.
+- [x] **CYCLE7_DATASET_PLAN.md** — 260 pairs, zero domain pairs, voice-first strategy committed.
+
 **Still pending:**
-- [ ] Feedback signals audit + wire
-- [ ] Cycle 7 dataset generation
-- [ ] Fix eval script threshold (0.8 → 0.92)
-- [ ] BUILD_DAY env update
+- [ ] Cycle 7 dataset generation (`generate_cycle7_dataset.py`)
+- [ ] BUILD_DAY env update to "Day 69"
 - [ ] Codex C5/C6/C7
+- [ ] Admin key in password manager (Fahmi)
+- [ ] Hafidz Ledger Phase A
 
 **Lessons:**
 - #153: Tracker alongside code — agents read context as files, not narrative
 - #154: File-based async agent sync beats real-time protocol
-- #155: Eval script threshold 0.8 ≠ real gate 0.92 — THIRD TIME this caused confusion (Lessons #140, #144, now #155). Fix the source permanently: hardcode real gates in eval script.
+- #155: Eval script threshold 0.8 ≠ real gate 0.92 — THIRD TIME. Fix the source permanently.
+- #156: `asyncio.create_task` after SSE `done` = race condition. Feedback 404 for 16 days. Always `await` before yielding done when downstream needs DB row.
+- #157: Frontend fbSent permanent lock on any API error = user can never retry. Error handlers MUST rollback UI state.
 
 **Costs:** $0
 
@@ -328,8 +335,11 @@ Every `CODEX_QA_*.md` must include:
 
 | # | Day | Category | Lesson |
 |---|-----|----------|--------|
-| 153 | 69 | Workflow | Tracker must live alongside code — agents read context as files, not narrative. `docs/AGENT_SYNC/` as file-based message bus. |
+| 157 | 69 | Frontend | fbSent permanent lock on API error = user can never retry feedback. Always rollback UI state (fbSent=false, fbState=null) in catch. Silent swallowed errors = silent broken features. |
+| 156 | 69 | Architecture | `asyncio.create_task(_persist)` AFTER `yield done` = race condition. Fast user clicks feedback before DB write completes → 404 for 16 days, 0 signals. Always `await _persist` BEFORE yielding SSE done. |
+| 155 | 69 | Training | Eval threshold 0.80 ≠ real gate 0.92 — THIRD TIME (also Lessons #140, #144). Fix the source: hardcode real gates in eval script with permanent comment. |
 | 154 | 69 | Workflow | Multi-agent sync via files beats real-time protocol. Async drop-and-pick pattern — each agent works when active, leaves artifact. |
+| 153 | 69 | Workflow | Tracker must live alongside code — agents read context as files, not narrative. `docs/AGENT_SYNC/` as file-based message bus. |
 | 152 | 68 | Infrastructure | Recovery scripts with `ls` multi-line output: `== "READY"` comparison fails. Always grep-filter: `ls ... | grep -c "READY"`. |
 | 151 | 68 | Security | Admin key exposed since Day 22 in repo history. Lesson: ANY secret in a committed doc file = permanently exposed. Even after redact, git history retains it. Private vault is non-negotiable from Day 1. |
 | 150 | 68 | Tooling | PowerShell heredoc `@'..'@` chokes on `()`, `:`, `$` in body. Workaround: write to `.commit_msg.tmp` → `git commit -F`. |
