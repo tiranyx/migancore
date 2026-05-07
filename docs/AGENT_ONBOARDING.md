@@ -311,3 +311,6 @@ Per `docs/VISION_DISTINCTIVENESS_2026.md`:
 ---
 
 **This file is THE permanent protocol. Update only with explicit user approval. Never delete.**
+
+| **143** | **SSH blocking call timeout must exceed actual training time** | Day 67: cycle6_orpo_vast.py timeout=7200s (2hr) < actual training time (3.5hr on Q RTX 8000). At 16:02 UTC, subprocess.run fires TimeoutExpired, kills SSH, SIGHUP may kill training. Fix: timeout=14400 (4hr) + try/except to NOT delete instance on timeout. Also: use detached mode (nohup &) + separate polling script (vast_recovery.sh). Three-layer safety: tmux guard (restart if killed) + VPS downloader (periodic pull) + wait loop (trigger post-pipeline). |
+| **144** | **Always list Vast.ai instances FIRST — orphan check before any work** | Day 67: instance 36263704 (A40) from prior session ran 16hr = $5.72 wasted. First command of any agent session that might use Vast.ai: `curl .../instances/` → list all → delete orphans. Never assume clean state. Budget burn from inaction is silent. |
