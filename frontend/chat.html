@@ -4,11 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MiganCore — Chat</title>
+  <meta name="description" content="ADO yang belajar dari interaksi — brain Indonesia, voice direct, action over advice.">
+  <meta name="theme-color" content="#ff8a24">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MiganCore">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.json">
 
-  <!-- Fonts -->
+  <!-- Resource hints — speed up critical-path origins -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://unpkg.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://api.migancore.com">
+  <link rel="preload" as="script" href="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin>
+  <link rel="preload" as="script" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin>
+
+  <!-- Fonts (display=swap = render text immediately with fallback, swap when ready) -->
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <!-- React 18 + Babel -->
@@ -3084,7 +3099,121 @@
     );
   }
 
-  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  // ===========================
+  // RELIABILITY LAYER (Day 71c)
+  // ===========================
+  // Error boundary — UI tetap render walaupun ada JS error tak terduga
+  class ErrorBoundary extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error) {
+      return { hasError: true, error };
+    }
+    componentDidCatch(error, info) {
+      console.error('[ErrorBoundary]', error, info);
+      // Best-effort telemetry (fire-and-forget, doesn't block recovery)
+      try {
+        const beacon = JSON.stringify({
+          msg: String(error && error.message || error),
+          stack: String(error && error.stack || '').slice(0, 800),
+          url: location.href,
+          ua: navigator.userAgent,
+          ts: Date.now(),
+        });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/v1/telemetry/error', new Blob([beacon], { type: 'application/json' }));
+        }
+      } catch (_) {}
+    }
+    render() {
+      if (this.state.hasError) {
+        return (
+          <div className="center-screen" style={{ flexDirection: 'column', gap: '1rem', padding: '1rem', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--display)', color: 'var(--orange)', fontSize: '1.5rem', letterSpacing: '0.15em' }}>
+              SISTEM RECOVER
+            </div>
+            <div style={{ color: 'var(--text-dim)', maxWidth: '32rem' }}>
+              Ada glitch di tampilan. Refresh untuk lanjut. Riwayat percakapan aman tersimpan.
+            </div>
+            <button
+              onClick={() => location.reload()}
+              style={{
+                background: 'var(--orange)', color: 'var(--bg-0)', border: 0,
+                padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: 600,
+                fontFamily: 'var(--mono)', letterSpacing: '0.1em', cursor: 'pointer',
+              }}
+            >
+              REFRESH APP
+            </button>
+            <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem', fontFamily: 'var(--mono)' }}>
+              {String(this.state.error && this.state.error.message || 'unknown error').slice(0, 100)}
+            </div>
+          </div>
+        );
+      }
+      return this.props.children;
+    }
+  }
+
+  // Network status indicator — bilang user kalau offline
+  function NetworkBanner() {
+    const [online, setOnline] = React.useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    React.useEffect(() => {
+      const goOnline = () => setOnline(true);
+      const goOffline = () => setOnline(false);
+      window.addEventListener('online', goOnline);
+      window.addEventListener('offline', goOffline);
+      return () => {
+        window.removeEventListener('online', goOnline);
+        window.removeEventListener('offline', goOffline);
+      };
+    }, []);
+    if (online) return null;
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: 'var(--orange)', color: 'var(--bg-0)',
+        padding: '0.5rem 1rem', textAlign: 'center', fontFamily: 'var(--mono)',
+        fontSize: '0.8rem', letterSpacing: '0.1em', fontWeight: 600,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+      }}>
+        ⚠ OFFLINE — Chat realtime butuh koneksi internet. Pesan akan dikirim saat online kembali.
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <ErrorBoundary>
+      <NetworkBanner/>
+      <App/>
+    </ErrorBoundary>
+  );
+</script>
+
+<!-- Service Worker registration + update flow (Day 71c) -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then((reg) => {
+          // Check for updates every 60min while tab is open
+          setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+          // When new SW takes over, soft-reload to pick up new assets
+          reg.addEventListener('updatefound', () => {
+            const newSw = reg.installing;
+            if (!newSw) return;
+            newSw.addEventListener('statechange', () => {
+              if (newSw.state === 'installed' && navigator.serviceWorker.controller) {
+                console.info('[SW] Update available — will activate on next navigation');
+              }
+            });
+          });
+        })
+        .catch((err) => console.warn('[SW] register failed:', err));
+    });
+  }
 </script>
 </body>
 </html>

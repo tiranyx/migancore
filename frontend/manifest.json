@@ -1,0 +1,34 @@
+{
+  "name": "MiganCore Chat",
+  "short_name": "MiganCore",
+  "description": "ADO yang belajar dari interaksi — brain Indonesia, voice direct, action over advice.",
+  "start_url": "/chat.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07100e",
+  "theme_color": "#ff8a24",
+  "lang": "id",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chat baru",
+      "short_name": "New Chat",
+      "description": "Mulai percakapan baru",
+      "url": "/chat.html?new=1"
+    }
+  ]
+}
