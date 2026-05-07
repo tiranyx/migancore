@@ -250,6 +250,16 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("contracts.startup_failed", error=str(exc))
 
+    # 9b. Day 71d: Pre-compute tool description embeddings for semantic
+    #     filtering (Lesson #181). Cuts tool-detection prompt 5x by selecting
+    #     top-K tools per query instead of sending all 29.
+    try:
+        from services.tool_relevance import precompute_tool_embeddings
+        n = await precompute_tool_embeddings()
+        logger.info("tool_relevance.boot_ok", count=n)
+    except Exception as exc:
+        logger.warning("tool_relevance.boot_failed", error=str(exc))
+
     # 10. Day 61: License validation at startup (GAP-03 Phase 2)
     #     Inspired by Ixonomic coin minting — each ADO instance carries a
     #     cryptographically signed license.json (HMAC-SHA256). Offline-capable.

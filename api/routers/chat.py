@@ -351,8 +351,23 @@ async def chat_stream(
         prepend_summary=prepend_summary,
     )
 
+    # Day 71d — Semantic tool filtering: select top-K relevant tools to
+    # reduce tool-detection prompt size on CPU 7B (29 tools = ~3000 tokens
+    # baseline). Cuts inference time ~40-60%. Falls back to all tools if
+    # embedding model unavailable. (Lesson #180 + #181)
+    try:
+        from services.tool_relevance import select_relevant_tools
+        filtered_tools = await select_relevant_tools(
+            user_query=data.message,
+            available_tools=agent_tools_for_stream,
+            top_k=4,  # 4 semantic + 2 always_include = 6 total
+        )
+    except Exception as _e:
+        # Defensive: never block chat on filter failure
+        filtered_tools = agent_tools_for_stream
+
     # Day 39 — tool spec + executor for the streaming generator
-    tools_spec_stream = build_ollama_tools_spec(agent_tools_for_stream)
+    tools_spec_stream = build_ollama_tools_spec(filtered_tools)
     tool_ctx_stream = ToolContext(
         tenant_id=tenant_id,
         agent_id=agent_id,
