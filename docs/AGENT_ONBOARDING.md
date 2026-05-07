@@ -80,7 +80,7 @@ User's exact words yang HARUS diikuti tiap sprint:
 
 ## 🚨 CRITICAL FAILURE MODES (LESSONS PAST)
 
-Top 6 yang HARUS diingat (133 lessons total — semua di MEMORY.md per-day notes):
+Top 6 yang HARUS diingat (137 lessons total — semua di MEMORY.md per-day notes):
 
 | # | Lesson | Forever-rule |
 |---|--------|--------------|
@@ -167,6 +167,10 @@ Top 6 yang HARUS diingat (133 lessons total — semua di MEMORY.md per-day notes
 | **131** | **Voice/evo seed dedup: seed pool MUST be >= target pairs** | Day 64: 30 voice seeds x 4 repeats = still only 30 unique prompts after dedup. Rule: seed pool size >= target pairs. 60 unique pairs needs 60 unique seeds. Check unique count after generation. |
 | **132** | **NEVER scp -r full adapter directory** | Day 64-65: scp -r full dir = adapter (155MB) + 3 checkpoints (3x325MB) = 700MB. 600s timeout exceeded. Rule: only SCP adapter_model.safetensors + adapter_config.json = 155MB total, 60-90s. Checkpoints = temporary, not needed. |
 | **133** | **Ollama all-cores triggers hypervisor CPU throttle** | Day 65: Ollama runner at 687% CPU (7/8 cores) -> hypervisor throttles VM -> %st=93.8% steal -> inference 16x slower. FIX: OLLAMA_NUM_THREAD=4 + cpus=4.0 in docker-compose ollama service. 4 dedicated cores without throttle > 8 throttled cores. Watchdog cron every 15min. |
+| **134** | **SSE message_id: pre-generate UUID before stream starts** | Day 65: Feedback endpoint needs server DB message UUID, but SSE `done` fires BEFORE `_persist_assistant_message` task completes. Fix: `assistant_msg_id = uuid.uuid4()` at TOP of `generate()` → pass to ALL `done` events → pass `message_id=assistant_msg_id` to persist → Message ORM uses it. Pattern: pre-assign → stream → persist with pre-assigned ID → client never needs re-fetch. |
+| **135** | **React message state: add serverId separate from local id** | Day 65: Frontend messages use `Date.now()` as local `id` (React key). Server uses UUID. CANNOT replace `id` with server UUID → React key change → component re-mount → state reset (bad). Fix: add `serverId: null` to initial message state; `onDone(cid, serverMsgId)` sets `msg.serverId = serverMsgId`. Feedback buttons check `msg.serverId && convId` before rendering. Applies to any pattern where frontend needs server-assigned ID post-stream. |
+| **136** | **promote_cycle5.sh: always test gate scripts against actual JSON schema** | Day 65: Script read `d.get('eval_summary', {}).get('weighted_avg')` but eval JSON uses flat `d['weighted_avg_cosine_sim']` and `d['category_means']` at top level. Fix: support both formats with format detection. Rule: when writing gate/promote scripts, run against sample output JSON first. "Written against spec" ≠ "matches actual JSON output". |
+| **137** | **Eval MUST have retry logic for Ollama 500 — no retry = unfair rollback** | Day 65: 3 Ollama HTTP 500 errors during Cycle 5 eval (CPU steal 58-65%) → scored 0.000 each → -0.099 on weighted_avg → ROLLBACK. Est. weighted_avg without errors: 0.944 → PROMOTE. Fix: all eval scripts must wrap each Ollama call with max 3 retries, 10s sleep. Without this, infrastructure noise causes unfair rollbacks that waste Vast.ai credits + training time. |
 
 ---
 

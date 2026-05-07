@@ -1,31 +1,37 @@
 # DAY 66 PLAN — MiganCore
 **Date:** 2026-05-08 (Friday)
-**Author:** Claude Sonnet 4.6 (Day 65 handoff)
-**Production Brain:** TBD — pending Cycle 5 eval result
+**Author:** Claude Sonnet 4.6 (Day 65 handoff — fully updated)
+**Production Brain:** migancore:0.3 (STAYS — Cycle 5 ROLLBACK)
 
 ---
 
-## CONTEXT DARI DAY 65
+## CONTEXT DARI DAY 65 — SELESAI SEMUA ✅
 
-### Yang Sudah Selesai Hari Ini:
+### Yang Sudah Selesai (Day 65 + awal Day 66):
 1. ✅ Cycle 5 ORPO training: 877 pairs, RTX 5880 Ada, train_loss 2.5103
 2. ✅ Stuck Ollama runner fix: 4-core cap (OLLAMA_NUM_THREAD=4)
 3. ✅ KB auto-update cron: daily 23:00 UTC, exchangerate-api + IHSG
-4. ✅ Thumbs feedback flywheel (commit 24b378a): backend + frontend complete
-5. ✅ Teacher refinement cron (commit b69c171): `scripts/refine_pending_pairs.py`
-6. ✅ promote_cycle5.sh ready at `/opt/ado/scripts/`
-7. ⏳ Cycle 5 eval IN PROGRESS — started 10:31 UTC, ~8/20 done
+4. ✅ Thumbs feedback flywheel (commit 24b378a): backend + frontend LIVE
+5. ✅ Teacher refinement cron (commit b69c171): installed 19:00 UTC daily
+6. ✅ Cycle 5 eval COMPLETE → **ROLLBACK** (4/6 gates failed, see below)
+7. ✅ deploy_day65.sh EXECUTED: API rebuilt + restarted, frontend deployed
+8. ✅ Feedback endpoint LIVE: `POST /v1/conversations/{id}/messages/{id}/feedback`
+9. ✅ Synthetic gen RUNNING: target 1000 pairs
+10. ✅ VPS git HEAD: `426833b` (all commits pushed to main)
 
-### Yang Perlu Deploy Day 66 (setelah eval selesai):
-```bash
-# On VPS:
-bash /opt/ado/scripts/deploy_day65.sh
-# Then restart synthetic gen:
-curl -X POST http://localhost:18000/v1/admin/synthetic/start \
-  -H 'X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef' \
-  -H 'Content-Type: application/json' \
-  -d '{"target_pairs": 1000}'
-```
+### Cycle 5 Eval Result — ROLLBACK ❌
+
+| Category | Score | Gate | Status | Notes |
+|----------|-------|------|--------|-------|
+| identity | 0.9376 | ≥ 0.90 | ✅ PASS | Excellent |
+| voice | 0.8946 | ≥ 0.85 | ✅ PASS | +0.077 dari Cycle 4 — 80 pairs worked |
+| weighted_avg | 0.8453 | ≥ 0.92 | ❌ FAIL | 3 Ollama 500 errors cost ~0.099 |
+| evolution-aware | 0.7502 | ≥ 0.80 | ❌ FAIL | +0.213 dari Cycle 4 tapi below gate |
+| tool-use | 0.7439 | ≥ 0.85 | ❌ FAIL | No targeted pairs di Cycle 5 |
+| creative | 0.7278 | ≥ 0.80 | ❌ FAIL | Regressed -0.101 — domain pairs diluted |
+
+**Root cause**: 3 Ollama HTTP 500 errors (CPU steal 58-65%) → scored 0.000 each → -0.099 on weighted_avg.
+Est. weighted_avg without errors: ~0.944 → would PASS 0.92 gate.
 
 ---
 
@@ -33,84 +39,98 @@ curl -X POST http://localhost:18000/v1/admin/synthetic/start \
 
 ### CRITICAL (lakukan pertama)
 
-#### 1. Resolve Cycle 5 Eval → PROMOTE or ROLLBACK
+#### 1. Generate Cycle 6 Supplement Pairs
 
-Check result:
+Target: fix 3 failed categories + add eval retry infrastructure.
+
+**Tool-use supplement (60+ pairs)**
 ```bash
-cat /opt/ado/data/workspace/eval_result_migancore-7b-soul-cycle5.json
-bash /opt/ado/scripts/promote_cycle5.sh
+python3 scripts/generate_tool_use_pairs.py --target 60
+```
+Focus on:
+- Image gen description format (describe → call generate_image → describe result)
+- File write confirmation (write file → confirm with "File X berhasil ditulis")
+- Tool invocation patterns (onamix_search → summarize result → cite source)
+- Multi-step tool chains (search → read URL → summarize)
+
+**Creative supplement (60+ pairs)**
+```bash
+python3 scripts/generate_creative_pairs.py --target 60
+```
+Focus on:
+- Tagline generation (brand name → catchy Indonesian tagline)
+- Name generation (product/company naming with rationale)
+- Creative storytelling (short story, analogy, metaphor)
+- Copywriting in Migan voice (warm, direct, tidak bertele-tele)
+
+**Evolution-aware supplement (40+ pairs)**
+```bash
+python3 scripts/generate_evo_aware_pairs.py --target 40
+```
+Total after this: ~100 evo-aware pairs (60 existing + 40 new).
+Focus on episodic memory explanation, learning from past errors, self-correction.
+
+**Eval retry infrastructure**
+- File: `eval/run_identity_eval.py`
+- Add retry: max 3 retries per question on HTTP 500
+- Sleep 10s between retries
+- Log retry count per question
+- This would prevent 3 questions scoring 0.000
+
+#### 2. Export + Train Cycle 6
+
+After supplement pairs generated:
+```bash
+# Export dataset
+python3 scripts/export_cycle6_dataset.py
+
+# Train on Vast.ai
+python3 training/cycle6_orpo_vast.py
 ```
 
-Gates:
-| Category | Gate | Cycle 3 (prod) |
-|----------|------|----------------|
-| weighted_avg | ≥ 0.92 | 0.9082 |
-| identity | ≥ 0.90 | 0.953 |
-| voice | ≥ 0.85 | 0.817 |
-| evo-aware | ≥ 0.80 | (failed) → fixed |
-| tool-use | ≥ 0.85 | 0.768 |
-| creative | ≥ 0.80 | 0.829 |
-
-**IF PROMOTE:**
-- promote_cycle5.sh handles docker-compose + restart automatically
-- Update MEMORY.md, DAY65_PROGRESS.md with result + timestamp
-- Commit PROMOTE to git
-
-**IF ROLLBACK:**
-- Identify failed categories from eval_result JSON
-- Generate targeted supplement pairs for failed cats
-- Plan Cycle 6 training
-
-#### 2. Deploy Day 65 Changes
-
-```bash
-bash /opt/ado/scripts/deploy_day65.sh
-```
-
-Deploys:
-- Feedback endpoint (POST /v1/conversations/{id}/messages/{id}/feedback)
-- SSE done event includes message_id
-- Frontend thumbs 👍👎 buttons
-
-#### 3. Restart Synthetic Generation
-
-```bash
-curl -X POST http://localhost:18000/v1/admin/synthetic/start \
-  -H 'X-Admin-Key: ado-admin-5eab08ff6453b160dd4908cab9ead9ef' \
-  -H 'Content-Type: application/json' \
-  -d '{"target_pairs": 1000}'
-```
+Target: 900-1100 pairs total for Cycle 6 JSONL.
+Same hyperparams as Cycle 5 (2 epochs, lr=6e-7, ORPO beta=0.1).
 
 ---
 
 ### HIGH (setelah critical done)
 
-#### 4. Test Thumbs Feedback E2E
+#### 3. Test Thumbs Feedback E2E
 - Chat dengan migancore via app.migancore.com
 - Klik 👎 pada satu respon
-- Verify di DB: `SELECT * FROM preference_pairs WHERE source_method='user_thumbs_down' ORDER BY created_at DESC LIMIT 1;`
-- Verify chosen="PENDING — awaiting teacher API refinement"
+- Verify di DB:
+  ```sql
+  SELECT id, prompt, rejected, chosen, source_method, created_at
+  FROM preference_pairs
+  WHERE source_method = 'user_thumbs_down'
+  ORDER BY created_at DESC
+  LIMIT 1;
+  ```
+- Verify `chosen = 'PENDING — awaiting teacher API refinement'`
+- Verify 👍👎 buttons appear (requires `msg.serverId` to be set from SSE done event)
 
-#### 5. Verify KB Auto-Update
-- Check cron log: `cat /tmp/kb_update.log`
-- If empty/failed: run manually: `python3 /opt/ado/scripts/kb_auto_update.py`
-- Check that DATA TERKINI section updated in indonesia_kb_v1.md
+#### 4. Update AGENT_ONBOARDING.md
+- Add lessons #134-136 from Day 65 session
+- Document: SSE pre-assigned UUID pattern, serverId vs id in React, asyncpg cron pattern
+- File: `docs/AGENT_ONBOARDING.md`
 
-#### 6. Install refine_pending_pairs.py Cron
+#### 5. Verify KB Auto-Update Cron
 ```bash
-# Already done by deploy_day65.sh, but verify:
-crontab -l | grep refine_pending
-```
+# Check if cron ran at 23:00 UTC
+cat /tmp/kb_update.log
 
-#### 7. Update AGENT_ONBOARDING.md
-- Add lessons #134+ from Day 65 session
-- Document: SSE message_id pattern, PreferencePair user_thumbs_down flow, teacher refinement cron
+# If empty/no output, run manually:
+python3 /opt/ado/scripts/kb_auto_update.py
+
+# Verify DATA TERKINI section updated:
+grep -A 5 "DATA TERKINI" /opt/ado/data/knowledge/indonesia_kb_v1.md | head -20
+```
 
 ---
 
 ### NORMAL (Day 66-67 sprint)
 
-#### 8. Clone Mechanism (GAP-01) — P0 for First Paid Client
+#### 6. Clone Mechanism (GAP-01) — P0 for First Paid Client
 - aaPanel API: create new site + SSL certificate
 - Docker template: per-client Compose file generator
 - License integration: validate BERLIAN/EMAS tier before clone
@@ -119,15 +139,54 @@ crontab -l | grep refine_pending
   - `scripts/clone_ado.sh` (aaPanel + Docker automation)
   - `api/routers/admin.py` — add `/v1/admin/clone` endpoint
 
-#### 9. Multi-Language Detection (Jawa/Sunda/Minang)
+#### 7. Multi-Language Detection (Jawa/Sunda/Minang)
 - Keyword dict for each language dialect
 - Inject into system prompt: "User berbicara Bahasa Jawa, respond dengan campuran Indonesia+Jawa"
 - Implementation in `services/language_detector.py`
 
-#### 10. Enterprise Connectors Research
+#### 8. Enterprise Connectors Research
 - BPS API (bps.go.id) — GDP, inflation, population stats
 - IDX (Indonesia Stock Exchange) — IHSG + listed companies
 - BI (Bank Indonesia) — monetary policy, reference rate
+
+---
+
+## CYCLE 6 TRAINING PLAN
+
+### Target Supplement Breakdown
+| Category | Existing (Cycle 5) | New Cycle 6 | Total |
+|----------|--------------------|-------------|-------|
+| tool-use | ~0 targeted | +60 | 60 |
+| creative | 55 (creative_id) | +60 | 115 |
+| evolution-aware | 60 | +40 | 100 |
+| voice | 80 | 0 (PASS already) | 80 |
+| identity | (core dataset) | 0 (PASS already) | - |
+
+### Eval Infrastructure Fix
+```python
+# In eval/run_identity_eval.py, wrap each question call:
+for attempt in range(3):
+    try:
+        response = call_ollama(question)
+        break
+    except HTTPError as e:
+        if e.status_code == 500 and attempt < 2:
+            logger.warning(f"Q{qnum} attempt {attempt+1} failed (500), retrying in 10s...")
+            await asyncio.sleep(10)
+        else:
+            raise
+```
+
+### Training Config (same as Cycle 5)
+```yaml
+model: Qwen/Qwen2.5-7B-Instruct
+epochs: 2
+lr: 6e-7
+loss: orpo
+beta: 0.1
+batch_size: 4
+grad_accum: 4
+```
 
 ---
 
@@ -145,6 +204,11 @@ crontab -l | grep refine_pending
 ### #136: Teacher Refinement Cron — asyncpg Not asyncio.run on old Python
 - **Note**: `refine_pending_pairs.py` uses asyncpg directly (not SQLAlchemy) for simpler cron operation. DB DSN env var format: DATABASE_URL with `postgresql://` (not `postgresql+asyncpg://`)
 
+### #137: Ollama 500 Under CPU Steal → Always Add Retry in Eval
+- **Problem**: 3 Ollama HTTP 500 errors during Cycle 5 eval (CPU steal 58-65%) → scored 0.000 → -0.099 on weighted_avg → ROLLBACK instead of PROMOTE
+- **Rule**: ALL eval scripts MUST have retry logic (max 3, 10s sleep) for Ollama 500 errors
+- **Impact**: Without retry, infrastructure issues cause unfair rollbacks that waste Vast.ai credits + training time
+
 ---
 
 ## COSTS DAY 65
@@ -152,8 +216,8 @@ crontab -l | grep refine_pending
 | Item | Cost |
 |------|------|
 | VPS inference (CPU-only, no extra) | $0 |
-| Gemini API (KB queries, no new pairs today) | ~$0 |
-| **Total Day 66** | **$0** |
+| Gemini API (KB queries, no new pairs) | ~$0 |
+| **Total Day 65** | **~$0** |
 
 Remaining credits: Vast.ai ~$6.84, RunPod $16.69
 
@@ -163,13 +227,15 @@ Remaining credits: Vast.ai ~$6.84, RunPod $16.69
 
 | Commit | What |
 |--------|------|
-| eb5b114 | DAY65_PROGRESS.md |
+| eb5b114 | DAY65_PROGRESS.md initial |
 | 6fbcff9 | kb_auto_update.py + promote_cycle5.sh + kill_stuck_ollama_runners.sh |
 | 3f60a66 | conversations.py feedback endpoint |
 | c2b895d | scripts cleanup + docker-compose.yml 4-core cap |
 | 24b378a | thumbs feedback flywheel (backend + frontend) |
 | b69c171 | refine_pending_pairs.py teacher cron |
-| deploy_day65.sh | NOT YET COMMITTED — add to Day 66 commit |
+| b28cd9b | deploy_day65.sh + DAY66_PLAN.md initial |
+| be01b90 | promote_cycle5.sh JSON key bug fix (Lesson #136) |
+| 426833b | docs(day65): ROLLBACK verdict + final eval result + lessons #134-136 |
 
 ---
 
@@ -181,3 +247,6 @@ Remaining credits: Vast.ai ~$6.84, RunPod $16.69
 - Frontend: /www/wwwroot/app.migancore.com/chat.html
 - Eval log: /opt/ado/data/workspace/cycle5_eval_stdout.log
 - Eval result: /opt/ado/data/workspace/eval_result_migancore-7b-soul-cycle5.json
+- Supplement gen scripts: `scripts/generate_*.py`
+- Cycle 6 export: `scripts/export_cycle6_dataset.py`
+- Cycle 6 training: `training/cycle6_orpo_vast.py`
