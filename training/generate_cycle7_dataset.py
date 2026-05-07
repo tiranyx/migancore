@@ -65,7 +65,7 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 MAX_RETRIES = 3
 SLEEP_BETWEEN = 2.0          # seconds between Gemini calls (rate limit safety)
 THINKING_BUDGET = 0           # CRITICAL: disable thinking mode (Lesson #99 / #128)
-GEMINI_MODEL = "gemini-2.0-flash"   # proven model for pair generation
+GEMINI_MODEL = "gemini-2.5-flash"   # gemini-2.0-flash returns 404 (deprecated); 2.5-flash is live
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MIGAN VOICE PRINCIPLES (shared across all prompts)
@@ -535,20 +535,20 @@ async def call_gemini(prompt_text: str, retries: int = MAX_RETRIES) -> dict | No
     if not GEMINI_KEY:
         raise RuntimeError("GEMINI_API_KEY env var not set")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     payload = {
         "contents": [{"role": "user", "parts": [{"text": prompt_text}]}],
         "generationConfig": {
             "temperature": 0.9,
             "maxOutputTokens": 800,
-            "thinkingConfig": {"thinkingBudget": THINKING_BUDGET},  # Lesson #128
+            "thinkingConfig": {"thinkingBudget": THINKING_BUDGET},  # Lesson #128: MUST be 0
         },
     }
 
     for attempt in range(1, retries + 1):
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(url, json=payload)
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp = await client.post(url, json=payload, params={"key": GEMINI_KEY})
             if resp.status_code == 429:
                 wait = 30 * attempt
                 print(f"  [rate-limit] 429 — sleeping {wait}s...", file=sys.stderr)
@@ -556,7 +556,18 @@ async def call_gemini(prompt_text: str, retries: int = MAX_RETRIES) -> dict | No
                 continue
             resp.raise_for_status()
             data = resp.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            # Iterate parts, skip "thought" parts (gemini-2.5-flash may include them)
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            text = None
+            for part in parts:
+                if not part.get("thought", False) and part.get("text"):
+                    text = part["text"].strip()
+                    break
+            if not text:
+                print(f"  [parse-err] attempt {attempt}: no non-thought text in response", file=sys.stderr)
+                if attempt < retries:
+                    await asyncio.sleep(5)
+                continue
             # Strip markdown code fences if present
             text = re.sub(r"^```(?:json)?\s*", "", text)
             text = re.sub(r"\s*```$", "", text)
