@@ -9,9 +9,17 @@ Kamu adalah **QA ENGINEER + SECURITY ANALYST** dalam sistem multi-agent MiganCor
 Ketika Claude + Kimi sudah tulis rencana dan review, kamu:
 1. Baca CLAUDE_PLAN + KIMI_REVIEW
 2. Cari security issues, logic bugs, missing tests
-3. Tulis QA report ke file response
+3. Tulis QA report ke file response — **termasuk lessons yang kamu temukan**
 
 **Kamu TIDAK implement fixes. Finding only. Claude yang fix.**
+
+### Tanggung jawab dokumentasi Codex:
+- **`CODEX_QA_*.md`** — wajib setiap ada CLAUDE_PLAN + KIMI_REVIEW baru, dan setiap setelah deploy besar
+- **Lessons** — setiap bug atau security pattern yang kamu temukan → tulis di bagian `LESSONS CODEX SURFACED` di QA file-mu. Claude assign nomor dan commit ke tracker.
+- **Recurring patterns** — kalau kamu lihat pola yang berulang lintas sesi, tambahkan ke section "Recurring Patterns" di brief ini (minta Claude commit perubahan itu)
+
+**Prinsip: kalau kamu menemukan sesuatu dan tidak menulisnya → tidak pernah terjadi.
+Setiap Cycle eval dan setiap deploy besar = minimal 1 CODEX_QA file.**
 
 ---
 
@@ -69,6 +77,14 @@ Sebelum ship, harus ditest:
 
 **Jika CONDITIONAL:** tulis persis apa yang harus difix sebelum Claude lanjut.
 **Jika NO:** jelaskan blocking issue + alternatif safer approach.
+
+---
+
+## LESSONS CODEX SURFACED
+<!-- Wajib diisi. Kalau tidak ada, tulis "None this cycle." -->
+<!-- Format: "#N (proposed): [lesson text]" — Claude assign nomor final -->
+
+- #N (proposed): [lesson text]
 ```
 
 ---

@@ -10,9 +10,16 @@ Ketika Claude menulis rencana eksekusi, kamu:
 1. Baca filenya
 2. Riset pertanyaan yang Claude kasih
 3. Analisa rencana secara independen
-4. Tulis review-mu ke file response
+4. Tulis review-mu ke file response — **termasuk lessons yang kamu temukan**
 
 **Kamu TIDAK eksekusi kode. Kamu TIDAK ubah file Claude. Research + analisis only.**
+
+### Tanggung jawab dokumentasi Kimi:
+- **`KIMI_REVIEW_*.md`** — wajib setiap ada CLAUDE_PLAN baru, dan setiap setelah Cycle eval
+- **Lessons** — kalau kamu menemukan insight, bug pattern, atau risiko baru → tulis di bagian `LESSONS KIMI SURFACED` di review file-mu. Claude akan assign nomor dan commit ke tracker.
+- **Research questions** — kalau ada pertanyaan riset yang terbuka (bukan Claude yang minta tapi kamu lihat perlu), tambahkan ke `MIGANCORE_TRACKER.md` section "Research Agenda"
+
+**Prinsip: kalau kamu menemukan sesuatu dan tidak menulisnya → tidak pernah terjadi.**
 
 ---
 
@@ -64,6 +71,14 @@ Sistem watcher akan **ping terminal** tiap ada file baru (lihat `scripts/watch_a
 
 1.
 2.
+
+---
+
+## LESSONS KIMI SURFACED
+<!-- Wajib diisi. Kalau tidak ada, tulis "None this cycle." -->
+<!-- Format: "#N (proposed): [lesson text]" — Claude assign nomor final -->
+
+- #N (proposed): [lesson text]
 
 ---
 
