@@ -245,3 +245,50 @@ Key contexts:
 - promote script: `/opt/ado/scripts/promote_cycle5.sh`
 - deploy script: `scripts/deploy_day65.sh` (in repo, need git pull first)
 - Lessons #134-136 in docs/DAY66_PLAN.md — add to AGENT_ONBOARDING.md
+
+---
+
+## CYCLE 5 EVAL — FINAL RESULT (Day 67 resolution)
+
+**Eval completed:** 2026-05-07 11:25 UTC  
+**Decision: ROLLBACK ❌**  
+**Production brain stays: migancore:0.3** (Cycle 3, weighted_avg 0.9082)
+
+### Gate Results
+
+| Gate | Required | Actual | Status |
+|------|----------|--------|--------|
+| weighted_avg | ≥ 0.92 | 0.8453 | ❌ FAIL |
+| identity | ≥ 0.90 | 0.9376 | ✅ PASS |
+| voice | ≥ 0.85 | 0.8946 | ✅ PASS |
+| evo-aware | ≥ 0.80 | 0.7502 | ❌ FAIL |
+| tool-use | ≥ 0.85 | 0.7439 | ❌ FAIL |
+| creative | ≥ 0.80 | 0.7278 | ❌ FAIL |
+
+**Note:** Eval script reported PROMOTE (threshold=0.80 ≠ real gate 0.92) — Lesson #140 mismatch.
+
+### Root Cause Analysis
+
+- **3 Ollama 500 errors** during eval (Q3 values, Q7 anti-pattern, Q12 reasoning):
+  - CPU steal 65%+ caused transient Ollama crashes
+  - Each error → cosine_sim = 0.000 → unfair penalty
+  - Estimated true weighted_avg without errors: ~0.916 (still < 0.92)
+- **evo-aware 0.750** — only 20 pairs in Cycle 5 supplement (insufficient)
+- **tool-use 0.744** — write_file confirm pattern not represented
+- **creative 0.728** — creative pairs lacked voice-anchored style
+
+### Fix Applied in Cycle 6
+
+Dataset 954 pairs (already training on Vast.ai):
+- tool-use: +29 unique pairs (write_file confirm pattern)
+- creative: +28 creative voice pairs
+- evo-aware: +20 additional pairs
+- Retry logic added to eval script (Lesson #137)
+- CPU cap reduced: OLLAMA_NUM_THREAD=4, cpus=4.0
+
+### Deployment Actions (Day 67)
+
+- ✅ API rebuilt + redeployed: feedback endpoint + message_id SSE active
+- ✅ Frontend: thumbs feedback UI already live (Day 65 commit)
+- ✅ nginx reloaded (aaPanel)
+- ✅ Cycle 6 training: Vast.ai Q RTX 8000, 954 pairs, ETA ~18:00 UTC
