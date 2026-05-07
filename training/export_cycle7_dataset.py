@@ -110,16 +110,12 @@ def to_trl_format(row) -> dict:
 
 
 async def export_async(args):
-    from deps.db import get_async_db
     from sqlalchemy import text
-    from contextlib import asynccontextmanager
+    import models.base as _base
+    from models.base import init_engine
+    init_engine()
 
-    @asynccontextmanager
-    async def get_db():
-        async for db in get_async_db():
-            yield db
-
-    async with get_db() as db:
+    async with _base.AsyncSessionLocal() as db:
         # Build query
         source_placeholders = ", ".join(f":s{i}" for i in range(len(INCLUDE_SOURCES)))
         exclude_placeholders = ", ".join(f":e{i}" for i in range(len(EXCLUDE_SOURCES)))

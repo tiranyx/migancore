@@ -775,17 +775,13 @@ async def main_async(args):
         print(f"\nTotal planned: {sum(c['target'] for c in CATEGORIES.values())} pairs")
         return
 
-    # DB setup
-    from deps.db import get_async_db
-    from contextlib import asynccontextmanager
-
-    @asynccontextmanager
-    async def get_db():
-        async for db in get_async_db():
-            yield db
+    # DB setup — same pattern as Cycle 6 (deps.db.get_async_db doesn't exist in this container)
+    import models.base as _base
+    from models.base import init_engine
+    init_engine()
 
     total_stored = 0
-    async with get_db() as db:
+    async with _base.AsyncSessionLocal() as db:
         for cat_name, cfg in CATEGORIES.items():
             if args.only and cat_name != args.only:
                 continue
