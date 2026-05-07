@@ -351,7 +351,14 @@ def main():
     )
     log("Training started. Estimated 25-40 min...")
     train_start = time.time()
-    rc, out, err = ssh_run(ssh_host, ssh_port, train_cmd, timeout=7200)
+    # Lesson #143: timeout must exceed actual training time (Q RTX 8000 ~3.5hr for 954 pairs)
+    try:
+        rc, out, err = ssh_run(ssh_host, ssh_port, train_cmd, timeout=14400)
+    except Exception as e:
+        log(f"Training SSH timeout/error: {e}")
+        log("Instance NOT deleted — training may still be running on Vast.ai")
+        log("Recovery: bash /opt/ado/scripts/vast_recovery.sh")
+        sys.exit(7)
     train_elapsed = time.time() - train_start
     log(f"Training exit={rc} | elapsed={train_elapsed:.0f}s ({train_elapsed/60:.1f}min)")
 
