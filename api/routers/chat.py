@@ -403,6 +403,9 @@ async def chat_stream(
         tool_iter = 0
         # Cap of 4 tool round-trips before we force a final stream (matches sync director)
         STREAM_TOOL_MAX = 4
+        # Day 65 — pre-generate UUID for assistant message so it can be included
+        # in the `done` SSE event; frontend uses it for thumbs-up/down feedback.
+        assistant_msg_id = uuid.uuid4()
 
         try:
             # Day 39 — Phase A: tool execution loop (non-streamed). Continues only as
@@ -436,13 +439,14 @@ async def chat_stream(
                             yield _sse({"type": "chunk", "content": content_now})
                             chunk_count += 1
                             full_text = "".join(full_response)
-                            yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+                            yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
                             logger.info("chat.stream.done_via_toolcall", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
                             _t_done = asyncio.create_task(_persist_assistant_message(
                                 conversation_id=conversation_id,
                                 tenant_id=tenant_id,
                                 content=full_text,
                                 message_count=len(history) + 2,
+                                message_id=assistant_msg_id,
                             ))
                             _background_tasks.add(_t_done)
                             _t_done.add_done_callback(_background_tasks.discard)
@@ -455,7 +459,7 @@ async def chat_stream(
                             break
                         # Already spent tool iters but got no content/calls — finish
                         full_text = ""
-                        yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+                        yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
                         logger.warning("chat.stream.done_empty_after_tools", tool_iters=tool_iter)
                         return
 
@@ -557,7 +561,7 @@ async def chat_stream(
                         break
 
             full_text = "".join(full_response)
-            yield _sse({"type": "done", "conversation_id": str(conversation_id)})
+            yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
 
             # Day 53 — telemetry: engine, TTFB, sustained throughput.
             # Acceptance rate (true spec-dec metric) lives in llama-server
@@ -596,6 +600,7 @@ async def chat_stream(
                     tenant_id=tenant_id,
                     content=full_text,
                     message_count=len(history) + 2,
+                    message_id=assistant_msg_id,
                 )
             )
             _background_tasks.add(_t)
@@ -633,6 +638,7 @@ async def chat_stream(
                         tenant_id=tenant_id,
                         content=full_text + "\n\n[stopped by user]",
                         message_count=len(history) + 2,
+                        message_id=assistant_msg_id,
                     )
                 )
                 _background_tasks.add(_t)
@@ -1009,6 +1015,7 @@ async def _persist_assistant_message(
     tenant_id: str,
     content: str,
     message_count: int,
+    message_id: uuid.UUID | None = None,
 ) -> None:
     """Persist assistant message after SSE streaming completes.
 
@@ -1021,6 +1028,9 @@ async def _persist_assistant_message(
     breaking conversation continuity (every "follow-up" chat started cold
     because history loader saw user messages but no AI replies).
     Fix: import inside this function so it's resolved at call time.
+
+    Day 65: accepts optional message_id (pre-generated UUID) so the SSE
+    `done` event can include it before DB commit — enables thumbs feedback.
     """
     from models.base import AsyncSessionLocal as _ASL
     if _ASL is None:
@@ -1030,12 +1040,16 @@ async def _persist_assistant_message(
         async with _ASL() as db:
             await set_tenant_context(db, tenant_id)
 
-            assistant_msg = Message(
-                conversation_id=conversation_id,
-                tenant_id=uuid.UUID(tenant_id),
-                role="assistant",
-                content=content,
-            )
+            msg_kwargs: dict = {
+                "conversation_id": conversation_id,
+                "tenant_id": uuid.UUID(tenant_id),
+                "role": "assistant",
+                "content": content,
+            }
+            if message_id is not None:
+                msg_kwargs["id"] = message_id
+
+            assistant_msg = Message(**msg_kwargs)
             db.add(assistant_msg)
 
             await db.execute(

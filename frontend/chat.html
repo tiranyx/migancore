@@ -1011,6 +1011,12 @@
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+    // Day 65 — user feedback signal (thumbs_up / thumbs_down on assistant messages)
+    submitFeedback: (convId, msgId, rating, comment) => apiFetch(
+      `/v1/conversations/${convId}/messages/${msgId}/feedback`,
+      { method: 'POST', body: JSON.stringify({ rating, comment: comment || null }) }
+    ),
   };
 
   // ===========================
@@ -1070,7 +1076,7 @@
               const ev = JSON.parse(line.slice(6));
               if (ev.type === 'start')        onStart?.(ev.conversation_id);
               if (ev.type === 'chunk')        onChunk?.(ev.content || '');
-              if (ev.type === 'done')         onDone?.(ev.conversation_id);
+              if (ev.type === 'done')         onDone?.(ev.conversation_id, ev.message_id || null);
               if (ev.type === 'error')        onError?.(ev.message || 'Stream error');
               // Day 40 — tool execution events from hybrid stream endpoint
               if (ev.type === 'tool_start')   onToolStart?.(ev.tools || []);
@@ -1699,7 +1705,7 @@
     return parts.length ? parts : text;
   }
 
-  function Msg({ msg, onRetry }) {
+  function Msg({ msg, onRetry, convId }) {
     const { role, content, streaming, toolCount, error, tools, attachments } = msg;
     const label = role === 'user' ? 'YOU' : 'MC';
     const isError = !!error || (content || '').startsWith('⚠');
@@ -1707,6 +1713,17 @@
 
     // Day 36: Status hierarchy when streaming with NO content yet
     const isThinking = streaming && !content;
+
+    // Day 65 — feedback state (thumbs_up / thumbs_down)
+    const [fbState, setFbState] = React.useState(null); // null | 'liked' | 'disliked'
+    const [fbSent, setFbSent] = React.useState(false);
+
+    const sendFeedback = async (rating) => {
+      if (!convId || !msg.serverId || fbSent) return;
+      setFbState(rating === 'thumbs_up' ? 'liked' : 'disliked');
+      setFbSent(true);
+      try { await api.submitFeedback(convId, msg.serverId, rating, null); } catch (_) {}
+    };
 
     // Track elapsed seconds while thinking
     const [elapsed, setElapsed] = React.useState(0);
@@ -1779,6 +1796,37 @@
                 </div>
               )}
               {linkifyContent(content)}
+              {/* Day 65 — thumbs up/down feedback on completed assistant messages */}
+              {role === 'assistant' && !streaming && !isError && content && msg.serverId && convId && (
+                <div style={{ display: 'flex', gap: 5, marginTop: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => sendFeedback('thumbs_up')}
+                    title="Respons bagus"
+                    disabled={fbSent}
+                    style={{
+                      background: fbState === 'liked' ? 'var(--green-dim)' : 'transparent',
+                      border: `1px solid ${fbState === 'liked' ? 'var(--green-border)' : 'rgba(147,179,165,0.18)'}`,
+                      borderRadius: 4, padding: '2px 7px', cursor: fbSent ? 'default' : 'pointer',
+                      fontSize: '0.72rem', lineHeight: 1.4,
+                      color: fbState === 'liked' ? 'var(--green)' : 'var(--text-dim)',
+                      transition: 'all 0.15s', opacity: fbSent && fbState !== 'liked' ? 0.35 : 1,
+                    }}
+                  >👍</button>
+                  <button
+                    onClick={() => sendFeedback('thumbs_down')}
+                    title="Perlu diperbaiki"
+                    disabled={fbSent}
+                    style={{
+                      background: fbState === 'disliked' ? 'var(--orange-dim)' : 'transparent',
+                      border: `1px solid ${fbState === 'disliked' ? 'var(--orange-border)' : 'rgba(147,179,165,0.18)'}`,
+                      borderRadius: 4, padding: '2px 7px', cursor: fbSent ? 'default' : 'pointer',
+                      fontSize: '0.72rem', lineHeight: 1.4,
+                      color: fbState === 'disliked' ? 'var(--orange)' : 'var(--text-dim)',
+                      transition: 'all 0.15s', opacity: fbSent && fbState !== 'disliked' ? 0.35 : 1,
+                    }}
+                  >👎</button>
+                </div>
+              )}
             </div>
           )}
 
@@ -2060,9 +2108,11 @@
             m.id === targetMsgId ? { ...m, content: m.content + chunk } : m
           ));
         },
-        onDone: () => {
+        onDone: (cid, serverMsgId) => {
           setMsgs(p => p.map(m =>
-            m.id === targetMsgId ? { ...m, streaming: false, error: false } : m
+            m.id === targetMsgId
+              ? { ...m, streaming: false, error: false, serverId: serverMsgId || null }
+              : m
           ));
           setConsecErrors(0); // Day 52 Fix: success → reset error counter
           setBusy(false);
@@ -2522,6 +2572,7 @@
                   key={m.id}
                   msg={m}
                   onRetry={retry}
+                  convId={convId}
                 />
               ))
             )}
