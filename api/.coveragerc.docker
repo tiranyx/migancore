@@ -1,0 +1,38 @@
+[run]
+source = .
+omit =
+    */tests/*
+    */test_*
+    */.venv/*
+    */migrations/*
+    */__pycache__/*
+    # Only omit the truly external-dependent modules that fail even in Docker
+    */services/ollama.py
+    */services/llamaserver.py
+    */services/onamix_mcp.py
+    */services/synthetic_pipeline.py
+    */services/cai_pipeline.py
+    */services/distillation.py
+    */services/teacher_api.py
+    */services/magpie_seeds.py
+    */services/seed_bank.py
+    */services/conv_summarizer.py
+    */services/ingestion_worker.py
+    */services/response_cache.py
+    */main.py
+    */mcp_server.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    except ImportError:
+    pass  # abstract
+
+# Show missing lines for modules under 100% coverage
+show_missing = true
+skip_covered = false

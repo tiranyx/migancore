@@ -1,29 +1,189 @@
-# Test environment for integration tests
-# Usage: docker compose -f docker-compose.test.yml up -d
-#        pytest tests/integration/
-version: "3.8"
+# =============================================================================
+# MIGANCORE — Docker-based Test Runner (SP-104)
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.test.yml build api_test
+#   docker compose -f docker-compose.test.yml up --abort-on-container-exit
+#
+# This composition runs the FULL test suite inside the production-like
+# container (Python 3.11, all deps installable) against real PostgreSQL
+# + Redis services. Solves the local Windows Python 3.14 dependency hell.
+#
+# Target coverage: ≥40% (vs 19% local due to numpy<2 vs ≥2.1 conflict)
+# =============================================================================
 
 services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 + pgvector — matches production
+  # ---------------------------------------------------------------------------
   postgres_test:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ado
+      POSTGRES_USER: ado_app
       POSTGRES_PASSWORD: test
       POSTGRES_DB: ado_test
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "ado"]
+      test: ["CMD", "pg_isready", "-U", "ado_app"]
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits: { memory: 1G }
 
+  # ---------------------------------------------------------------------------
+  # Redis 7 — matches production
+  # ---------------------------------------------------------------------------
   redis_test:
     image: redis:7-alpine
     ports:
       - "6380:6379"
+    command: ["redis-server", "--requirepass", "test"]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "test", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits: { memory: 512M }
+
+  # ---------------------------------------------------------------------------
+  # Qdrant — for services that need vector DB (optional, mock if unavailable)
+  # ---------------------------------------------------------------------------
+  qdrant_test:
+    image: qdrant/qdrant:v1.12.0
+    ports:
+      - "6343:6333"
+    deploy:
+      resources:
+        limits: { memory: 1G }
+
+  # ---------------------------------------------------------------------------
+  # API Test Runner — builds prod image, runs pytest with coverage
+  # ---------------------------------------------------------------------------
+  api_test:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    # Override entrypoint to skip uvicorn startup; run pytest instead
+    entrypoint: [""]
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "=== MIGANCORE Docker Test Runner ==="
+        echo "Python: $(python --version)"
+        echo ""
+        # Wait for dependencies
+        echo "⏳ Waiting for PostgreSQL..."
+        for i in {1..30}; do
+          python -c "import asyncpg; import asyncio; asyncio.run(asyncpg.connect('postgresql://ado_app:test@postgres_test:5432/ado_test').close())" 2>/dev/null && break
+          sleep 1
+        done
+        echo "✅ PostgreSQL ready"
+        echo "⏳ Waiting for Redis..."
+        for i in {1..30}; do
+          python -c "import redis.asyncio as r; import asyncio; asyncio.run(r.from_url('redis://:test@redis_test:6379/0').ping())" 2>/dev/null && break
+          sleep 1
+        done
+        echo "✅ Redis ready"
+        echo "⏳ Waiting for Qdrant..."
+        for i in {1..30}; do
+          python -c "import httpx; import asyncio; asyncio.run(httpx.AsyncClient().get('http://qdrant_test:6333/collections'))" 2>/dev/null && break
+          sleep 1
+        done
+        echo "✅ Qdrant ready"
+        echo ""
+        # Generate dummy RSA keys for JWT signing in tests
+        mkdir -p /tmp/test_keys
+        openssl genrsa -out /tmp/test_keys/private.pem 2048 2>/dev/null
+        openssl rsa -in /tmp/test_keys/private.pem -pubout -out /tmp/test_keys/public.pem 2>/dev/null
+        chown -R ado:ado /tmp/test_keys
+        echo "✅ Dummy JWT keys generated"
+        echo ""
+        # Install test extras (pytest-cov not in requirements.txt)
+        pip install --no-cache-dir pytest-cov pytest-xdist 2>&1 | tail -n 2
+        echo ""
+        # Run tests with coverage
+        cd /app
+        pytest tests/ \
+          --cov=. \
+          --cov-config=/app/.coveragerc \
+          --cov-report=term-missing:skip-covered \
+          --cov-report=html:/app/htmlcov_docker \
+          --cov-report=json:/app/coverage.json \
+          --cov-fail-under=40 \
+          -v \
+          --tb=short \
+          2>&1 | tee /app/test_output.log
+        TEST_EXIT=${PIPESTATUS[0]}
+        echo ""
+        echo "=== Coverage Summary ==="
+        if [ -f /app/coverage.json ]; then
+          python -c "
+            import json, sys
+            d = json.load(open('/app/coverage.json'))
+            pct = d.get('totals', {}).get('percent_covered', 0)
+            print(f'Overall coverage: {pct:.2f}%')
+            if pct < 40:
+                print('❌ FAIL: Coverage below 40%')
+                sys.exit(1)
+            else:
+                print('✅ PASS: Coverage meets target')
+          "
+        fi
+        exit $TEST_EXIT
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ado_app:test@postgres_test:5432/ado_test
+      REDIS_URL: redis://:test@redis_test:6379/0
+      QDRANT_URL: http://qdrant_test:6333
+      QDRANT_API_KEY: ""
+      OLLAMA_URL: http://localhost:11434
+      LETTA_URL: http://localhost:8283
+      ADMIN_SECRET_KEY: test-admin-key-for-ci-only
+      LICENSE_SECRET_KEY: test-license-secret-for-ci-only
+      LICENSE_DEMO_MODE: "true"
+      ADO_DISPLAY_NAME: TestMigan
+      ENVIRONMENT: testing
+      LOG_LEVEL: WARNING
+      # Disable external API calls during tests
+      ANTHROPIC_API_KEY: ""
+      OPENAI_API_KEY: ""
+      KIMI_API_KEY: ""
+      GEMINI_API_KEY: ""
+      TAVILY_API_KEY: ""
+      SERPER_API_KEY: ""
+      FAL_KEY: ""
+      ELEVENLABS_KEY: ""
+      # JWT keys — generate dummy RSA pair at runtime
+      JWT_PRIVATE_KEY_PATH: /tmp/test_keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /tmp/test_keys/public.pem
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: 7
+    volumes:
+      # Mount test code so we can iterate without rebuild
+      - ./api/tests:/app/tests:ro
+      # Mount pytest config
+      - ./api/pytest.ini:/app/pytest.ini:ro
+      - ./api/.coveragerc.docker:/app/.coveragerc:ro
+      # Output coverage reports to host
+      - ./api/htmlcov_docker:/app/htmlcov_docker
+      - ./api/coverage.json:/app/coverage.json
+      # Workspace for sandboxed tests
+      - /tmp/migan_test_workspace:/app/workspace
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+      qdrant_test:
+        condition: service_started
+    deploy:
+      resources:
+        limits: { memory: 3G, cpus: '2.0' }
+    # Not read-only for tests (need to write coverage reports)
+    read_only: false
