@@ -14,19 +14,6 @@ import uuid
 
 sys.path.insert(0, "/app")
 
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-import asyncio
-import sys
-import uuid
-
-import pytest
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-import asyncio
-
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,6 +98,7 @@ async def _cleanup_test_data(session: AsyncSession, tenant_ids: list[uuid.UUID])
     await session.commit()
 
 
+@pytest.mark.asyncio
 async def test_rls_isolation():
     """Main RLS test: Tenant A cannot see Tenant B's data."""
     print("\n=== RLS ISOLATION TEST ===\n")
@@ -194,11 +182,16 @@ async def test_rls_isolation():
 
     if failures:
         print(f"\n{len(failures)} TEST(S) FAILED: {', '.join(failures)}")
-        return False
     print("\nALL RLS TESTS PASSED")
-    return True
+    
+    # Use assertions for pytest compatibility
+    assert len(failures) == 0, f"RLS tests failed: {failures}"
 
 
 if __name__ == "__main__":
-    ok = asyncio.run(test_rls_isolation())
-    exit(0 if ok else 1)
+    try:
+        asyncio.run(test_rls_isolation())
+        exit(0)
+    except AssertionError as e:
+        print(f"FAILED: {e}")
+        exit(1)

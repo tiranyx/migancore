@@ -25,7 +25,7 @@ services:
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "ado_app"]
+      test: ["CMD", "pg_isready", "-U", "ado_app", "-d", "ado_test"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -108,6 +108,11 @@ services:
         # Install test extras (pytest-cov not in requirements.txt)
         pip install --no-cache-dir pytest-cov pytest-xdist 2>&1 | tail -n 2
         echo ""
+        # Run DB migrations so schema + RLS policies exist for integration tests
+        echo "⏳ Running alembic migrations..."
+        cd /app && alembic upgrade head
+        echo "✅ Migrations complete"
+        echo ""
         # Run tests with coverage
         cd /app
         pytest tests/ \
@@ -115,7 +120,7 @@ services:
           --cov-config=/app/.coveragerc \
           --cov-report=term-missing:skip-covered \
           --cov-report=html:/app/htmlcov_docker \
-          --cov-report=json:/app/coverage.json \
+          --cov-report=json:/tmp/coverage.json \
           --cov-fail-under=40 \
           -v \
           --tb=short \
@@ -123,10 +128,10 @@ services:
         TEST_EXIT=$${PIPESTATUS[0]}
         echo ""
         echo "=== Coverage Summary ==="
-        if [ -f /app/coverage.json ]; then
+        if [ -f /tmp/coverage.json ]; then
           python -c "
             import json, sys
-            d = json.load(open('/app/coverage.json'))
+            d = json.load(open('/tmp/coverage.json'))
             pct = d.get('totals', {}).get('percent_covered', 0)
             print(f'Overall coverage: {pct:.2f}%')
             if pct < 40:
@@ -136,6 +141,8 @@ services:
                 print('✅ PASS: Coverage meets target')
           "
         fi
+        # Copy coverage reports to mounted host directories
+        cp -f /tmp/coverage.json /app/htmlcov_docker/coverage.json 2>/dev/null || true
         exit $$TEST_EXIT
     environment:
       DATABASE_URL: postgresql+asyncpg://ado_app:test@postgres_test:5432/ado_test
@@ -173,7 +180,6 @@ services:
       - ./api/.coveragerc.docker:/app/.coveragerc:ro
       # Output coverage reports to host
       - ./api/htmlcov_docker:/app/htmlcov_docker
-      - ./api/coverage.json:/app/coverage.json
       # Workspace for sandboxed tests
       - /tmp/migan_test_workspace:/app/workspace
     depends_on:
