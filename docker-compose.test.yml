@@ -76,7 +76,7 @@ services:
       - |
         set -e
         echo "=== MIGANCORE Docker Test Runner ==="
-        echo "Python: $(python --version)"
+        echo "Python: $$(python --version)"
         echo ""
         # Wait for dependencies
         echo "⏳ Waiting for PostgreSQL..."
@@ -120,7 +120,7 @@ services:
           -v \
           --tb=short \
           2>&1 | tee /app/test_output.log
-        TEST_EXIT=${PIPESTATUS[0]}
+        TEST_EXIT=$${PIPESTATUS[0]}
         echo ""
         echo "=== Coverage Summary ==="
         if [ -f /app/coverage.json ]; then
@@ -136,7 +136,7 @@ services:
                 print('✅ PASS: Coverage meets target')
           "
         fi
-        exit $TEST_EXIT
+        exit $$TEST_EXIT
     environment:
       DATABASE_URL: postgresql+asyncpg://ado_app:test@postgres_test:5432/ado_test
       REDIS_URL: redis://:test@redis_test:6379/0
