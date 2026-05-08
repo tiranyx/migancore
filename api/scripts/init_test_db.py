@@ -37,27 +37,27 @@ Table(
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ado_app:test@localhost:5432/ado_test")
 
-# RLS policies from baseline migration
+# RLS policies from baseline migration (PostgreSQL has no IF NOT EXISTS for policies)
 RLS_POLICIES = """
-CREATE POLICY IF NOT EXISTS tenant_isolation_users ON users
+CREATE POLICY tenant_isolation_users ON users
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY IF NOT EXISTS tenant_isolation_agents ON agents
+CREATE POLICY tenant_isolation_agents ON agents
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY IF NOT EXISTS tenant_isolation_conversations ON conversations
+CREATE POLICY tenant_isolation_conversations ON conversations
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY IF NOT EXISTS tenant_isolation_messages ON messages
+CREATE POLICY tenant_isolation_messages ON messages
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY IF NOT EXISTS tenant_isolation_feedback ON interactions_feedback
+CREATE POLICY tenant_isolation_feedback ON interactions_feedback
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY IF NOT EXISTS tenant_isolation_memory ON memory_blocks
+CREATE POLICY tenant_isolation_memory ON memory_blocks
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY IF NOT EXISTS tenant_isolation_archival ON archival_memory
+CREATE POLICY tenant_isolation_archival ON archival_memory
     USING (tenant_id = current_setting('app.current_tenant')::uuid);
 """
 
