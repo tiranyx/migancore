@@ -1,0 +1,41 @@
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [main, master]
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to VPS staging
+    runs-on: ubuntu-latest
+    needs: []  # Optional: add 'test' job if you want tests to pass first
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          port: ${{ secrets.STAGING_PORT || '22' }}
+          script: |
+            set -e
+            cd /opt/ado
+            git pull origin main
+            docker compose build api
+            docker compose up -d api
+            echo "Waiting for health check..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:18000/health > /dev/null; then
+                echo "Staging deployed successfully"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health check failed"
+            exit 1

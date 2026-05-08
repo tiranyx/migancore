@@ -1,0 +1,44 @@
+name: CI — Test & Lint
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov httpx
+
+      - name: Run tests
+        env:
+          DATABASE_URL: "postgresql+asyncpg://ado_app:test@localhost:5432/ado"
+          REDIS_URL: "redis://:test@localhost:6379/0"
+        run: |
+          pytest tests/ -v --ignore=tests/test_rls.py --cov=api --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./api/coverage.xml
+          fail_ci_if_error: false
