@@ -9,7 +9,7 @@ by background workers (teacher distillation, synthetic generation).
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, ForeignKey, DateTime, Float, Text
+from sqlalchemy import String, ForeignKey, DateTime, Float, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,7 +22,7 @@ class FeedbackEvent(Base):
     __tablename__ = "interactions_feedback"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default="gen_random_uuid()"
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     message_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
