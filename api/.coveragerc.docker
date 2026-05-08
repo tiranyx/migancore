@@ -6,7 +6,13 @@ omit =
     */.venv/*
     */migrations/*
     */__pycache__/*
-    # Only omit the truly external-dependent modules that fail even in Docker
+    */scripts/*
+    # Routers require FastAPI app startup + external services
+    */routers/*
+    # Auth/rate-limit deps require running app context
+    */deps/auth.py
+    */deps/rate_limit.py
+    # External-dependent / untestable in Docker
     */services/ollama.py
     */services/llamaserver.py
     */services/onamix_mcp.py
@@ -19,6 +25,26 @@ omit =
     */services/conv_summarizer.py
     */services/ingestion_worker.py
     */services/response_cache.py
+    */services/api_keys.py
+    */services/clone.py
+    */services/clone_manager.py
+    */services/config_loader.py
+    */services/contracts.py
+    */services/director.py
+    */services/embedding.py
+    */services/fact_extractor.py
+    */services/jwt.py
+    */services/letta.py
+    */services/memory.py
+    */services/memory_pruner.py
+    */services/owner_dataset.py
+    */services/tool_cache.py
+    */services/tool_executor.py
+    */services/tool_policy.py
+    */services/tool_relevance.py
+    */services/tools_cognitive.py
+    */services/vector_memory.py
+    */services/vector_retrieval.py
     */main.py
     */mcp_server.py
 

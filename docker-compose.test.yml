@@ -109,9 +109,9 @@ services:
         pip install --no-cache-dir pytest-cov pytest-xdist 2>&1 | tail -n 2
         echo ""
         # Run DB migrations so schema + RLS policies exist for integration tests
-        echo "⏳ Running alembic migrations..."
-        cd /app && alembic upgrade head
-        echo "✅ Migrations complete"
+        echo "⏳ Initialising database schema..."
+        cd /app && python scripts/init_test_db.py
+        echo "✅ Schema initialised"
         echo ""
         # Run tests with coverage
         cd /app
