@@ -237,7 +237,7 @@ class TestBaseMetadata:
         for name in expected:
             assert name in tables, f"Table {name} not registered in Base.metadata"
 
-    def test_hafidz_not_in_base_metadata_yet(self):
-        """hafidz_contributions is added via migration, not ORM model."""
+    def test_hafidz_in_base_metadata(self):
+        """hafidz_contributions is now registered via ORM model import."""
         tables = Base.metadata.tables
-        assert "hafidz_contributions" not in tables
+        assert "hafidz_contributions" in tables
