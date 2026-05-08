@@ -1,33 +1,51 @@
-FROM python:3.11-slim
+# ============================================
+# MIGANCORE API — Multi-Stage Optimized Build
+# Target: <400MB (from 752MB)
+# ============================================
+
+# -------- Stage 1: Builder --------
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-# Day 41: weasyprint needs cairo + pango + gdk-pixbuf; marp-cli needs nodejs (chromium for PPTX renderer)
-# Day 42 prep: nodejs also needed for HYPERX subprocess integration
+# Install build deps only (not needed at runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps into a virtual environment
+# (makes it easy to copy to runtime stage)
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# -------- Stage 2: Runtime --------
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Install ONLY runtime system deps (no build tools, no chromium, no nodejs)
+# Weasyprint needs: libcairo2, libpango, libgdk-pixbuf, libffi
+# PostgreSQL needs: libpq5 (runtime, not dev)
+# Fonts needed for PDF generation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libgdk-pixbuf-2.0-0 \
-    libffi-dev \
+    libffi8 \
     shared-mime-info \
     fonts-dejavu \
-    nodejs \
-    npm \
-    chromium \
-    && npm install -g @marp-team/marp-cli@4 \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell marp/puppeteer where chromium is (avoids second download)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy application code
 COPY . .

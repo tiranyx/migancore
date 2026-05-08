@@ -141,7 +141,7 @@ services:
     depends_on: [postgres, qdrant, redis, ollama]
     deploy:
       resources:
-        limits: { memory: 2G }
+        limits: { memory: 4G }
 
   # Celery workers DISABLED for seed stage — saves 4-6GB RAM.
   # Use asyncio.create_task() for background jobs instead.
