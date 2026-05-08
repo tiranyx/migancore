@@ -168,6 +168,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error("memory_pruner.start_failed", error=str(exc))
 
+    # 6b. Sprint 1: Launch knowledge ingestion worker (SP-009)
+    ingestion_task = None
+    try:
+        from services.ingestion_worker import start_worker
+        ingestion_task = start_worker()
+        logger.info("ingestion.worker.started")
+    except Exception as exc:
+        logger.error("ingestion.worker.start_failed", error=str(exc))
+
     # 7. Day 44: Start ONAMIX MCP stdio singleton client (Track A)
     #    Replaces per-call subprocess.run pattern (Day 42) — eliminates
     #    Node.js cold-start cost per request, unlocks 6 new tools.
@@ -323,6 +332,14 @@ async def lifespan(app: FastAPI):
         pruner_task.cancel()
         try:
             await pruner_task
+        except asyncio.CancelledError:
+            pass
+
+    # Tear down ingestion worker
+    if ingestion_task is not None and not ingestion_task.done():
+        ingestion_task.cancel()
+        try:
+            await ingestion_task
         except asyncio.CancelledError:
             pass
 

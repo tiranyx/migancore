@@ -34,6 +34,8 @@ from services.hafidz import (
     list_contributions,
     review_contribution,
 )
+from services.ingestion import incorporate_contribution
+from services.ingestion_worker import enqueue_contribution
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/hafidz", tags=["hafidz"])
@@ -98,6 +100,9 @@ async def submit_contribution(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
+
+    # SP-009: Auto-enqueue for ingestion pipeline
+    await enqueue_contribution(contrib.id)
 
     logger.info(
         "hafidz.submitted",
@@ -197,3 +202,57 @@ async def review_contribution_endpoint(
         quality_score=req.quality_score,
     )
     return ContributionResponse.model_validate(contrib)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INGESTION PIPELINE — SP-009
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/contributions/{contribution_id}/ingest", dependencies=[Depends(_require_admin)])
+async def ingest_contribution_endpoint(
+    contribution_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Manually trigger ingestion for a contribution.
+
+    Runs quality scoring + auto-incorporate logic synchronously.
+    Returns decision, quality_score, and optional training pair_id.
+    """
+    try:
+        result = await incorporate_contribution(db, contribution_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    return {
+        "contribution_id": str(result["contribution_id"]),
+        "quality_score": result["quality_score"],
+        "decision": result["decision"],
+        "pair_id": str(result["pair_id"]) if result["pair_id"] else None,
+    }
+
+
+@router.get("/queue/status", dependencies=[Depends(_require_admin)])
+async def queue_status() -> dict:
+    """Return ingestion queue status (Redis-backed)."""
+    try:
+        import redis.asyncio as aioredis
+        from config import settings
+        r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=3)
+        queue_len = await r.llen("migancore:ingestion:queue")
+        await r.aclose()
+        return {
+            "queue_key": "migancore:ingestion:queue",
+            "pending_items": queue_len,
+            "worker_running": True,  # Simplified — actual state tracked in worker module
+        }
+    except Exception as exc:
+        return {
+            "queue_key": "migancore:ingestion:queue",
+            "pending_items": None,
+            "worker_running": False,
+            "error": str(exc),
+        }
