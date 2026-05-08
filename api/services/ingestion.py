@@ -148,11 +148,23 @@ async def incorporate_contribution(
     contrib.quality_score = quality_score
 
     # Decide
+    segment_id = None
     if quality_score >= 0.8:
         decision = "auto_approved"
         contrib.status = "incorporated"
         contrib.incorporated_at = datetime.now(timezone.utc)
         pair_id = await _convert_to_preference_pair(session, contrib)
+        # Also accumulate into Parent Brain for distribution to other children
+        try:
+            from services.parent_brain import accumulate_segment
+            segment = await accumulate_segment(session, contrib)
+            segment_id = segment.id
+        except Exception as exc:
+            logger.warning(
+                "ingestion.brain_accumulate_failed",
+                contribution_id=str(contribution_id),
+                error=str(exc),
+            )
     elif quality_score >= 0.5:
         decision = "queued_for_review"
         contrib.status = "reviewing"
@@ -179,6 +191,7 @@ async def incorporate_contribution(
         "quality_score": quality_score,
         "decision": decision,
         "pair_id": pair_id,
+        "segment_id": segment_id,
     }
 
 

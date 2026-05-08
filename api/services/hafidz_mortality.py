@@ -72,11 +72,24 @@ async def report_child_death(
 
     await session.commit()
 
+    # Transfer all brain segments from child to parent
+    brain_transfer = {"segments_transferred": 0}
+    try:
+        from services.parent_brain import transfer_all_segments_on_death
+        brain_transfer = await transfer_all_segments_on_death(session, child_license_id)
+    except Exception as exc:
+        logger.warning(
+            "hafidz.brain_transfer_failed",
+            child_license_id=child_license_id,
+            error=str(exc),
+        )
+
     logger.info(
         "hafidz.child_death_reported",
         child_license_id=child_license_id,
         death_reason=death_reason,
         contributions_affected=affected,
+        segments_transferred=brain_transfer.get("segments_transferred", 0),
     )
 
     return {
@@ -85,6 +98,7 @@ async def report_child_death(
         "death_reason_human": DEATH_REASONS[death_reason],
         "death_note": death_note,
         "contributions_affected": affected,
+        "segments_transferred": brain_transfer.get("segments_transferred", 0),
         "died_at": now.isoformat(),
     }
 
