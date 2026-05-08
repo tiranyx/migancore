@@ -111,19 +111,74 @@ fatal: no submodule mapping found in .gitmodules for path 'busy-dijkstra-d1681d'
 ### 2.1 VPS Access
 | Aspect | Status | Detail |
 |---|---|---|
-| SSH (root@72.62.125.6) | 🔴 TIMEOUT | 30s timeout, tidak bisa masuk |
+| SSH (sidix-vps config) | 🟢 **OK** | `~/.ssh/sidix_session_key` — working |
+| Direct SSH (root@72.62.125.6) | 🔴 TIMEOUT | Default key rejected, must use config |
 | API Health | 🟢 OK | `curl /health` = 200, 50ms |
 | DNS Resolution | 🟢 OK | All domains → 72.62.125.6 |
 
-**Issue:** SSH tidak bisa diakses. Kemungkinan:
-- Firewall (UFW) block port 22 dari IP ini
-- SSH key tidak configured
-- Port SSH diubah dari default
+**SSH Config:** `C:\Users\ASUS\.ssh\config`
+```
+Host sidix-vps
+    HostName 72.62.125.6
+    User root
+    IdentityFile ~/.ssh/sidix_session_key
+    IdentitiesOnly yes
+```
 
-**Action required:**
-1. Cek aaPanel SSH config (port, key-based auth)
-2. Pastikan IP Windows workspace di-whitelist di UFW
-3. Atau: gunakan console provider (Hetzner) untuk emergency access
+**Usage:** `ssh sidix-vps "command"`
+
+### 2.2 Server Resources
+| Resource | Value | Status |
+|---|---|---|
+| RAM | 31GB total / 4.7GB used / **26GB available** | 🟢 Excellent |
+| Disk | 388GB total / 124GB used / **264GB free** | 🟢 Excellent |
+| Load average | 0.00 | 🟢 Very idle |
+| Uptime | 1 day, 2 hours | 🟢 Stable |
+
+### 2.3 Docker Containers
+
+**Running (7 containers):**
+| Container | Status | Uptime | Ports |
+|---|---|---|---|
+| ado-api-1 | Up 16 hours | Healthy | 127.0.0.1:18000→8000 |
+| ado-ollama-1 | Up 23 hours | OK | 11434 (internal) |
+| ado-postgres-1 | Up 26 hours | Healthy | 5432 (internal) |
+| ado-qdrant-1 | Up 26 hours | OK | 6333-6334 (internal) |
+| ado-redis-1 | Up 26 hours | OK | 6379 (internal) |
+| ado-letta-1 | Up 26 hours | OK | 8083 (internal) |
+
+**NOT Running (missing from compose):**
+| Service | Status | Reason |
+|---|---|---|
+| langfuse | 🔴 MISSING | Not in default profile |
+| caddy | 🔴 MISSING | Disabled — aaPanel/nginx owns 80/443 |
+| studio/mlflow | 🔴 MISSING | Future/training profile |
+| celery workers | 🔴 MISSING | workers profile not active |
+| frontend | 🔴 MISSING | Served by nginx directly from /opt/ado/frontend |
+
+**Docker Compose Profile:** `default` only (postgres, redis, qdrant, ollama, api, letta)
+
+### 2.4 Reverse Proxy Architecture
+
+**Actual reverse proxy: aaPanel/nginx** (NOT caddy)
+- Nginx master process: `/www/server/nginx/sbin/nginx`
+- Listens on 0.0.0.0:80 and 0.0.0.0:443
+- SSL via Let's Encrypt
+- API proxied to `127.0.0.1:18000` (ado-api-1 container port mapping)
+- Frontend served from `/opt/ado/frontend/` (nginx root directive)
+- Landing served from `/www/wwwroot/migancore.com/` (nginx root directive)
+
+**Nginx configs exist for:**
+- ✅ `migancore.com` + `www.migancore.com` (landing)
+- ✅ `api.migancore.com` (API proxy to :18000)
+- ✅ `app.migancore.com` (frontend from /opt/ado/frontend)
+- ❌ `lab.migancore.com` — **NO CONFIG**
+- ❌ `studio.migancore.com` — **NO CONFIG**
+
+**Why lab/studio down:**
+1. No nginx vhost config for these subdomains
+2. langfuse container not running (not in default compose profile)
+3. studio service doesn't exist in compose
 
 ### 2.2 Docker Containers (via API inference)
 Tidak bisa verifikasi langsung karena SSH timeout, tapi dari `/ready` endpoint:
@@ -246,21 +301,25 @@ Tidak bisa verifikasi langsung karena SSH timeout, tapi dari `/ready` endpoint:
 | **Real Data** | **29** | **0.9%** | 🔴 **CRITICAL** |
 | **Synthetic** | **~3300** | **~98%** | 🔴 **CRITICAL** |
 
-### 4.2 Database State (inferred)
+### 4.2 Database State (verified via SSH)
 
-| Table | Expected | Actual | Status |
+| Table | Row Count | Status | Notes |
 |---|---|---|---|
-| tenants | 1+ | ? | Unknown |
-| users | 1+ | ? | Unknown |
-| agents | 1+ | ? | Unknown |
-| conversations | 1+ | ? | Unknown |
-| messages | 1+ | ? | Unknown |
-| preference_pairs | 3354 | 3354 | ✅ |
-| model_versions | 1+ | ? | Unknown |
-| training_runs | 0 | 0 | ⚠️ Not tracked? |
-| datasets | 0 | 0 | ⚠️ Not tracked? |
-| kg_entities | 0 | 0 | ⚠️ Not tracked? |
-| interactions_feedback | 1 | 1 | 🔴 Broken |
+| tenants | **56** | 🟢 | Multi-tenant active |
+| users | **56** | 🟢 | 1 user per tenant? |
+| agents | **73** | 🟢 | Active agents |
+| conversations | **72** | 🟢 | Chat sessions |
+| messages | **194** | 🟢 | Total messages |
+| preference_pairs | **3354** | ⚠️ | 99% synthetic |
+| tools | **21** | 🟢 | Tool registry |
+| model_versions | ? | ? | Not checked |
+| training_runs | **0** | 🔴 | Not tracked |
+| datasets | **0** | 🔴 | Not tracked |
+| kg_entities | **0** | 🔴 | Knowledge graph empty |
+| kg_relations | **0** | 🔴 | Knowledge graph empty |
+| interactions_feedback | **0** | 🔴 | Broken worker |
+| experiments | ? | ? | Not checked |
+| papers | ? | ? | Not checked |
 
 ---
 
@@ -279,6 +338,19 @@ Tidak bisa verifikasi langsung karena SSH timeout, tapi dari `/ready` endpoint:
 | tiranyx.com | N/A | DOWN |
 
 **Security headers:** API returns 401/405 correctly untuk protected endpoints. Public endpoints (health, ready, public/stats, system/*) correctly unauthenticated.
+
+---
+
+## 5.5 SERVER DEPLOYMENT GAP
+
+**Server git is BEHIND GitHub by 6 commits:**
+- Server: `556abb2` (Day 71d Phase 4)
+- GitHub: `b2cf0a8` (Day 0 Remap + Audit)
+- Missing on server: Day 71e research, lessons F-12~F-18, architecture remap, daily logs, alignment audit
+
+**Impact:** Semua docs baru tidak ada di server. Tapi karena ini hanya docs (bukan code), API tidak terpengaruh.
+
+**Fix:** `git pull` di `/opt/ado/` (tidak perlu rebuild karena hanya markdown).
 
 ---
 
@@ -310,6 +382,51 @@ Tidak bisa verifikasi langsung karena SSH timeout, tapi dari `/ready` endpoint:
 | 10 | SSH timeout | Cannot check server directly | Whitelist IP di UFW |
 | 11 | docs/logs in .gitignore | Daily logs not tracked | Remove from .gitignore OR use -f |
 | 12 | 99% synthetic data | Brain quality stuck | Build 4 pathways (M1) |
+
+---
+
+## 6.5 SSH VALIDATION COMMANDS
+
+Sekarang SSH berfungsi, berikut commands untuk validasi cepat:
+
+```bash
+# === CONNECT ===
+ssh sidix-vps
+
+# === HEALTH CHECKS ===
+# API health
+curl -s http://localhost:18000/health | python3 -m json.tool
+
+# Readiness (all services)
+curl -s http://localhost:18000/ready | python3 -m json.tool
+
+# Public stats
+curl -s http://localhost:18000/v1/public/stats | python3 -m json.tool
+
+# === DOCKER ===
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
+
+# === DATABASE ===
+docker exec ado-postgres-1 psql -U ado -d ado -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;"
+docker exec ado-postgres-1 psql -U ado -d ado -c "SELECT source_method, COUNT(*) FROM preference_pairs GROUP BY source_method ORDER BY COUNT(*) DESC;"
+docker exec ado-postgres-1 psql -U ado -d ado -c "SELECT COUNT(*) FROM agents;"
+docker exec ado-postgres-1 psql -U ado -d ado -c "SELECT COUNT(*) FROM conversations;"
+docker exec ado-postgres-1 psql -U ado -d ado -c "SELECT COUNT(*) FROM interactions_feedback;"
+
+# === RESOURCES ===
+free -h
+df -h
+cat /proc/loadavg
+
+# === LOGS ===
+docker logs ado-api-1 --tail 50
+docker logs ado-ollama-1 --tail 20
+
+# === OLLAMA ===
+docker exec ado-ollama-1 ollama list
+docker exec ado-ollama-1 ollama ps
+```
 
 ---
 
