@@ -59,6 +59,7 @@ from routers import license as license_router  # Day 61
 from routers import metrics as metrics_router  # Day 72: Sprint 0 Observability
 from routers import hafidz as hafidz_router  # Day 72: Sprint 1 Hafidz Ledger
 from routers import brain as brain_router  # Day 72: Parent Brain — knowledge distribution
+from routers import owner_datasets as owner_datasets_router  # Sprint 1: Owner Data Pathway
 
 # Day 26: MCP Streamable HTTP server (lazy import — degrades gracefully if SDK missing)
 try:
@@ -412,6 +413,7 @@ app.include_router(license_router.router)  # Day 61
 app.include_router(metrics_router.router)
 app.include_router(hafidz_router.router)  # Day 72: Sprint 1 Hafidz Ledger
 app.include_router(brain_router.router)  # Day 72: Parent Brain — knowledge distribution
+app.include_router(owner_datasets_router.router)  # Sprint 1: Owner Data Pathway
 
 # Day 71d Phase 2.1: system telemetry (status + metrics, public, no auth)
 try:

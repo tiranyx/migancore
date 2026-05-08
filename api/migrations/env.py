@@ -30,6 +30,7 @@ from models import (  # noqa: F401 -- side effect: register all tables in Base.m
     audit_event,
     brain_segment,
     feedback,
+    owner_dataset,
 )
 
 # this is the Alembic Config object

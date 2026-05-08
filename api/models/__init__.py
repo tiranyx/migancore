@@ -14,6 +14,7 @@ from models.preference_pair import PreferencePair
 from models.api_key import ApiKey
 from models.hafidz import HafidzContribution
 from models.feedback import FeedbackEvent
+from models.owner_dataset import OwnerDataset
 
 __all__ = [
     "Base",
@@ -34,4 +35,5 @@ __all__ = [
     "ApiKey",
     "HafidzContribution",
     "FeedbackEvent",
+    "OwnerDataset",
 ]
