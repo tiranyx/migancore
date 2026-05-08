@@ -47,8 +47,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Create non-root user for security
+RUN groupadd -r ado && useradd -r -g ado ado
+
+# Create writable directories for the app (needed for read-only rootfs)
+RUN mkdir -p /app/workspace /tmp /var/tmp && chown -R ado:ado /app /tmp /var/tmp
+
 # Copy application code
 COPY . .
+RUN chown -R ado:ado /app
+
+# Switch to non-root user
+USER ado
 
 # Run FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
