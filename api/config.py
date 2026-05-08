@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     LICENSE_ISSUER_MODE: bool = False
 
     # Observability
-    ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production)$")
+    ENVIRONMENT: str = Field(default="production", pattern="^(development|staging|production|testing)$")
     LOG_LEVEL: str = "INFO"
 
     model_config = ConfigDict(

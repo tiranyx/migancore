@@ -150,6 +150,7 @@ services:
       ADO_DISPLAY_NAME: TestMigan
       ENVIRONMENT: testing
       LOG_LEVEL: WARNING
+      PYTHONPATH: /app
       # Disable external API calls during tests
       ANTHROPIC_API_KEY: ""
       OPENAI_API_KEY: ""
