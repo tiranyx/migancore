@@ -116,6 +116,8 @@ async def clone_agent_with_license(
     )
 
     # Embed license metadata into persona for tracking
+    # LICENSE IS IMMUTABLE — this is the child's birth certificate.
+    # White-label name (`name`) can be changed by client, but license cannot.
     child_persona["_license"] = {
         "license_id": license_data["license_id"],
         "tier": tier,
@@ -124,6 +126,7 @@ async def clone_agent_with_license(
         "parent_version": parent_agent.model_version,
         "generation": parent_agent.generation + 1,
         "knowledge_return_enabled": knowledge_return_enabled,
+        "mortality_tracking": True,  # Always true — parent tracks child's life/death
     }
     child_persona["_lineage_chain"] = lineage_chain
 

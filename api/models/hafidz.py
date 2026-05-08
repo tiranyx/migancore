@@ -47,3 +47,17 @@ class HafidzContribution(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
+
+    # ── Child Mortality Protocol (SP-009 Extension) ──
+    # Tracks when a child ADO instance dies (license expired, destroyed, revoked)
+    # so the parent can extract final knowledge and capabilities.
+    child_alive: Mapped[bool] = mapped_column(
+        nullable=False, server_default=text("true")
+    )
+    child_death_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    child_death_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    final_knowledge_extracted: Mapped[bool] = mapped_column(
+        nullable=False, server_default=text("false")
+    )

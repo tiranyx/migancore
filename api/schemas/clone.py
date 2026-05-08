@@ -13,15 +13,30 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CloneRequest(BaseModel):
-    """Request to clone a parent agent into a licensed child ADO."""
+    """Request to clone a parent agent into a licensed child ADO.
 
-    name: str = Field(..., min_length=1, max_length=255, description="Display name for the child agent")
+    WHITE-LABEL RULE:
+      - `name` (ado_display_name) can be changed by the client — this is the white-label name.
+      - `client_name` is the legal entity.
+      - LICENSE is immutable — generated once, cryptographically signed, cannot be replaced.
+        The license contains the lineage, tier, expiry, and parent genealogy.
+        It is the child's birth certificate and death certificate.
+
+    ADO STANDING ALONE PHILOSOPHY:
+      The parent is NOT a brain router. The parent is a reference, a teacher.
+      The child receives a full license and runs autonomously.
+      The child may contribute knowledge back via Hafidz Ledger — but this is voluntary,
+      not a command-and-control channel.
+    """
+
+    # White-label: this is what the client sees
+    name: str = Field(..., min_length=1, max_length=255, description="White-label display name for the child ADO (e.g. 'SARI', 'LEX')")
     template_id: str | None = Field(None, max_length=64, description="Personality template to apply")
-    persona_overrides: dict | None = Field(None, description="Optional persona field overrides")
+    persona_overrides: dict | None = Field(None, description="Optional persona field overrides (voice, tone, values)")
 
-    # License parameters
-    client_name: str = Field(..., min_length=1, description="Legal company name of the client")
-    tier: str = Field(..., description="BERLIAN | EMAS | PERAK | PERUNGGU")
+    # License parameters — immutable once minted
+    client_name: str = Field(..., min_length=1, description="Legal company name of the client (on the license)")
+    tier: str = Field(..., description="BERLIAN | EMAS | PERAK | PERUNGGU — immutable after minting")
     language_pack: list[str] = Field(default=["id"], description="Language codes")
     months: int | None = Field(None, description="License duration override (default from tier)")
     knowledge_return_enabled: bool = Field(
@@ -31,6 +46,10 @@ class CloneRequest(BaseModel):
     knowledge_return_opt_in_types: list[str] | None = Field(
         None,
         description="Which types: dpo_pair, tool_pattern, domain_cluster, voice_pattern",
+    )
+    mortality_tracking: bool = Field(
+        default=True,
+        description="If true, parent tracks child's life/death for final knowledge extraction",
     )
 
     @field_validator("tier")

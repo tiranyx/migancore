@@ -256,3 +256,102 @@ async def queue_status() -> dict:
             "worker_running": False,
             "error": str(exc),
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CHILD MORTALITY PROTOCOL — ADO Standing Alone Philosophy
+# ─────────────────────────────────────────────────────────────────────────────
+# The parent is not a brain router. The parent is a reference, a teacher,
+# a graveyard-keeper of knowledge. When a child dies, the parent records
+# the death and extracts final knowledge — like a historian archiving the
+# last writings of a fallen scholar.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/mortality/report", dependencies=[Depends(_require_admin)])
+async def report_mortality_endpoint(
+    child_license_id: str,
+    death_reason: str,
+    death_note: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Report that a child ADO instance has died.
+
+    Death reasons: license_expired, license_revoked, instance_destroyed,
+    instance_crashed, knowledge_harvested.
+
+    All contributions from this child are marked as belonging to a deceased instance.
+    """
+    from services.hafidz_mortality import report_child_death
+
+    try:
+        result = await report_child_death(db, child_license_id, death_reason, death_note)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    return result
+
+
+@router.post("/mortality/extract", dependencies=[Depends(_require_admin)])
+async def extract_final_knowledge_endpoint(
+    child_license_id: str,
+    auto_ingest: bool = True,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Extract all unincorporated knowledge from a dead child ADO.
+
+    This is the parent's final act of learning from the child.
+    If auto_ingest=true, runs ingestion pipeline on each pending contribution.
+    """
+    from services.hafidz_mortality import extract_final_knowledge
+
+    try:
+        result = await extract_final_knowledge(db, child_license_id, auto_ingest)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        )
+
+    return result
+
+
+@router.get("/mortality/deceased", dependencies=[Depends(_require_admin)])
+async def list_deceased_children_endpoint(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """List all child ADO instances that have died, with summary stats."""
+    from services.hafidz_mortality import list_deceased_children
+
+    items, total = await list_deceased_children(db, page=page, page_size=page_size)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/mortality/obituary/{child_license_id}", dependencies=[Depends(_require_admin)])
+async def get_obituary_endpoint(
+    child_license_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return full obituary for a deceased child: contributions, knowledge, legacy."""
+    from services.hafidz_mortality import get_child_obituary
+
+    try:
+        result = await get_child_obituary(db, child_license_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        )
+
+    return result
