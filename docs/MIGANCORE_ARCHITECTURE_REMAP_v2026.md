@@ -704,6 +704,14 @@ Setiap keputusan arsitektural dicatat di sini. Tidak boleh ada keputusan yang ti
 | D-008 | 2026-05-08 | Celery + Redis untuk workers | RQ atau Dapr Agents | Celery sudah ada di stack, Dapr terlalu berat untuk solo | Minimal change, reliable |
 | D-009 | 2026-05-08 | DeepSeek R1-0528 sebagai reasoning tier (future) | Claude Sonnet 4.6 | DeepSeek 10-20× cheaper, strategis untuk Indonesia | Cost efficient, trilingual native |
 | D-010 | 2026-05-08 | Causal AI + Active Inference Phase 2+ (bukan sekarang) | Bangun sekarang | Solo founder bandwidth terbatas, foundation dulu | Window arbitrage 12-18 bulan masih terbuka |
+| D-011 | 2026-05-08 | Clone model: Self-contained Docker per instance (amoeba), bukan SaaS multi-tenant | SaaS multi-tenant shared DB | Zero data leak, on-premise capable, inheritance model | Setiap client = stack penuh, resource lebih besar |
+| D-012 | 2026-05-08 | License validation: Offline HMAC-SHA256 (no phone-home) | Online validation tiap startup | Air-gapped requirement (BERLIAN tier), client trust | Tidak bisa revoke remote; harus kirim file license baru |
+| D-013 | 2026-05-08 | Knowledge return: Opt-in, default false | Default on / mandatory | Privacy first, compliance (RS, bank, gov), client trust | Data yang kembali lebih sedikit tapi higher quality |
+| D-014 | 2026-05-08 | Data yang kembali: Pola yang dianonimkan, bukan raw data | Kirim percakapan verbatim / database snapshot | Zero PII leakage guarantee, client bisa audit | Lebih kompleks: perlu anonymization pipeline di anak |
+| D-015 | 2026-05-08 | Generation depth: Unlimited, tracked via lineage_chain | Max 1 level (direct child only) | Reseller model, white-label nesting, network effect | License schema lebih kompleks, tracking overhead |
+| D-016 | 2026-05-08 | Death handler: Read-only grace 7 hari, kemudian knowledge return | Auto-delete on expiry | Window untuk backup & final contribution; client control | Grace period = resource gratis selama 7 hari |
+
+**Referensi Locked:** `docs/MIGANCORE_AMOEBA_ARCHITECTURE_LOCKED.md` — Canonical document untuk clone, deployment, dan death model.
 
 ---
 
