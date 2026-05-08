@@ -20,7 +20,7 @@ class Tool(Base):
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True
     )
-    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     schema: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
