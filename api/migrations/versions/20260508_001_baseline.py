@@ -9,6 +9,42 @@ For new databases: run upgrade normally:
 
 from alembic import op
 
+
+def _split_statements(sql: str):
+    """Split SQL into individual statements for asyncpg compatibility.
+
+    asyncpg does not allow multiple commands in a single prepared
+    statement.  We split on semicolons, but we must be careful not
+    to split inside quoted strings or dollar-quoted blocks.
+    For the baseline migration the SQL is simple enough that a
+    naive split on ';' followed by whitespace or end-of-string
+    works safely.
+    """
+    import re
+    from sqlalchemy import text
+
+    # Normalise line endings and strip leading/trailing whitespace.
+    sql = sql.strip()
+    if not sql:
+        return []
+
+    statements = []
+    current = []
+    for line in sql.splitlines():
+        stripped = line.strip()
+        # Skip empty lines and standalone comments.
+        if not stripped or stripped.startswith('--'):
+            continue
+        current.append(line)
+        if stripped.endswith(';'):
+            statements.append(text('\n'.join(current)))
+            current = []
+    # Any trailing fragment without a semicolon.
+    if current:
+        statements.append(text('\n'.join(current)))
+    return statements
+
+
 # revision identifiers, used by Alembic.
 revision = "001_baseline"
 down_revision = None
@@ -342,8 +378,16 @@ CREATE POLICY tenant_isolation_messages ON messages
 
 
 def upgrade() -> None:
-    """Apply baseline schema."""
-    op.execute(INIT_SQL)
+    """Apply baseline schema.
+
+    Split multi-statement SQL into individual execute() calls
+    because asyncpg does not support multiple commands in a
+    single prepared statement.
+    """
+    from alembic import context
+    connection = context.get_bind()
+    for stmt in _split_statements(INIT_SQL):
+        connection.execute(stmt)
 
     # Seed data (builtin tools + initial model version)
     op.execute("""

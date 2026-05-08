@@ -109,10 +109,8 @@ services:
         pip install --no-cache-dir pytest-cov pytest-xdist 2>&1 | tail -n 2
         echo ""
         # Run DB migrations so schema + RLS policies exist for integration tests
-        # NOTE: Use psycopg2 driver for alembic because asyncpg doesn't support
-        # multi-statement execute() which baseline migration 001 uses.
         echo "⏳ Running alembic migrations..."
-        cd /app && DATABASE_URL="postgresql+psycopg2://ado_app:test@postgres_test:5432/ado_test" alembic upgrade head
+        cd /app && alembic upgrade head
         echo "✅ Migrations complete"
         echo ""
         # Run tests with coverage
