@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
 from models import Agent, User, Tenant
+from schemas.clone import CloneRequest
 from services.config_loader import load_soul_md
 from services.letta import ensure_letta_agent
 
@@ -435,6 +436,77 @@ async def spawn_agent(
         generation=child.generation,
         template_id=child.template_id,
         persona_locked=child.persona_locked,
+    )
+
+
+@router.post("/{agent_id}/clone", status_code=status.HTTP_201_CREATED)
+async def clone_agent(
+    agent_id: str,
+    data: CloneRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Clone a parent agent into a licensed child ADO (SP-008).
+
+    Combines spawn + license generation. Returns the child agent record
+    AND the complete license.json needed for Docker deployment.
+
+    The license includes genealogy metadata (parent_version, generation,
+    lineage_chain) so the child can phone home via Hafidz Ledger.
+    """
+    from schemas.clone import CloneResponse, LicenseInfo
+    from services.clone import clone_agent_with_license
+
+    await set_tenant_context(db, str(current_user.tenant_id))
+    parent = await _get_agent_or_404(db, agent_id, current_user.tenant_id)
+
+    try:
+        child, license_data = await clone_agent_with_license(
+            session=db,
+            parent_agent=parent,
+            current_user=current_user,
+            name=data.name,
+            template_id=data.template_id,
+            persona_overrides=data.persona_overrides,
+            client_name=data.client_name,
+            tier=data.tier,
+            language_pack=data.language_pack,
+            months=data.months,
+            knowledge_return_enabled=data.knowledge_return_enabled,
+            knowledge_return_opt_in_types=data.knowledge_return_opt_in_types,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        )
+
+    return CloneResponse(
+        agent_id=str(child.id),
+        agent_name=child.name,
+        generation=child.generation,
+        parent_agent_id=str(parent.id),
+        license=LicenseInfo(
+            license_id=license_data["license_id"],
+            client_name=license_data["client_name"],
+            ado_display_name=license_data["ado_display_name"],
+            tier=license_data["tier"],
+            issued_date=license_data["issued_date"],
+            expiry_date=license_data["expiry_date"],
+            state=license_data["state"],
+            parent_version=license_data.get("parent_version", "v0.3"),
+            generation=license_data.get("generation", 1),
+            lineage_chain=license_data.get("lineage_chain", []),
+            knowledge_return_enabled=license_data.get("knowledge_return_enabled", False),
+            knowledge_return_opt_in_types=license_data.get("knowledge_return_opt_in_types"),
+            identity_hash=license_data["identity_hash"],
+            signature=license_data["signature"],
+        ),
     )
 
 
