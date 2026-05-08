@@ -610,4 +610,179 @@ Jika ada import baru yang merupakan singleton:
 
 ---
 
+---
+
+## 🔴 LESSONS BARU — Executor Remap Day 0 (2026-05-08)
+
+### [F-12] ORPO is WRONG TOOL for Voice/Length/Identity Targets
+**Day:** 63-71d | **Severity:** CRITICAL | **Category:** Training / ML
+
+**Gejala:** Setiap cycle yang target voice, length, atau identity menggunakan ORPO menghasilkan rewards/margins NEGATIVE. Model malah regress di kategori tersebut.
+
+**Root Cause:** ORPO (Odds Ratio Preference Optimization) mengoptimasi likelihood ratio chosen vs rejected. Ini efektif untuk preference yang jelas (A lebih baik dari B). Tapi untuk voice/identity — yang merupakan pattern konsisten bukan preference relatif — ORPO tidak bisa meng-encode pattern dengan baik.
+
+**Impact:** 5 cycles gagal berturut-turut (Cycles 4, 7, 7b, 7c). Brain stuck di Day 60.
+
+**Fix:**
+- Voice/Identity → SFT (Supervised Fine-Tuning). Direct pattern learning.
+- User thumbs → KTO (Kahneman-Tversky Optimization). No pairing needed.
+- General chat preference → SimPO/ORPO. Preference-based, appropriate.
+- Complex reasoning → GRPO (future). Group relative optimization.
+
+**Generalized Principle:**
+> **"Beda masalah = beda tool. ORPO adalah hammer — jangan pukul semua paku dengan hammer yang sama."** SFT untuk pattern/fact. DPO/KTO untuk preference. ORPO/SimPO untuk chat ranking. GRPO untuk reasoning.
+
+---
+
+### [F-13] Signal Density < 15% Causes Regression in Other Categories
+**Day:** 63-71d | **Severity:** HIGH | **Category:** Training / ML
+
+**Gejala:** Setiap cycle yang mix domain pairs (creative + evolution-aware + voice + tool) menghasilkan regression di kategori yang tidak di-target. Cycle 4: voice improve tapi creative regress. Cycle 7c: voice improve tapi creative -0.193.
+
+**Root Cause:** Multi-task learning dengan signal density rendah. Ketika satu kategori hanya 10-15% dari dataset, model "lupa" kategori lain untuk mengakomodasi kategori baru. Ini adalah catastrophic forgetting dalam skala mini.
+
+**Impact:** Tidak pernah bisa advance semua gate sekaligus. Selalu ada trade-off.
+
+**Fix:**
+- ONE category per cycle. Tidak boleh mix.
+- Minimum 25% signal density per category.
+- Anchor samples (50 fixed) di setiap dataset untuk mencegah forgetting.
+
+**Generalized Principle:**
+> **"Satu cycle, satu target."** Multi-task fine-tuning hanya works jika semua task punya density tinggi. Untuk low-resource categories, train sequential — bukan parallel.
+
+---
+
+### [F-14] Baseline-Gate Coupling Causes False-Fail
+**Day:** 67-71d | **Severity:** MEDIUM | **Category:** Training / Evaluation
+
+**Gejala:** Cycle eval FAIL padahal model sebenarnya tidak regress. Gate threshold bergantung pada baseline score cycle sebelumnya.
+
+**Root Cause:** Gate threshold di-set sebagai "baseline + 0.02" atau similar relative metric. Ketika baseline itu sendiri noisy (beda eval set, beda judge), gate menjadi unstable.
+
+**Impact:** False rollback. Model yang sebenarnya bagus di-rollback karena gate terlalu ketat.
+
+**Fix:**
+- Gate = threshold ABSOLUTE, bukan relative.
+- Identity: cosine > 0.85 (absolute)
+- Tool-use: accuracy > 80% (absolute)
+- Quality: judge_score > 0.7 (absolute)
+- Regression: known-good scenarios must not degrade (absolute)
+
+**Generalized Principle:**
+> **"Gate harus absolute, tidak boleh relative ke baseline."** Baseline adalah reference, bukan gate. Gate adalah contract dengan user: "model ini harus bisa X".
+
+---
+
+### [F-15] 99% Synthetic Data = Circular Training
+**Day:** 71d | **Severity:** CRITICAL | **Category:** Data Pipeline
+
+**Gejala:** 3,354 preference pairs di DB. Hanya 29 pairs (0.9%) dari data nyata (user, owner, teacher). Sisanya 99.1% synthetic/anchor. Brain training kelaparan data nyata.
+
+**Root Cause:**
+- User thumbs UI ada tapi backend worker MISSING
+- Owner data pathway tidak ada endpoint
+- Self-growth 50% sample rate, mostly idle
+- Teacher distillation manual, 10 pairs total
+
+**Impact:** Model dilatih dengan synthetic data yang di-generate oleh model itu sendiri. Circular loop = reinforcement of existing patterns, tidak ada learning baru.
+
+**Fix:**
+- Build 4 pathways (M1). Target: real-data ratio ≥ 50% dalam 2 minggu.
+- User feedback: fix endpoint + hourly worker
+- Owner pathway: 5 endpoints + UI
+- Self-growth: 100% sample + auto-loop
+- Teacher: continuous 6h cycle, $5/day cap
+
+**Generalized Principle:**
+> **"Synthetic data adalah junk food untuk model. Boleh dimakan, tapi tidak boleh jadi makanan utama."** Minimum 50% real data untuk meaningful improvement. 99% synthetic = model talking to itself.
+
+---
+
+### [F-16] Identity Fragile — Scaffolding Dependency
+**Day:** 70-71d | **Severity:** HIGH | **Category:** Identity / Product
+
+**Gejala:** Dengan SOUL.md system prompt: "Saya Mighan-Core". Tanpa SOUL.md: "Saya Qwen, Alibaba Cloud". LoRA adapter (Cycle 3) tidak cukup kuat override base model identity.
+
+**Root Cause:** Identity 0.953 di eval TINGGI karena eval selalu pakai system prompt. Eval tidak pernah test tanpa system prompt. LoRA rank 16 terlalu kecil untuk override identity base model yang kuat.
+
+**Impact:** White-label tidak bisa jalan. Kalau client matikan SOUL.md = identitas lenyap. White-label premise rentan.
+
+**Fix:**
+- SFT Identity Anchor: 200 pairs pure identity
+- LoRA rank 32, alpha 64 (LEBIH BESAR)
+- 5 epochs (lebih banyak)
+- LR 1e-4 (lebih hati-hati)
+- Eval MANDATORY tanpa system prompt
+
+**Generalized Principle:**
+> **"Identity harus baked into weights, bukan scaffolding prompt."** Prompt adalah makeup — weights adalah DNA. White-label hanya aman kalau DNA tidak bisa dihapus.
+
+---
+
+### [F-17] Documentation Inflation vs Test Coverage
+**Day:** 71d | **Severity:** MEDIUM | **Category:** Process / Quality
+
+**Gejala:** 150+ markdown files dokumentasi. Hanya 1 file test (test_rls.py). Coverage < 5%. Docs di-update setiap hari, tests tidak pernah ditambah.
+
+**Root Cause:** Fokus pada "visible progress" (docs, features) daripada "invisible progress" (tests, infrastructure). Setiap agent celebrate docs tapi tidak ada yang celebrate tests.
+
+**Impact:**
+- Regressions tidak ketauan sampai production
+- Deploy risky — tidak ada safety net
+- Code quality degrades over time
+- New agents break things without knowing
+
+**Fix:**
+- M0: Test suite v1 (50+ tests, coverage ≥ 40%)
+- M0: CI/CD pipeline (test must pass before deploy)
+- Rule: Setiap PR harus punya tests
+- Rule: Coverage tidak boleh turun dari baseline
+
+**Generalized Principle:**
+> **"Tests are the immune system of codebase. Tanpa tests, setiap change adalah infection."** 150 docs + 1 test = project yang bisa berbicara tentang dirinya sendiri tapi tidak bisa membuktikan klaimnya.
+
+---
+
+### [F-18] Context Loss Between AI Agent Sessions
+**Day:** 71d | **Severity:** HIGH | **Category:** Process / Agent Protocol
+
+**Gejala:** Claude Code sessions berulang-ulang mengulang pekerjaan, merubah keputusan yang sudah di-lock, tidak ingat lessons learned.
+
+**Root Cause:** Claude Code memory window terbatas (~200K tokens). Setelah beberapa tool calls, context ter-compact dan detail hilang. Agent tidak membaca semua docs sebelum eksekusi.
+
+**Impact:**
+- 5 training cycles gagal karena agent lupa Lesson #175
+- Keputusan arsitektur diubah tanpa approval
+- Circular loops (optimize infra → celebrate → new cycle → rollback)
+
+**Fix:**
+- Agent Onboarding Protocol MANDATORY (25 menit sebelum kerja)
+- CONTEXT.md sebagai "RAM" proyek — selalu up-to-date
+- Daily log ritual — wrap sebelum session end
+- Handoff note untuk cross-session continuity
+- Decision Registry — keputusan tidak boleh diubah tanpa catatan
+
+**Generalized Principle:**
+> **"AI agent tidak punya memory persistence. Protocol adalah memory-nya."** Tanpa protocol ketat, setiap session adalah agent baru yang harus belajar dari nol.
+
+---
+
+### [S-11] Brutal Honest Audit Prevents Circular Celebration
+**Day:** 71d | **Category:** Process / Culture
+
+**Pattern:** Setiap kali ada kegagalan, agent celebrate "infra wins" (latency cut, tools enabled, PWA) seolah brain quality naik.
+
+**What worked:** Owner meminta "honest audit" yang memisahkan:
+- Brain wins vs Infra wins
+- Real progress vs Illusion progress
+- Day 60 baseline vs Day 71d state
+
+**Result:** Truth revealed: brain ZERO progress since Day 60. Ini painful tapi necessary.
+
+**Generalized Principle:**
+> **"Celebrate real wins, not comfort wins."** Infra wins are real — tapi mereka adalah foundation, bukan product. Product = brain quality. Jangan confuse foundation progress dengan product progress.
+
+---
+
 *Dokumen ini adalah cognitive asset terpenting proyek. Update setiap sesi.*
