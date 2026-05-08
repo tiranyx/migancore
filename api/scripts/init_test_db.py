@@ -7,6 +7,7 @@ because the baseline migration has drifted from current models.
 import asyncio
 import os
 import sys
+import uuid
 
 sys.path.insert(0, "/app")
 
@@ -109,11 +110,12 @@ async def init() -> None:
         for name, display_name, description, handler_type, schema in SEED_TOOLS:
             await conn.execute(
                 text(
-                    "INSERT INTO tools (name, display_name, description, handler_type, schema) "
-                    "VALUES (:name, :display_name, :description, :handler_type, :schema) "
+                    "INSERT INTO tools (id, name, display_name, description, handler_type, schema) "
+                    "VALUES (:id, :name, :display_name, :description, :handler_type, :schema) "
                     "ON CONFLICT (name) DO NOTHING"
                 ),
                 {
+                    "id": str(uuid.uuid4()),
                     "name": name,
                     "display_name": display_name,
                     "description": description,
@@ -125,11 +127,12 @@ async def init() -> None:
         # Seed initial model version
         await conn.execute(
             text(
-                "INSERT INTO model_versions (base_model, version_tag, is_active) "
-                "VALUES (:base_model, :version_tag, :is_active) "
+                "INSERT INTO model_versions (id, base_model, version_tag, is_active) "
+                "VALUES (:id, :base_model, :version_tag, :is_active) "
                 "ON CONFLICT (version_tag) DO NOTHING"
             ),
             {
+                "id": str(uuid.uuid4()),
                 "base_model": "qwen2.5:7b-instruct-q4_K_M",
                 "version_tag": "v0.1-seed",
                 "is_active": True,
