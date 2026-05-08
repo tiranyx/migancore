@@ -67,6 +67,24 @@ async def init() -> None:
         await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
         await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "vector"'))
 
+        # Create tables that have no SQLAlchemy model but are referenced by FKs
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS datasets (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                name VARCHAR(255) NOT NULL,
+                source_type VARCHAR(32) NOT NULL
+                    CHECK (source_type IN ('magpie','curated','distilled','feedback','self_play','constitutional')),
+                size_samples INTEGER,
+                hf_dataset_uri VARCHAR(512),
+                local_path VARCHAR(512),
+                parent_dataset_id UUID REFERENCES datasets(id),
+                quality_avg FLOAT,
+                language VARCHAR(8) DEFAULT 'id',
+                domain VARCHAR(64),
+                generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """))
+
         # Tables from current models
         await conn.run_sync(Base.metadata.create_all)
 
