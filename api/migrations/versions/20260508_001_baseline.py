@@ -390,8 +390,11 @@ def upgrade() -> None:
         connection.execute(stmt)
 
     # Seed data (builtin tools + initial model version)
-    op.execute("""
-        INSERT INTO tools (name, display_name, description, handler_type, schema) VALUES
+    # Use explicit parameter binding to avoid SQLAlchemy parsing JSON
+    # colons as bind parameters (e.g. "default":30 → :30).
+    from sqlalchemy import text
+
+    seed_tools = [
         ('web_search', 'Web Search', 'Search the web for current information', 'builtin',
          '{"type":"object","properties":{"query":{"type":"string","description":"Search query"}},"required":["query"]}'),
         ('python_repl', 'Python REPL', 'Execute Python code in a sandbox', 'builtin',
@@ -405,13 +408,34 @@ def upgrade() -> None:
         ('memory_write', 'Memory Write', 'Write a fact to long-term memory', 'builtin',
          '{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"},"namespace":{"type":"string","default":"default"}},"required":["key","value"]}'),
         ('memory_search', 'Memory Search', 'Search long-term memory semantically', 'builtin',
-         '{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer","default":5}},"required":["query"]}');
-    """)
+         '{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer","default":5}},"required":["query"]}'),
+    ]
+    for name, display_name, description, handler_type, schema in seed_tools:
+        connection.execute(
+            text(
+                "INSERT INTO tools (name, display_name, description, handler_type, schema) "
+                "VALUES (:name, :display_name, :description, :handler_type, :schema)"
+            ),
+            {
+                "name": name,
+                "display_name": display_name,
+                "description": description,
+                "handler_type": handler_type,
+                "schema": schema,
+            },
+        )
 
-    op.execute("""
-        INSERT INTO model_versions (base_model, version_tag, is_active) VALUES
-        ('qwen2.5:7b-instruct-q4_K_M', 'v0.1-seed', true);
-    """)
+    connection.execute(
+        text(
+            "INSERT INTO model_versions (base_model, version_tag, is_active) "
+            "VALUES (:base_model, :version_tag, :is_active)"
+        ),
+        {
+            "base_model": "qwen2.5:7b-instruct-q4_K_M",
+            "version_tag": "v0.1-seed",
+            "is_active": True,
+        },
+    )
 
 
 def downgrade() -> None:
