@@ -13,7 +13,7 @@ sys.path.insert(0, "/app")
 
 from sqlalchemy import text, Table, Column, String, Integer, Float, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from models.base import Base
 
 # Register the datasets table in Base.metadata so that FK references
@@ -106,38 +106,35 @@ async def init() -> None:
             if stmt and "memory_blocks" not in stmt and "archival_memory" not in stmt:
                 await conn.execute(text(stmt + ";"))
 
-        # Seed builtin tools
-        for name, display_name, description, handler_type, schema in SEED_TOOLS:
-            await conn.execute(
-                text(
-                    "INSERT INTO tools (id, name, display_name, description, handler_type, schema) "
-                    "VALUES (:id, :name, :display_name, :description, :handler_type, :schema) "
-                    "ON CONFLICT (name) DO NOTHING"
-                ),
-                {
-                    "id": str(uuid.uuid4()),
-                    "name": name,
-                    "display_name": display_name,
-                    "description": description,
-                    "handler_type": handler_type,
-                    "schema": schema,
-                },
-            )
+    # Seed data using ORM so Python-side defaults are applied
+    from sqlalchemy import select
+    AsyncSeedSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with AsyncSeedSession() as session:
+        from models.tool import Tool
+        from models.model_version import ModelVersion
 
-        # Seed initial model version
-        await conn.execute(
-            text(
-                "INSERT INTO model_versions (id, base_model, version_tag, is_active) "
-                "VALUES (:id, :base_model, :version_tag, :is_active) "
-                "ON CONFLICT (version_tag) DO NOTHING"
-            ),
-            {
-                "id": str(uuid.uuid4()),
-                "base_model": "qwen2.5:7b-instruct-q4_K_M",
-                "version_tag": "v0.1-seed",
-                "is_active": True,
-            },
-        )
+        for name, display_name, description, handler_type, schema in SEED_TOOLS:
+            result = await session.execute(select(Tool).where(Tool.name == name))
+            if result.scalar_one_or_none() is None:
+                tool = Tool(
+                    name=name,
+                    display_name=display_name,
+                    description=description,
+                    handler_type=handler_type,
+                    schema=schema,
+                )
+                session.add(tool)
+
+        result = await session.execute(select(ModelVersion).where(ModelVersion.version_tag == "v0.1-seed"))
+        if result.scalar_one_or_none() is None:
+            mv = ModelVersion(
+                base_model="qwen2.5:7b-instruct-q4_K_M",
+                version_tag="v0.1-seed",
+                is_active=True,
+            )
+            session.add(mv)
+
+        await session.commit()
 
     await engine.dispose()
     print("✅ Test database initialized")
