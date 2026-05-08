@@ -95,3 +95,8 @@ eval/eval_result_cycle*.json
 # Day 68: working scratch
 TASK_BOARD.md
 
+
+# Bundle files
+*.bundle
+migancore-push*.bundle
+
