@@ -5,6 +5,7 @@ Import all models so autogenerate can detect schema changes.
 """
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -27,6 +28,7 @@ from models import (  # noqa: F401 -- side effect: register all tables in Base.m
     api_key,
     refresh_token,
     audit_event,
+    brain_segment,
 )
 
 # this is the Alembic Config object
@@ -40,13 +42,18 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _get_database_url() -> str:
+    """Return DATABASE_URL from env var, falling back to alembic.ini."""
+    return os.environ.get("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
     This configures the context with just a URL and not an Engine.
     Calls to context.execute() here emit the given string to the script output.
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = _get_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -74,8 +81,10 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Create async engine and run migrations."""
+    section = config.get_section(config.config_ini_section, {})
+    section["sqlalchemy.url"] = _get_database_url()
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
