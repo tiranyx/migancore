@@ -93,12 +93,14 @@ async def init() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
         # Enable RLS on tables that exist in models
+        # FORCE is required so even the table owner (ado_app) is subject to RLS.
         rls_tables = [
             "users", "agents", "conversations", "messages",
             "interactions_feedback",
         ]
         for tbl in rls_tables:
             await conn.execute(text(f"ALTER TABLE IF EXISTS {tbl} ENABLE ROW LEVEL SECURITY"))
+            await conn.execute(text(f"ALTER TABLE IF EXISTS {tbl} FORCE ROW LEVEL SECURITY"))
 
         # RLS policies (only for tables that exist in models)
         for stmt in RLS_POLICIES.strip().split(";"):
