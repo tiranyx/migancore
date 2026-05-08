@@ -24,21 +24,6 @@ from deps.db import set_tenant_context
 from services.password import hash_password
 
 
-async def _db_reachable() -> bool:
-    try:
-        init_engine()
-        from models.base import AsyncSessionLocal
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-        return True
-    except Exception:
-        return False
-
-
-_DB_AVAILABLE = asyncio.run(_db_reachable())
-pytestmark = pytest.mark.skipif(not _DB_AVAILABLE, reason="PostgreSQL not reachable for RLS test")
-
-
 TEST_EMAIL_A = "rls_test_a@migancore.com"
 TEST_EMAIL_B = "rls_test_b@migancore.com"
 TEST_SLUG_A = "rls-test-a"

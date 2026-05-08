@@ -129,23 +129,20 @@ services:
         echo ""
         echo "=== Coverage Summary ==="
         if [ -f /tmp/coverage.json ]; then
-          python -c "
-            import json, sys
-            d = json.load(open('/tmp/coverage.json'))
-            pct = d.get('totals', {}).get('percent_covered', 0)
-            print(f'Overall coverage: {pct:.2f}%')
-            if pct < 40:
-                print('❌ FAIL: Coverage below 40%')
-                sys.exit(1)
-            else:
-                print('✅ PASS: Coverage meets target')
-          "
+          python -c "import json,sys;d=json.load(open('/tmp/coverage.json'));pct=d.get('totals',{}).get('percent_covered',0);print(f'Overall coverage: {pct:.2f}%');sys.exit(1 if pct<40 else 0)"
+          COV_EXIT=$?
+          if [ $COV_EXIT -ne 0 ]; then
+            echo "❌ FAIL: Coverage below 40%"
+          else
+            echo "✅ PASS: Coverage meets target"
+          fi
         fi
         # Copy coverage reports to mounted host directories
         cp -f /tmp/coverage.json /app/htmlcov_docker/coverage.json 2>/dev/null || true
         exit $$TEST_EXIT
     environment:
       DATABASE_URL: postgresql+asyncpg://ado_app:test@postgres_test:5432/ado_test
+      TEST_DATABASE_URL: postgresql+asyncpg://ado_app:test@postgres_test:5432/ado_test
       REDIS_URL: redis://:test@redis_test:6379/0
       QDRANT_URL: http://qdrant_test:6333
       QDRANT_API_KEY: ""
