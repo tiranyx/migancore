@@ -32,6 +32,7 @@ WORKDIR /app
 # Weasyprint needs: libcairo2, libpango, libgdk-pixbuf, libffi
 # PostgreSQL needs: libpq5 (runtime, not dev)
 # Fonts needed for PDF generation
+# gosu needed for entrypoint (drop privileges to non-root)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libcairo2 \
@@ -41,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi8 \
     shared-mime-info \
     fonts-dejavu \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
@@ -57,8 +59,8 @@ RUN mkdir -p /app/workspace /tmp /var/tmp && chown -R ado:ado /app /tmp /var/tmp
 COPY . .
 RUN chown -R ado:ado /app
 
-# Switch to non-root user
-USER ado
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
 
-# Run FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run FastAPI via entrypoint (handles key copy + privilege drop)
+ENTRYPOINT ["/app/entrypoint.sh"]
