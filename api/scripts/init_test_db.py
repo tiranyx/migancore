@@ -91,18 +91,18 @@ async def init() -> None:
         # Tables from current models (including datasets registered above)
         await conn.run_sync(Base.metadata.create_all)
 
-        # Enable RLS
+        # Enable RLS on tables that exist in models
         rls_tables = [
             "users", "agents", "conversations", "messages",
-            "interactions_feedback", "memory_blocks", "archival_memory",
+            "interactions_feedback",
         ]
         for tbl in rls_tables:
             await conn.execute(text(f"ALTER TABLE IF EXISTS {tbl} ENABLE ROW LEVEL SECURITY"))
 
-        # RLS policies
+        # RLS policies (only for tables that exist in models)
         for stmt in RLS_POLICIES.strip().split(";"):
             stmt = stmt.strip()
-            if stmt:
+            if stmt and "memory_blocks" not in stmt and "archival_memory" not in stmt:
                 await conn.execute(text(stmt + ";"))
 
         # Seed builtin tools
