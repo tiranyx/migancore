@@ -269,50 +269,42 @@ async def submit_message_feedback(
     prev_user_msg = prev_msgs_result.scalar_one_or_none()
     prompt_text = prev_user_msg.content if prev_user_msg else "[context unavailable]"
 
-    if body.rating == "thumbs_up":
-        # Day 67 fix: store thumbs_up as a positive DPO pair (chosen = good response).
-        # source_method="user_thumbs_up" distinguishes it from teacher-generated pairs.
-        # Enables future positive sampling for ORPO "chosen" selection.
-        pair = PreferencePair(
-            prompt=prompt_text,
-            chosen=target_msg.content,
-            rejected="PENDING — no explicit rejected for thumbs_up signal",
-            judge_score=1.0,
-            judge_model="user_signal",
-            source_method="user_thumbs_up",
-            source_message_id=target_msg.id,
-        )
-        db.add(pair)
-        await db.commit()
-        await db.refresh(pair)
-        return FeedbackOut(
-            ok=True,
-            pair_id=str(pair.id),
-            message="Positive feedback recorded. Thank you!",
-        )
+    from services.feedback import record_feedback
 
-    # thumbs_down: build the preference pair using prompt_text fetched above
-    # Build rejected text (optionally include user comment as annotation)
-    rejected_text = target_msg.content
-    if body.comment:
-        rejected_text = f"{rejected_text}\n\n[User note: {body.comment}]"
-
-    # Create preference pair: chosen=PENDING (will be filled by teacher API offline)
-    pair = PreferencePair(
-        prompt=prompt_text,
-        chosen="PENDING — awaiting teacher API refinement",
-        rejected=rejected_text,
-        judge_score=0.0,
-        judge_model="user_signal",
-        source_method="user_thumbs_down",
-        source_message_id=target_msg.id,
+    result = await record_feedback(
+        db,
+        message_id=target_msg.id,
+        tenant_id=current_user.tenant_id,
+        signal_type="thumb_up" if body.rating == "thumbs_up" else "thumb_down",
+        rating=body.rating,
+        comment=body.comment,
+        prompt_text=prompt_text,
+        target_text=target_msg.content,
     )
-    db.add(pair)
-    await db.commit()
-    await db.refresh(pair)
 
     return FeedbackOut(
         ok=True,
-        pair_id=str(pair.id),
-        message="Feedback stored. We'll use this to improve the next training cycle.",
+        pair_id=str(result["pair_id"]) if result["pair_id"] else None,
+        message="Feedback recorded. Thank you!" if body.rating == "thumbs_up" else "Feedback stored. We'll use this to improve.",
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/conversations/feedback/stats — tenant feedback overview
+# ---------------------------------------------------------------------------
+
+class FeedbackStatsOut(BaseModel):
+    total: int
+    thumbs_up: int
+    thumbs_down: int
+    awaiting_processing: int
+
+
+@router.get("/feedback/stats", response_model=FeedbackStatsOut)
+async def feedback_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return feedback statistics for the current tenant."""
+    from services.feedback import get_feedback_stats
+    return await get_feedback_stats(db, current_user.tenant_id)

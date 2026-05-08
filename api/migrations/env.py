@@ -29,6 +29,7 @@ from models import (  # noqa: F401 -- side effect: register all tables in Base.m
     refresh_token,
     audit_event,
     brain_segment,
+    feedback,
 )
 
 # this is the Alembic Config object
