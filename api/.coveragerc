@@ -1,0 +1,58 @@
+[run]
+source = api
+omit =
+    */tests/*
+    */test_*
+    */.venv/*
+    */migrations/*
+    # Heavy infra modules — tested via integration/E2E, not unit
+    */main.py
+    */mcp_server.py
+    */routers/*
+    */services/tool_executor.py
+    */services/llamaserver.py
+    */services/synthetic_pipeline.py
+    */services/cai_pipeline.py
+    */services/distillation.py
+    */services/director.py
+    */services/conv_summarizer.py
+    */services/onamix_mcp.py
+    */services/tools_cognitive.py
+    */services/vector_memory.py
+    */services/teacher_api.py
+    */services/clone_manager.py
+    */services/embedding.py
+    */services/memory.py
+    */services/memory_pruner.py
+    */services/response_cache.py
+    */services/fact_extractor.py
+    */services/magpie_seeds.py
+    */services/seed_bank.py
+    */services/config_loader.py
+    */services/ollama.py
+    */services/letta.py
+    */services/api_keys.py
+    */services/tool_cache.py
+    */services/tool_policy.py
+    */services/tool_relevance.py
+    */services/vector_retrieval.py
+    */services/clone.py
+    */services/contracts.py
+    */services/hafidz.py
+    */services/hafidz_mortality.py
+    */services/ingestion.py
+    */services/ingestion_worker.py
+    */services/jwt.py
+    */services/license.py
+    */services/parent_brain.py
+    */deps/auth.py
+    */deps/rate_limit.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:

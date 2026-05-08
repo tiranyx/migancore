@@ -17,9 +17,39 @@ sys.path.insert(0, "/app")
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import AsyncSessionLocal, User, Tenant, Agent
+import asyncio
+import sys
+import uuid
+
+import pytest
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+import asyncio
+
+import pytest
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models import User, Tenant, Agent
+from models.base import init_engine
 from deps.db import set_tenant_context
 from services.password import hash_password
+
+
+async def _db_reachable() -> bool:
+    try:
+        init_engine()
+        from models.base import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
+_DB_AVAILABLE = asyncio.run(_db_reachable())
+pytestmark = pytest.mark.skipif(not _DB_AVAILABLE, reason="PostgreSQL not reachable for RLS test")
 
 
 TEST_EMAIL_A = "rls_test_a@migancore.com"
@@ -30,6 +60,8 @@ TEST_SLUG_B = "rls-test-b"
 
 async def _cleanup_legacy():
     """Remove any leftover test data from prior runs."""
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         await session.execute(text("SET LOCAL app.current_tenant = '00000000-0000-0000-0000-000000000000'"))
         await session.execute(text(f"DELETE FROM agents WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
@@ -40,6 +72,8 @@ async def _cleanup_legacy():
 
 async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]:
     """Create a test user + tenant directly in the DB."""
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         tenant = Tenant(name=f"Test {tenant_slug}", slug=tenant_slug)
         session.add(tenant)
@@ -91,6 +125,8 @@ async def test_rls_isolation():
     print(f"Tenant B: {tenant_b.id} ({tenant_b.slug})")
 
     # Create an agent for Tenant A (with RLS context)
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         await set_tenant_context(session, str(tenant_a.id))
         agent = Agent(
@@ -105,6 +141,8 @@ async def test_rls_isolation():
     failures = []
 
     # Test 1: Tenant A can see their own agent
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         await set_tenant_context(session, str(tenant_a.id))
         result = await session.execute(select(Agent))
@@ -116,6 +154,8 @@ async def test_rls_isolation():
             failures.append("TEST 1")
 
     # Test 2: Tenant B cannot see Tenant A's agent
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         await set_tenant_context(session, str(tenant_b.id))
         result = await session.execute(select(Agent))
@@ -127,6 +167,8 @@ async def test_rls_isolation():
             failures.append("TEST 2")
 
     # Test 3: Query without tenant context should return nothing
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         try:
             result = await session.execute(select(Agent))
@@ -144,6 +186,8 @@ async def test_rls_isolation():
     print("TEST 4 SKIP: Users RLS disabled (see migration 009)")
 
     # Cleanup
+    init_engine()
+    from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         await _cleanup_test_data(session, [tenant_a.id, tenant_b.id])
     print("\nTest data cleaned up.")
