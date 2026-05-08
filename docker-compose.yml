@@ -15,7 +15,7 @@
 
 services:
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.6.5
     restart: unless-stopped
     volumes:
       - ./data/ollama:/root/.ollama
@@ -40,10 +40,10 @@ services:
       POSTGRES_PASSWORD: ${PG_PASSWORD}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
-      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     deploy:
       resources:
-        limits: { memory: 4G }
+        limits: { memory: 4G, cpus: '1.0' }
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "ado"]
 
@@ -60,17 +60,17 @@ services:
         hard: 65536
     deploy:
       resources:
-        limits: { memory: 4G }
+        limits: { memory: 4G, cpus: '1.0' }
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     restart: unless-stopped
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--maxmemory", "1500mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - ./data/redis:/data
     deploy:
       resources:
-        limits: { memory: 2G }
+        limits: { memory: 2G, cpus: '0.5' }
 
   letta:
     image: letta/letta:0.6.0
@@ -104,7 +104,7 @@ services:
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}
       # Day 62: ADO License System
       LICENSE_SECRET_KEY: ${LICENSE_SECRET_KEY}
-      LICENSE_DEMO_MODE: ${LICENSE_DEMO_MODE:-true}
+      LICENSE_DEMO_MODE: ${LICENSE_DEMO_MODE:-false}
       ADO_DISPLAY_NAME: ${ADO_DISPLAY_NAME:-Migan}
       LICENSE_INTERNAL_KEY: ${LICENSE_INTERNAL_KEY}
       # ISSUER MODE (Codex review Day 62): set true ONLY on api.migancore.com parent.
@@ -147,7 +147,7 @@ services:
       start_period: 60s
     deploy:
       resources:
-        limits: { memory: 4G }
+        limits: { memory: 4G, cpus: '2.0' }
 
   # Celery workers DISABLED for seed stage — saves 4-6GB RAM.
   # Use asyncio.create_task() for background jobs instead.
@@ -169,7 +169,7 @@ services:
   #   ...
 
   langfuse:
-    image: langfuse/langfuse:2
+    image: langfuse/langfuse:2.50
     restart: unless-stopped
     profiles: ["observability"]
     ports:
@@ -188,7 +188,7 @@ services:
   # nginx aaPanel owns ports 80/443. MiganCore services bind to 127.0.0.1 only.
   # To enable Caddy (e.g., on a dedicated VPS), run: docker compose --profile ingress up -d
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.8-alpine
     restart: unless-stopped
     profiles: ["ingress"]
     ports:
