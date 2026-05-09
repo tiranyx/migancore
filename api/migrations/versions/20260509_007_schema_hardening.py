@@ -276,16 +276,14 @@ def upgrade() -> None:
             200, true, NULL
         WHERE NOT EXISTS (SELECT 1 FROM tools WHERE name = 'write_file');
     """)
-    connection.execute(
-        text("""
-            UPDATE tools SET
-                risk_level = 'low',
-                policy = '{"classes":["write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}'::jsonb,
-                max_calls_per_day = 200,
-                is_active = true
-            WHERE name = 'write_file';
-        """)
-    )
+    connection.exec_driver_sql("""
+        UPDATE tools SET
+            risk_level = 'low',
+            policy = '{"classes":["write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}'::jsonb,
+            max_calls_per_day = 200,
+            is_active = true
+        WHERE name = 'write_file';
+    """)
 
     connection.exec_driver_sql("""
         INSERT INTO tools (name, description, schema, handler_type, handler_config, scopes_required, risk_level, policy, max_calls_per_day, is_active, tenant_id)
@@ -299,16 +297,14 @@ def upgrade() -> None:
             100, true, NULL
         WHERE NOT EXISTS (SELECT 1 FROM tools WHERE name = 'generate_image');
     """)
-    connection.execute(
-        text("""
-            UPDATE tools SET
-                risk_level = 'medium',
-                policy = '{"classes":["open_world","write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}'::jsonb,
-                max_calls_per_day = 100,
-                is_active = true
-            WHERE name = 'generate_image';
-        """)
-    )
+    connection.exec_driver_sql("""
+        UPDATE tools SET
+            risk_level = 'medium',
+            policy = '{"classes":["open_world","write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}'::jsonb,
+            max_calls_per_day = 100,
+            is_active = true
+        WHERE name = 'generate_image';
+    """)
 
 
 def downgrade() -> None:
