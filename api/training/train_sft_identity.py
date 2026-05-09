@@ -156,7 +156,7 @@ def main():
         DataCollatorForLanguageModeling,
     )
     from peft import LoraConfig, get_peft_model, TaskType
-    from trl import SFTTrainer
+    from trl import SFTTrainer, SFTConfig
 
     # ------------------------------------------------------------------
     # Load tokenizer & verify chat template
@@ -235,7 +235,7 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=str(output_dir),
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -258,6 +258,7 @@ def main():
         lr_scheduler_type="cosine",
         seed=args.seed,
         report_to=[],
+        max_length=args.max_seq_length,
         remove_unused_columns=False,
     )
 
@@ -269,11 +270,10 @@ def main():
 
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         formatting_func=formatting_func,
-        max_seq_length=args.max_seq_length,
         args=training_args,
     )
 
