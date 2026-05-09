@@ -36,7 +36,10 @@ Table(
     extend_existing=True,
 )
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://ado_app:test@localhost:5432/ado_test")
+# Connect as postgres superuser for setup, then tests run as ado_app
+SETUP_DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql+asyncpg://postgres:test@localhost:5432/ado_test"
+)
 
 # RLS policies from baseline migration (PostgreSQL has no IF NOT EXISTS for policies)
 RLS_POLICIES = """
@@ -81,9 +84,14 @@ SEED_TOOLS = [
 
 
 async def init() -> None:
-    engine = create_async_engine(DATABASE_URL)
+    engine = create_async_engine(SETUP_DATABASE_URL)
 
     async with engine.begin() as conn:
+        # Create ado_app as non-superuser (RLS will apply to this user)
+        await conn.execute(text("CREATE ROLE ado_app WITH LOGIN PASSWORD 'test'"))
+        await conn.execute(text("GRANT CREATE ON SCHEMA public TO ado_app"))
+        await conn.execute(text("GRANT ALL PRIVILEGES ON DATABASE ado_test TO ado_app"))
+
         # Extensions
         await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
         await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
@@ -93,7 +101,6 @@ async def init() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
         # Enable RLS on tables that exist in models
-        # FORCE is required so even the table owner (ado_app) is subject to RLS.
         rls_tables = [
             "users", "agents", "conversations", "messages",
             "interactions_feedback",
@@ -107,6 +114,12 @@ async def init() -> None:
             stmt = stmt.strip()
             if stmt and "memory_blocks" not in stmt and "archival_memory" not in stmt:
                 await conn.execute(text(stmt + ";"))
+
+        # Grant all privileges to ado_app
+        for tbl in Base.metadata.tables:
+            await conn.execute(text(f"GRANT ALL PRIVILEGES ON TABLE {tbl} TO ado_app"))
+        await conn.execute(text("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ado_app"))
+        await conn.execute(text("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ado_app"))
 
     # Seed data using ORM so Python-side defaults are applied
     from sqlalchemy import select
