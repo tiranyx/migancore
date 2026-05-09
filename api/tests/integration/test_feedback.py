@@ -3,16 +3,49 @@
 import uuid
 
 import pytest
+from sqlalchemy import text
 
 from services.feedback import record_feedback, get_feedback_stats
 from models.feedback import FeedbackEvent
 from models.preference_pair import PreferencePair
 
 
+async def _create_dummy_message(session, tenant_id: uuid.UUID) -> uuid.UUID:
+    """Create a minimal agent → conversation → message chain for FK validity."""
+    from models.agent import Agent
+    from models.conversation import Conversation
+    from models.message import Message
+
+    # Set RLS context to the target tenant so inserts pass policy.
+    await session.execute(
+        text("SELECT set_config('app.current_tenant', :tid, false)"),
+        {"tid": str(tenant_id)},
+    )
+
+    agent = Agent(tenant_id=tenant_id, name="Test Agent", slug="test-agent")
+    session.add(agent)
+    await session.flush()
+
+    conv = Conversation(tenant_id=tenant_id, agent_id=agent.id, title="Test")
+    session.add(conv)
+    await session.flush()
+
+    msg = Message(
+        conversation_id=conv.id,
+        tenant_id=tenant_id,
+        role="user",
+        content="hello",
+    )
+    session.add(msg)
+    await session.flush()
+
+    return msg.id
+
+
 class TestRecordFeedback:
     async def test_thumbs_up_creates_pair(self, db_session):
-        msg_id = uuid.uuid4()
         tenant_id = uuid.uuid4()
+        msg_id = await _create_dummy_message(db_session, tenant_id)
 
         result = await record_feedback(
             db_session,
@@ -44,8 +77,8 @@ class TestRecordFeedback:
         assert pair.judge_score == 1.0
 
     async def test_thumbs_down_creates_pair(self, db_session):
-        msg_id = uuid.uuid4()
         tenant_id = uuid.uuid4()
+        msg_id = await _create_dummy_message(db_session, tenant_id)
 
         result = await record_feedback(
             db_session,
@@ -67,10 +100,13 @@ class TestRecordFeedback:
         assert pair.judge_score == 0.0
 
     async def test_unknown_rating_returns_error(self, db_session):
+        tenant_id = uuid.uuid4()
+        msg_id = await _create_dummy_message(db_session, tenant_id)
+
         result = await record_feedback(
             db_session,
-            message_id=uuid.uuid4(),
-            tenant_id=uuid.uuid4(),
+            message_id=msg_id,
+            tenant_id=tenant_id,
             signal_type="weird",
             rating="weird",
             prompt_text="",
@@ -84,20 +120,22 @@ class TestFeedbackStats:
     async def test_stats_count_correctly(self, db_session):
         tenant_id = uuid.uuid4()
 
-        # Create 2 thumbs_up, 1 thumbs_down
+        # Create 2 thumbs_up, 1 thumbs_down (each needs a real message FK)
         for _ in range(2):
+            msg_id = await _create_dummy_message(db_session, tenant_id)
             await record_feedback(
                 db_session,
-                message_id=uuid.uuid4(),
+                message_id=msg_id,
                 tenant_id=tenant_id,
                 signal_type="thumb_up",
                 rating="thumbs_up",
                 prompt_text="q",
                 target_text="a",
             )
+        msg_id = await _create_dummy_message(db_session, tenant_id)
         await record_feedback(
             db_session,
-            message_id=uuid.uuid4(),
+            message_id=msg_id,
             tenant_id=tenant_id,
             signal_type="thumb_down",
             rating="thumbs_down",
