@@ -249,15 +249,16 @@ def upgrade() -> None:
         ),
     ]
     for name, risk, policy, max_calls in tool_updates:
-        connection.execute(
-            text("""
-                UPDATE tools
-                SET risk_level = :risk,
-                    policy = :policy::jsonb,
-                    max_calls_per_day = :max_calls
-                WHERE name = :name;
-            """),
-            {"name": name, "risk": risk, "policy": policy, "max_calls": max_calls},
+        # NOTE: asyncpg has trouble with named params + ::jsonb cast inside
+        # text() — use plain string op.execute instead.
+        op.execute(
+            f"""
+            UPDATE tools
+            SET risk_level = '{risk}',
+                policy = '{policy}'::jsonb,
+                max_calls_per_day = {max_calls}
+            WHERE name = '{name}';
+            """
         )
 
     # ------------------------------------------------------------------
