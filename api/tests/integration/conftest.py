@@ -48,12 +48,14 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
     dedicated connection that is closed afterwards — no pool leakage risk.
     """
     async with AsyncTestingSessionLocal() as session:
-        await session.execute(
-            text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)")
-        )
-        # Wrap the test in a transaction so uncommitted changes are rolled back
-        # automatically when the test ends (unless the test itself calls commit).
+        # Wrap the test in an explicit transaction so uncommitted changes are
+        # rolled back automatically when the test ends (unless the test itself
+        # calls commit).  set_config must live INSIDE the begin() block so
+        # autobegin does not start a transaction before we call begin().
         async with session.begin():
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)")
+            )
             yield session
 
         # Safety: reset the connection if a previous flush left it in an
