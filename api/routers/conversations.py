@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from deps.auth import get_current_user
 from deps.db import get_db, set_tenant_context
-from models import User, Conversation, Message, PreferencePair
+from models import User, Conversation, Message, PreferencePair, FeedbackEvent
 
 router = APIRouter(prefix="/v1/conversations", tags=["conversations"])
 
@@ -52,7 +52,7 @@ class ConversationListItem(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# GET /v1/conversations — list all user conversations
+# GET /v1/conversations â€” list all user conversations
 # ---------------------------------------------------------------------------
 
 @router.get("", response_model=list[ConversationListItem])
@@ -94,7 +94,7 @@ async def list_conversations(
 
 
 # ---------------------------------------------------------------------------
-# GET /v1/conversations/{id} — get conversation with messages
+# GET /v1/conversations/{id} â€” get conversation with messages
 # ---------------------------------------------------------------------------
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
@@ -152,7 +152,7 @@ async def get_conversation(
 
 
 # ---------------------------------------------------------------------------
-# DELETE /v1/conversations/{id} — soft delete (archive)
+# DELETE /v1/conversations/{id} â€” soft delete (archive)
 # ---------------------------------------------------------------------------
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -184,8 +184,8 @@ async def delete_conversation(
 
 
 # ---------------------------------------------------------------------------
-# POST /v1/conversations/{id}/messages/{msg_id}/feedback — user feedback signal
-# Day 65: User thumbs_up/thumbs_down → stored as preference pair for training flywheel.
+# POST /v1/conversations/{id}/messages/{msg_id}/feedback â€” user feedback signal
+# Day 65: User thumbs_up/thumbs_down â†’ stored as preference pair for training flywheel.
 # ---------------------------------------------------------------------------
 
 class FeedbackIn(BaseModel):
@@ -222,7 +222,7 @@ async def submit_message_feedback(
     thumbs_up: stores a positive signal. Used for validation sampling;
         does not create a preference pair immediately (no rejected available).
 
-    Day 65 implementation: minimal flywheel — store signal, refine offline.
+    Day 65 implementation: minimal flywheel â€” store signal, refine offline.
     """
     await set_tenant_context(db, str(current_user.tenant_id))
 
@@ -282,6 +282,18 @@ async def submit_message_feedback(
         target_text=target_msg.content,
     )
 
+    # Caller-managed transaction: commit the feedback + pair insert
+    await db.commit()
+
+    logger.info(
+        "feedback.submitted",
+        rating=body.rating,
+        message_id=str(target_msg.id),
+        conversation_id=conversation_id,
+        tenant_id=str(current_user.tenant_id),
+        pair_id=str(result["pair_id"]) if result.get("pair_id") else None,
+    )
+
     return FeedbackOut(
         ok=True,
         pair_id=str(result["pair_id"]) if result["pair_id"] else None,
@@ -290,7 +302,7 @@ async def submit_message_feedback(
 
 
 # ---------------------------------------------------------------------------
-# GET /v1/conversations/feedback/stats — tenant feedback overview
+# GET /v1/conversations/feedback/stats â€” tenant feedback overview
 # ---------------------------------------------------------------------------
 
 class FeedbackStatsOut(BaseModel):
@@ -298,6 +310,10 @@ class FeedbackStatsOut(BaseModel):
     thumbs_up: int
     thumbs_down: int
     awaiting_processing: int
+    awaiting_chosen: int      # thumb_down pairs waiting for teacher
+    awaiting_rejected: int    # thumb_up pairs waiting for synthetic
+    completed_pairs: int      # pairs ready for training
+    kto_signals_this_week: int
 
 
 @router.get("/feedback/stats", response_model=FeedbackStatsOut)
@@ -306,5 +322,43 @@ async def feedback_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Return feedback statistics for the current tenant."""
+    from sqlalchemy import func
     from services.feedback import get_feedback_stats
-    return await get_feedback_stats(db, current_user.tenant_id)
+
+    base_stats = await get_feedback_stats(db, current_user.tenant_id)
+
+    # Count awaiting/completed pairs
+    awaiting_chosen = await db.scalar(
+        select(func.count()).where(
+            PreferencePair.chosen.like("__AWAITING_CHOSEN__%"),
+        )
+    )
+    awaiting_rejected = await db.scalar(
+        select(func.count()).where(
+            PreferencePair.rejected.like("__AWAITING_REJECTED__%"),
+        )
+    )
+    total_pairs = await db.scalar(select(func.count()).select_from(PreferencePair))
+    completed_pairs = (total_pairs or 0) - (awaiting_chosen or 0) - (awaiting_rejected or 0)
+
+    # KTO signals this week (user feedback events)
+    from datetime import datetime, timezone, timedelta
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    kto_signals = await db.scalar(
+        select(func.count()).where(
+            FeedbackEvent.tenant_id == current_user.tenant_id,
+            FeedbackEvent.source == "user",
+            FeedbackEvent.created_at >= week_ago,
+        )
+    )
+
+    return FeedbackStatsOut(
+        total=base_stats["total"],
+        thumbs_up=base_stats["thumbs_up"],
+        thumbs_down=base_stats["thumbs_down"],
+        awaiting_processing=base_stats["awaiting_processing"],
+        awaiting_chosen=awaiting_chosen or 0,
+        awaiting_rejected=awaiting_rejected or 0,
+        completed_pairs=max(0, completed_pairs),
+        kto_signals_this_week=kto_signals or 0,
+    )

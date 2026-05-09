@@ -1,1 +1,45 @@
-Generic single-database configuration.
+MiganCore Alembic Migrations
+============================
+
+Overview
+--------
+This directory contains the Alembic migration chain for MiganCore.
+All schema changes MUST go through Alembic â€” no manual SQL patches in production.
+
+Migration Chain
+---------------
+001_baseline          â†’ Full schema from init.sql (embedded)
+002_hafidz_ledger     â†’ hafidz_contributions table + view
+003_patches           â†’ refresh_tokens, audit_events, api_keys, RLS for memory
+004_brain_segments    â†’ brain_segments table
+005_feedback_enhance  â†’ interactions_feedback.comment + preference_pair_id FK
+006_owner_datasets    â†’ owner_datasets table
+007_schema_hardening  â†’ tools.risk_level/policy/max_calls, tenant quotas,
+                        auth_lookup_user_by_email(), RLS policy fixes,
+                        FORCE RLS, tool seed updates (write_file, generate_image)
+
+Schema Drift (Resolved)
+-----------------------
+As of 007_schema_hardening the following drift items are closed:
+  â€¢ tools.risk_level, tools.policy, tools.max_calls_per_day
+  â€¢ tenants.messages_today, tenants.messages_day_reset
+  â€¢ Missing RLS policies: interactions_feedback, tools, agent_tool_grants
+  â€¢ RLS fail-closed: NULLIF handling on all policies
+  â€¢ FORCE ROW LEVEL SECURITY on all isolated tables
+  â€¢ auth_lookup_user_by_email() SECURITY DEFINER for login
+  â€¢ write_file and generate_image tools seeded
+
+Running Migrations
+------------------
+Local Docker (test):
+    docker compose -f docker-compose.test.yml up --build api_test --abort-on-container-exit
+
+Production:
+    cd /opt/ado/api && alembic upgrade head
+
+Creating a New Revision
+-----------------------
+    cd api && alembic revision -m "description"
+
+Autogenerate (use with care â€” always review generated SQL):
+    cd api && alembic revision --autogenerate -m "description"

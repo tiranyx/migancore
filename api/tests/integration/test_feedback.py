@@ -1,4 +1,4 @@
-"""Tests for feedback service — user thumbs → preference pairs."""
+"""Tests for feedback service â€” user thumbs â†’ preference pairs."""
 
 import uuid
 
@@ -12,7 +12,7 @@ from models.preference_pair import PreferencePair
 
 
 async def _create_dummy_message(session, tenant_id: uuid.UUID) -> uuid.UUID:
-    """Create a minimal tenant → agent → conversation → message chain for FK validity."""
+    """Create a minimal tenant â†’ agent â†’ conversation â†’ message chain for FK validity."""
     from sqlalchemy import select
     from models.agent import Agent
     from models.conversation import Conversation
@@ -67,12 +67,13 @@ class TestRecordFeedback:
             prompt_text="What is AI?",
             target_text="AI is artificial intelligence.",
         )
+        await db_session.commit()
 
         assert result["status"] == "recorded"
         assert result["feedback_id"] is not None
         assert result["pair_id"] is not None
 
-        # Verify FeedbackEvent (re-set tenant context because record_feedback commits)
+        # Verify FeedbackEvent (caller-managed commit)
         await set_tenant_context(db_session, str(tenant_id))
         event = await db_session.get(FeedbackEvent, result["feedback_id"])
         assert event is not None
@@ -103,6 +104,7 @@ class TestRecordFeedback:
             prompt_text="Explain quantum",
             target_text="It's complicated.",
         )
+        await db_session.commit()
 
         assert result["status"] == "recorded"
 
@@ -146,6 +148,7 @@ class TestFeedbackStats:
                 prompt_text="q",
                 target_text="a",
             )
+            await db_session.commit()
         msg_id = await _create_dummy_message(db_session, tenant_id)
         await record_feedback(
             db_session,
@@ -156,6 +159,7 @@ class TestFeedbackStats:
             prompt_text="q",
             target_text="a",
         )
+        await db_session.commit()
 
         stats = await get_feedback_stats(db_session, tenant_id)
         assert stats["total"] == 3

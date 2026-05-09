@@ -1,5 +1,5 @@
 """
-Feedback Service — convert user signals into auditable events and preference pairs.
+Feedback Service â€” convert user signals into auditable events and preference pairs.
 
 Design:
   1. Every signal is first recorded in FeedbackEvent (audit trail).
@@ -51,7 +51,7 @@ async def record_feedback(
     session.add(event)
     await session.flush()
 
-    # 2. PreferencePair placeholder (may be incomplete — worker fills later)
+    # 2. PreferencePair placeholder (may be incomplete â€” worker fills later)
     pair: PreferencePair | None = None
 
     if rating == "thumbs_up":
@@ -87,7 +87,8 @@ async def record_feedback(
 
     # Link event to pair
     event.preference_pair_id = pair.id
-    await session.commit()
+    # NOTE: Caller is responsible for session.commit().
+    # Do NOT commit here â€” internal commits break caller-managed transactions.
 
     logger.info(
         "feedback.recorded",
