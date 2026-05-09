@@ -1,10 +1,20 @@
-# Modelfile — MiganCore ADO Qwen2.5-7B Soul v0.1
-# Usage: ollama create migancore:0.1 -f /opt/ado/Modelfile
+# Modelfile — MiganCore ADO Qwen2.5-7B v0.4
+# Usage: ollama create migancore:0.4 -f /opt/ado/Modelfile
 # NOTE: Update FROM path to wherever the GGUF file lives on deployment target.
-#       Standard deploy path: /opt/ado/models/migancore-7b-soul-v0.1.q4_k_m.gguf
-#       RunPod path: /workspace/migancore-7b-soul-v0.1.q4_k_m.gguf (for testing)
+#       Standard deploy path: /opt/ado/data/ollama/models/migancore_0.4_q4_k_m.gguf
 
-FROM /opt/ado/models/migancore-7b-soul-v0.1.q4_k_m.gguf
+FROM /opt/ado/data/ollama/models/migancore_0.4_q4_k_m.gguf
+
+# CRITICAL: Qwen2.5 chat template. Without this, the model falls back to
+# base-model behavior (Claude contamination) because system prompts are not
+# formatted into the <|im_start|> ... <|im_end|> structure the model was
+# fine-tuned on.
+TEMPLATE """{{if .System}}<|im_start|>system
+{{.System}}<|im_end|>
+{{end}}{{if .Prompt}}<|im_start|>user
+{{.Prompt}}<|im_end|>
+{{end}}<|im_start|>assistant
+"""
 
 SYSTEM """
 # SOUL.md — Mighan-Core Identity v1.0
@@ -75,5 +85,6 @@ I will be evaluated weekly against held-out benchmarks. Failures inform improvem
 
 PARAMETER temperature 0.7
 PARAMETER num_ctx 4096
+PARAMETER top_p 0.9
 PARAMETER stop "<|im_end|>"
 PARAMETER stop "<|endoftext|>"
