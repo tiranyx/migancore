@@ -44,13 +44,16 @@ class TestHafidzIntegration:
         """Insert a contribution and verify it exists."""
         from models.hafidz import HafidzContribution
 
+        # Use a unique hash per test run to avoid collisions with stale data
+        unique_hash = uuid.uuid4().hex + uuid.uuid4().hex
+
         contrib = HafidzContribution(
             child_license_id="lic-test-001",
             child_display_name="Test Child",
             child_tier="PERAK",
             parent_version="v0.3",
             contribution_type="dpo_pair",
-            contribution_hash="a" * 64,
+            contribution_hash=unique_hash,
             anonymized_payload={"question": "test", "answer": "ok"},
         )
         db_session.add(contrib)
@@ -66,7 +69,7 @@ class TestHafidzIntegration:
 
         from models.hafidz import HafidzContribution
 
-        hash_val = "b" * 64
+        hash_val = uuid.uuid4().hex + uuid.uuid4().hex
 
         c1 = HafidzContribution(
             child_license_id="lic-1",
@@ -98,13 +101,15 @@ class TestHafidzIntegration:
         """Update status via review flow."""
         from models.hafidz import HafidzContribution
 
+        unique_hash = uuid.uuid4().hex + uuid.uuid4().hex
+
         contrib = HafidzContribution(
             child_license_id="lic-review",
             child_display_name="Review Child",
             child_tier="BERLIAN",
             parent_version="v0.3",
             contribution_type="voice_pattern",
-            contribution_hash="c" * 64,
+            contribution_hash=unique_hash,
             anonymized_payload={},
         )
         db_session.add(contrib)

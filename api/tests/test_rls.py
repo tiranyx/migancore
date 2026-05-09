@@ -19,7 +19,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import User, Tenant, Agent
-from models.base import init_engine, engine
+from models.base import init_engine
 from deps.db import set_tenant_context
 from services.password import hash_password
 

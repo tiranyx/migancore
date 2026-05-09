@@ -40,11 +40,12 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
 
     Sets a dummy tenant context so RLS-enabled tables can be queried without
     raising 'unrecognized configuration parameter app.current_tenant'.
+    Uses SET (session-level, false) because NullPool gives each test its own
+    dedicated connection that is closed afterwards — no pool leakage risk.
     """
     async with AsyncTestingSessionLocal() as session:
-        async with session.begin():
-            await session.execute(
-                text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', true)")
-            )
-            yield session
+        await session.execute(
+            text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)")
+        )
+        yield session
         await session.rollback()
