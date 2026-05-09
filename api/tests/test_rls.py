@@ -19,7 +19,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import User, Tenant, Agent
-from models.base import init_engine
+from models.base import init_engine, engine
 from deps.db import set_tenant_context
 from services.password import hash_password
 
@@ -112,42 +112,37 @@ async def test_rls_isolation():
 
     failures = []
 
+    # Use engine-level transactions for RLS verification to avoid any
+    # SQLAlchemy session abstraction leaking across connection boundaries.
+    # Each block gets a fresh Connection from the pool with its own tx.
+
     # Test 1: Tenant A can see their own agent
-    init_engine()
-    from models.base import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            await set_tenant_context(session, str(tenant_a.id))
-            result = await session.execute(select(Agent))
-            agents = result.scalars().all()
-        if len(agents) == 1 and agents[0].name == "Secret Agent":
-            print("TEST 1 PASS: Tenant A sees their own agent")
-        else:
-            print(f"TEST 1 FAIL: Tenant A sees {len(agents)} agents")
-            failures.append("TEST 1")
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT set_config('app.current_tenant', :tid, true)"), {"tid": str(tenant_a.id)})
+        result = await conn.execute(select(Agent))
+        agents = result.scalars().all()
+    if len(agents) == 1 and agents[0].name == "Secret Agent":
+        print("TEST 1 PASS: Tenant A sees their own agent")
+    else:
+        print(f"TEST 1 FAIL: Tenant A sees {len(agents)} agents")
+        failures.append("TEST 1")
 
     # Test 2: Tenant B cannot see Tenant A's agent
-    init_engine()
-    from models.base import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            await set_tenant_context(session, str(tenant_b.id))
-            result = await session.execute(select(Agent))
-            agents = result.scalars().all()
-        if len(agents) == 0:
-            print("TEST 2 PASS: Tenant B sees 0 agents (isolation works)")
-        else:
-            print(f"TEST 2 FAIL: Tenant B sees {len(agents)} agents — DATA LEAK!")
-            failures.append("TEST 2")
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT set_config('app.current_tenant', :tid, true)"), {"tid": str(tenant_b.id)})
+        result = await conn.execute(select(Agent))
+        agents = result.scalars().all()
+    if len(agents) == 0:
+        print("TEST 2 PASS: Tenant B sees 0 agents (isolation works)")
+    else:
+        print(f"TEST 2 FAIL: Tenant B sees {len(agents)} agents — DATA LEAK!")
+        failures.append("TEST 2")
 
-    # Test 3: Query without tenant context should return nothing
-    init_engine()
-    from models.base import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
+    # Test 3: Query without tenant context should fail-closed (error)
+    async with engine.begin() as conn:
         try:
-            async with session.begin():
-                result = await session.execute(select(Agent))
-                agents = result.scalars().all()
+            result = await conn.execute(select(Agent))
+            agents = result.scalars().all()
             if len(agents) == 0:
                 print("TEST 3 PASS: No tenant context → 0 agents")
             else:
