@@ -1,5 +1,5 @@
 # CONTEXT.md — MiganCore Project Live State
-**Last Updated:** 2026-05-08 22:15 WIB by Kimi Code CLI (Executor Session)
+**Last Updated:** 2026-05-09 02:45 WIB by Kimi Code CLI (Executor Session — SP-104 Test Stabilization Complete)
 **Location:** Project root (shared across all repos)
 **Protocol:** Baca ini SEBELUM kerja. Update SETELAH kerja.
 
@@ -72,7 +72,9 @@ Consumer Channels (hit api.migancore.com)
 - **Teacher Distillation:** Manual, 10 pairs total.
 - **Identity:** Tanpa SOUL.md prompt = "Saya Qwen, Alibaba Cloud".
 - **Migrations:** Manual SQL only. Alembic imported tapi tidak dipakai.
-- **Tests:** 1 file test_rls.py. Coverage < 5%.
+- **Tests:** 169 passed, 0 failed, coverage 66.12% (Docker Test Runner SP-104 stable)
+- **Alembic:** Schema drift (6 discrepancies) documented, not yet migrated
+- **Feedback service:** Internal `session.commit()` — caller-managed refactor deferred to M1
 - **Platform Repo:** Empty directories. Misleading.
 - **CI/CD:** Tidak ada. Deploy manual.
 
@@ -103,7 +105,7 @@ Consumer Channels (hit api.migancore.com)
 ---
 
 ## NEXT PRIORITY (M0 — Foundation Hardening)
-1. **Hari 1-2:** Alembic migrations + test suite v1
+1. **Hari 1-2:** Alembic migrations + test suite v1 ✅ TEST SUITE DONE (169 pass, 66% cov)
 2. **Hari 3:** CI/CD pipeline (GitHub Actions)
 3. **Hari 4:** Context preservation system + daily protocol
 4. **Hari 5-7:** Observability stack (Prometheus + Grafana)
