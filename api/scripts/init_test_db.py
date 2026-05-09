@@ -87,12 +87,17 @@ async def init() -> None:
     engine = create_async_engine(SETUP_DATABASE_URL)
 
     async with engine.begin() as conn:
-        # Create ado_app as non-superuser (RLS will apply to this user)
-        # Use IF NOT EXISTS guard so repeated runs against a persistent DB don't crash.
-        try:
-            await conn.execute(text("CREATE ROLE ado_app WITH LOGIN PASSWORD 'test'"))
-        except Exception:
-            pass  # Role already exists — safe to ignore
+        # Create ado_app as non-superuser (RLS will apply to this user).
+        # Use a PL/pgSQL anonymous block so a duplicate role doesn't abort the tx.
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+                CREATE ROLE ado_app WITH LOGIN PASSWORD 'test';
+            EXCEPTION WHEN duplicate_object THEN
+                RAISE NOTICE 'Role ado_app already exists, skipping.';
+            END
+            $$
+        """))
         await conn.execute(text("GRANT CREATE ON SCHEMA public TO ado_app"))
         await conn.execute(text("GRANT ALL PRIVILEGES ON DATABASE ado_test TO ado_app"))
 
