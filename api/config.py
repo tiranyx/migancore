@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # Ollama
     OLLAMA_URL: str = "http://ollama:11434"
-    DEFAULT_MODEL: str = "migancore:0.3"
+    DEFAULT_MODEL: str = "migancore:0.4"
 
     # Letta
     LETTA_URL: str = "http://letta:8283"

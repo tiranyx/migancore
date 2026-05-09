@@ -1,0 +1,14 @@
+[Unit]
+Description=MiganCore Distillation Worker
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ado/api/services/distill_cron.sh
+User=root
+StandardOutput=append:/opt/ado/logs/distill_systemd.log
+StandardError=append:/opt/ado/logs/distill_systemd.log
+
+[Install]
+WantedBy=multi-user.target

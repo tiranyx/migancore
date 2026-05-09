@@ -1,0 +1,17 @@
+# MiganCore SFT Training Dependencies
+torch>=2.4.0,<2.6.0
+transformers>=4.46.0,<4.48.0
+datasets>=3.0.0
+trl>=0.12.0
+unsloth>=2025.3.0
+peft>=0.14.0
+accelerate>=1.0.0
+bitsandbytes>=0.45.0
+sentencepiece
+protobuf
+scipy
+scikit-learn
+tqdm
+huggingface_hub[cli]
+# Optional: for GGUF export
+llama-cpp-python
