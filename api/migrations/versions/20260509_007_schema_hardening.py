@@ -48,27 +48,36 @@ def upgrade() -> None:
     # ------------------------------------------------------------------
     # 3. AUTH â€” SECURITY DEFINER lookup function from patch 010
     # ------------------------------------------------------------------
+    # Use CREATE FUNCTION (not OR REPLACE) inside a DO block so that
+    # if the function already exists (e.g. created manually by superuser)
+    # we swallow the duplicate_function exception rather than failing
+    # with "must be owner of function".
     connection.execute(text("""
-        CREATE OR REPLACE FUNCTION auth_lookup_user_by_email(p_email VARCHAR)
-        RETURNS TABLE (
-            id UUID,
-            tenant_id UUID,
-            email VARCHAR,
-            password_hash VARCHAR,
-            role VARCHAR,
-            display_name VARCHAR,
-            last_login_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ
-        ) SECURITY DEFINER
-        AS $$
+        DO $$
         BEGIN
-            RETURN QUERY
-            SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role,
-                   u.display_name, u.last_login_at, u.created_at
-            FROM users u
-            WHERE u.email = p_email;
-        END;
-        $$ LANGUAGE plpgsql;
+            CREATE FUNCTION auth_lookup_user_by_email(p_email VARCHAR)
+            RETURNS TABLE (
+                id UUID,
+                tenant_id UUID,
+                email VARCHAR,
+                password_hash VARCHAR,
+                role VARCHAR,
+                display_name VARCHAR,
+                last_login_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ
+            ) SECURITY DEFINER
+            AS $$
+            BEGIN
+                RETURN QUERY
+                SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role,
+                       u.display_name, u.last_login_at, u.created_at
+                FROM users u
+                WHERE u.email = p_email;
+            END;
+            $$ LANGUAGE plpgsql;
+        EXCEPTION WHEN duplicate_function THEN
+            RAISE NOTICE 'auth_lookup_user_by_email already exists, skipping creation.';
+        END $$;
     """))
     connection.execute(text("GRANT EXECUTE ON FUNCTION auth_lookup_user_by_email(VARCHAR) TO ado_app;"))
 
