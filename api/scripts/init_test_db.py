@@ -88,7 +88,11 @@ async def init() -> None:
 
     async with engine.begin() as conn:
         # Create ado_app as non-superuser (RLS will apply to this user)
-        await conn.execute(text("CREATE ROLE ado_app WITH LOGIN PASSWORD 'test'"))
+        # Use IF NOT EXISTS guard so repeated runs against a persistent DB don't crash.
+        try:
+            await conn.execute(text("CREATE ROLE ado_app WITH LOGIN PASSWORD 'test'"))
+        except Exception:
+            pass  # Role already exists — safe to ignore
         await conn.execute(text("GRANT CREATE ON SCHEMA public TO ado_app"))
         await conn.execute(text("GRANT ALL PRIVILEGES ON DATABASE ado_test TO ado_app"))
 
