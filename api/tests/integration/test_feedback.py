@@ -6,12 +6,14 @@ import pytest
 from sqlalchemy import text
 
 from services.feedback import record_feedback, get_feedback_stats
+from deps.db import set_tenant_context
 from models.feedback import FeedbackEvent
 from models.preference_pair import PreferencePair
 
 
 async def _create_dummy_message(session, tenant_id: uuid.UUID) -> uuid.UUID:
     """Create a minimal tenant → agent → conversation → message chain for FK validity."""
+    from sqlalchemy import select
     from models.agent import Agent
     from models.conversation import Conversation
     from models.message import Message
@@ -23,10 +25,13 @@ async def _create_dummy_message(session, tenant_id: uuid.UUID) -> uuid.UUID:
         {"tid": str(tenant_id)},
     )
 
-    tenant_slug = f"test-tenant-{uuid.uuid4().hex[:8]}"
-    tenant = Tenant(id=tenant_id, name="Test Tenant", slug=tenant_slug)
-    session.add(tenant)
-    await session.flush()
+    # Idempotent: only create tenant if it doesn't already exist.
+    result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+    if result.scalar_one_or_none() is None:
+        tenant_slug = f"test-tenant-{uuid.uuid4().hex[:8]}"
+        tenant = Tenant(id=tenant_id, name="Test Tenant", slug=tenant_slug)
+        session.add(tenant)
+        await session.flush()
 
     agent = Agent(tenant_id=tenant_id, name="Test Agent", slug="test-agent")
     session.add(agent)
@@ -67,7 +72,8 @@ class TestRecordFeedback:
         assert result["feedback_id"] is not None
         assert result["pair_id"] is not None
 
-        # Verify FeedbackEvent
+        # Verify FeedbackEvent (re-set tenant context because record_feedback commits)
+        await set_tenant_context(db_session, str(tenant_id))
         event = await db_session.get(FeedbackEvent, result["feedback_id"])
         assert event is not None
         assert event.signal_type == "thumb_up"
@@ -75,6 +81,7 @@ class TestRecordFeedback:
         assert event.preference_pair_id == result["pair_id"]
 
         # Verify PreferencePair
+        await set_tenant_context(db_session, str(tenant_id))
         pair = await db_session.get(PreferencePair, result["pair_id"])
         assert pair is not None
         assert pair.source_method == "user_thumbs_up"
@@ -99,6 +106,7 @@ class TestRecordFeedback:
 
         assert result["status"] == "recorded"
 
+        await set_tenant_context(db_session, str(tenant_id))
         pair = await db_session.get(PreferencePair, result["pair_id"])
         assert pair.source_method == "user_thumbs_down"
         assert pair.chosen == "__AWAITING_CHOSEN__"
