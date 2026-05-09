@@ -249,46 +249,33 @@ def upgrade() -> None:
         ),
     ]
     for name, risk, policy, max_calls in tool_updates:
-        # Use parameter binding — PostgreSQL will cast string → JSONB
-        # automatically because the column is typed JSONB.
-        connection.execute(
-            text("""
-                UPDATE tools
-                SET risk_level = :risk,
-                    policy = :policy,
-                    max_calls_per_day = :max_calls
-                WHERE name = :name;
-            """),
-            {"name": name, "risk": risk, "policy": policy, "max_calls": max_calls},
+        # exec_driver_sql bypasses SQLAlchemy text() parsing so JSON
+        # colons and ::jsonb casts are sent to PostgreSQL verbatim.
+        connection.exec_driver_sql(
+            f"""
+            UPDATE tools
+            SET risk_level = '{risk}',
+                policy = '{policy}'::jsonb,
+                max_calls_per_day = {max_calls}
+            WHERE name = '{name}';
+            """
         )
 
     # ------------------------------------------------------------------
     # 8. ADD write_file and generate_image tools (patch 024)
     # ------------------------------------------------------------------
-    connection.execute(
-        text("""
-            INSERT INTO tools (name, description, schema, handler_type, handler_config, scopes_required, risk_level, policy, max_calls_per_day, is_active, tenant_id)
-            SELECT
-                :name,
-                :description,
-                :schema,
-                :handler_type, :handler_config, ARRAY[]::text[],
-                :risk_level,
-                :policy,
-                :max_calls, true, NULL
-            WHERE NOT EXISTS (SELECT 1 FROM tools WHERE name = :name);
-        """),
-        {
-            "name": "write_file",
-            "description": "Write content to a file in the agent sandboxed workspace. Creates parent directories automatically.",
-            "schema": '{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}',
-            "handler_type": "builtin",
-            "handler_config": "{}",
-            "risk_level": "low",
-            "policy": '{"classes":["write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}',
-            "max_calls": 200,
-        },
-    )
+    connection.exec_driver_sql("""
+        INSERT INTO tools (name, description, schema, handler_type, handler_config, scopes_required, risk_level, policy, max_calls_per_day, is_active, tenant_id)
+        SELECT
+            'write_file',
+            'Write content to a file in the agent sandboxed workspace. Creates parent directories automatically.',
+            '{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}'::jsonb,
+            'builtin', '{}'::jsonb, ARRAY[]::text[],
+            'low',
+            '{"classes":["write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}'::jsonb,
+            200, true, NULL
+        WHERE NOT EXISTS (SELECT 1 FROM tools WHERE name = 'write_file');
+    """)
     connection.execute(
         text("""
             UPDATE tools SET
@@ -300,30 +287,18 @@ def upgrade() -> None:
         """)
     )
 
-    connection.execute(
-        text("""
-            INSERT INTO tools (name, description, schema, handler_type, handler_config, scopes_required, risk_level, policy, max_calls_per_day, is_active, tenant_id)
-            SELECT
-                :name,
-                :description,
-                :schema,
-                :handler_type, :handler_config, ARRAY[]::text[],
-                :risk_level,
-                :policy,
-                :max_calls, true, NULL
-            WHERE NOT EXISTS (SELECT 1 FROM tools WHERE name = :name);
-        """),
-        {
-            "name": "generate_image",
-            "description": "Generate an image from a text prompt via fal.ai FLUX schnell. Returns URL.",
-            "schema": '{"type":"object","properties":{"prompt":{"type":"string"},"image_size":{"type":"string"},"num_images":{"type":"integer"}},"required":["prompt"]}',
-            "handler_type": "builtin",
-            "handler_config": "{}",
-            "risk_level": "medium",
-            "policy": '{"classes":["open_world","write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}',
-            "max_calls": 100,
-        },
-    )
+    connection.exec_driver_sql("""
+        INSERT INTO tools (name, description, schema, handler_type, handler_config, scopes_required, risk_level, policy, max_calls_per_day, is_active, tenant_id)
+        SELECT
+            'generate_image',
+            'Generate an image from a text prompt via fal.ai FLUX schnell. Returns URL.',
+            '{"type":"object","properties":{"prompt":{"type":"string"},"image_size":{"type":"string"},"num_images":{"type":"integer"}},"required":["prompt"]}'::jsonb,
+            'builtin', '{}'::jsonb, ARRAY[]::text[],
+            'medium',
+            '{"classes":["open_world","write"],"requires_approval":false,"sandbox_required":false,"allowed_plans":["free","pro","enterprise"]}'::jsonb,
+            100, true, NULL
+        WHERE NOT EXISTS (SELECT 1 FROM tools WHERE name = 'generate_image');
+    """)
     connection.execute(
         text("""
             UPDATE tools SET
