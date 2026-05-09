@@ -157,7 +157,7 @@ class BudgetTracker:
 
 
 # ---------------------------------------------------------------------------
-# Conversation fetcher (placeholder — adapt to your DB schema)
+# Conversation fetcher — queries PostgreSQL messages table directly
 # ---------------------------------------------------------------------------
 @dataclass
 class RawInteraction:
@@ -165,53 +165,149 @@ class RawInteraction:
     user_message: str
     system_prompt: str
     model_response: str
-    user_feedback: Optional[str] = None  # thumbs up/down, correction, etc.
+    user_feedback: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
+
+
+# State tracking — which message IDs have been processed
+STATE_PATH = DATASET_DIR / "distill_state.json"
+
+
+def _load_processed_ids() -> set[str]:
+    if not STATE_PATH.exists():
+        return set()
+    try:
+        with open(STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return set(data.get("processed_ids", []))
+    except Exception:
+        return set()
+
+
+def _save_processed_ids(ids: set[str]):
+    with open(STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"processed_ids": list(ids), "updated_at": datetime.utcnow().isoformat()}, f)
 
 
 async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> list[RawInteraction]:
     """
-    Fetch recent conversations that haven't been distilled yet.
-    In production: query PostgreSQL for interactions WHERE distilled_at IS NULL.
-    For now: reads from a simple queue file or returns demo data.
+    Fetch recent user→assistant message pairs from PostgreSQL.
+    Uses file-based state tracking (no DB schema changes required).
     """
-    # TODO: Replace with actual DB query
-    # Example:
-    #   SELECT id, user_message, system_prompt, response, feedback, created_at
-    #   FROM chat_messages
-    #   WHERE distilled_at IS NULL AND created_at > NOW() - INTERVAL '%s hours'
-    #   ORDER BY created_at DESC LIMIT %s
-    queue_path = DATASET_DIR / "interaction_queue.jsonl"
-    if not queue_path.exists():
-        return []
+    import asyncpg
 
-    results = []
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
-    with open(queue_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                d = json.loads(line)
-                ts = datetime.fromisoformat(d.get("timestamp", "2026-01-01T00:00:00"))
-                if ts < cutoff:
+    processed = _load_processed_ids()
+    results: list[RawInteraction] = []
+
+    try:
+        conn = await asyncpg.connect(settings.DATABASE_URL)
+        try:
+            cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+            # Query: find conversations with user+assistant pairs in time window
+            # We look for assistant messages whose preceding message in the same
+            # conversation was from the user, and optionally a system message before that.
+            rows = await conn.fetch(
+                """
+                WITH recent_assistant AS (
+                    SELECT
+                        m.id AS assistant_msg_id,
+                        m.conversation_id,
+                        m.content AS assistant_content,
+                        m.created_at,
+                        m.quality_score,
+                        LAG(m.content) OVER (
+                            PARTITION BY m.conversation_id
+                            ORDER BY m.created_at
+                        ) AS prev_content,
+                        LAG(m.role) OVER (
+                            PARTITION BY m.conversation_id
+                            ORDER BY m.created_at
+                        ) AS prev_role
+                    FROM messages m
+                    WHERE m.role = 'assistant'
+                      AND m.created_at > $1
+                      AND m.content IS NOT NULL
+                      AND LENGTH(m.content) > 10
+                    ORDER BY m.created_at DESC
+                    LIMIT $2
+                )
+                SELECT
+                    assistant_msg_id,
+                    conversation_id,
+                    assistant_content,
+                    prev_content AS user_content,
+                    prev_role,
+                    created_at,
+                    quality_score
+                FROM recent_assistant
+                WHERE prev_role = 'user'
+                ORDER BY created_at DESC
+                """,
+                cutoff,
+                limit * 3,  # oversample to account for already-processed
+            )
+
+            for row in rows:
+                msg_id = str(row["assistant_msg_id"])
+                if msg_id in processed:
                     continue
+
+                # Fetch system prompt for this conversation (if any)
+                system_rows = await conn.fetch(
+                    "SELECT content FROM messages WHERE conversation_id = $1 AND role = 'system' ORDER BY created_at LIMIT 1",
+                    row["conversation_id"],
+                )
+                system_prompt = system_rows[0]["content"] if system_rows else ""
+
                 results.append(
                     RawInteraction(
-                        id=d.get("id", str(int(time.time() * 1000))),
-                        user_message=d.get("user_message", ""),
-                        system_prompt=d.get("system_prompt", ""),
-                        model_response=d.get("model_response", ""),
-                        user_feedback=d.get("user_feedback"),
-                        timestamp=ts,
+                        id=msg_id,
+                        user_message=row["user_content"] or "",
+                        system_prompt=system_prompt,
+                        model_response=row["assistant_content"] or "",
+                        user_feedback=None,  # TODO: join with feedback table
+                        timestamp=row["created_at"].replace(tzinfo=None) if row["created_at"] else datetime.utcnow(),
                     )
                 )
-            except Exception as exc:
-                logger.warning("distill.parse_queue_error", error=str(exc))
-                continue
+                processed.add(msg_id)
+                if len(results) >= limit:
+                    break
 
-    return results[:limit]
+        finally:
+            await conn.close()
+
+        _save_processed_ids(processed)
+        logger.info("distill.db_fetch", count=len(results), window_hours=hours)
+        return results
+
+    except Exception as exc:
+        logger.error("distill.db_fetch_error", error=str(exc))
+        # Fallback to queue file
+        queue_path = DATASET_DIR / "interaction_queue.jsonl"
+        if not queue_path.exists():
+            return []
+        fallback = []
+        with open(queue_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                    fallback.append(
+                        RawInteraction(
+                            id=d.get("id", str(int(time.time() * 1000))),
+                            user_message=d.get("user_message", ""),
+                            system_prompt=d.get("system_prompt", ""),
+                            model_response=d.get("model_response", ""),
+                            user_feedback=d.get("user_feedback"),
+                            timestamp=datetime.fromisoformat(d.get("timestamp", "2026-01-01T00:00:00")),
+                        )
+                    )
+                except Exception:
+                    continue
+        return fallback[:limit]
 
 
 # ---------------------------------------------------------------------------
