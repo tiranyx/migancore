@@ -11,16 +11,21 @@ from models.preference_pair import PreferencePair
 
 
 async def _create_dummy_message(session, tenant_id: uuid.UUID) -> uuid.UUID:
-    """Create a minimal agent → conversation → message chain for FK validity."""
+    """Create a minimal tenant → agent → conversation → message chain for FK validity."""
     from models.agent import Agent
     from models.conversation import Conversation
     from models.message import Message
+    from models.tenant import Tenant
 
     # Set RLS context to the target tenant so inserts pass policy.
     await session.execute(
         text("SELECT set_config('app.current_tenant', :tid, false)"),
         {"tid": str(tenant_id)},
     )
+
+    tenant = Tenant(id=tenant_id, name="Test Tenant", slug="test-tenant")
+    session.add(tenant)
+    await session.flush()
 
     agent = Agent(tenant_id=tenant_id, name="Test Agent", slug="test-agent")
     session.add(agent)
