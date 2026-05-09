@@ -23,14 +23,18 @@ AsyncTestingSessionLocal = async_sessionmaker(
 
 @pytest_asyncio.fixture(scope="session")
 async def db_engine():
-    """Create engine and tables for integration test session."""
+    """Create engine and tables for integration test session.
+
+    Tables are created by init_test_db.py (superuser) before tests run;
+    create_all here is idempotent (checkfirst=True).  We do NOT drop_all
+    on teardown because ado_app is not the table owner and would get
+    InsufficientPrivilegeError.
+    """
     from models.base import Base
 
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield async_engine
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
     await async_engine.dispose()
 
 
@@ -47,13 +51,25 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
         await session.execute(
             text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)")
         )
-        yield session
-        # Some service functions call session.commit(), so a simple rollback
-        # is not enough.  Clean up tables in FK-safe order after each test.
-        await session.execute(text("DELETE FROM interactions_feedback"))
-        await session.execute(text("DELETE FROM preference_pairs"))
-        await session.execute(text("DELETE FROM messages"))
-        await session.execute(text("DELETE FROM conversations"))
-        await session.execute(text("DELETE FROM agents"))
-        await session.execute(text("DELETE FROM tenants WHERE slug LIKE 'test-tenant-%'"))
-        await session.commit()
+        # Wrap the test in a transaction so uncommitted changes are rolled back
+        # automatically when the test ends (unless the test itself calls commit).
+        async with session.begin():
+            yield session
+
+        # Safety: reset the connection if a previous flush left it in an
+        # aborted transaction state (e.g. IntegrityError inside pytest.raises).
+        await session.rollback()
+
+        # Explicit cleanup for rows that may have been committed by services.
+        try:
+            await session.execute(text("DELETE FROM interactions_feedback"))
+            await session.execute(text("DELETE FROM preference_pairs"))
+            await session.execute(text("DELETE FROM messages"))
+            await session.execute(text("DELETE FROM conversations"))
+            await session.execute(text("DELETE FROM agents"))
+            await session.execute(text("DELETE FROM tenants WHERE slug LIKE 'test-tenant-%'"))
+            await session.commit()
+        except Exception:
+            # If cleanup itself fails (e.g. connection still broken), just
+            # rollback so the session closes cleanly.
+            await session.rollback()
