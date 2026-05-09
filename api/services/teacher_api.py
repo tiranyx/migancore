@@ -172,6 +172,10 @@ async def call_kimi(
                     json=payload, headers=headers,
                 )
                 if resp.status_code == 429:
+                    # Lesson #186: 429 can mean "insufficient balance" — fatal, not retryable
+                    body = resp.text.lower()
+                    if "insufficient balance" in body or "credit" in body or "suspended" in body:
+                        raise TeacherError(f"Kimi suspended (insufficient balance): {resp.text[:200]}")
                     await asyncio.sleep(2 ** attempt)
                     continue
                 if resp.status_code != 200:

@@ -41,7 +41,7 @@ import sqlite3
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -189,10 +189,18 @@ def _save_processed_ids(ids: set[str]):
         json.dump({"processed_ids": list(ids), "updated_at": datetime.utcnow().isoformat()}, f)
 
 
-async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> list[RawInteraction]:
+async def fetch_unprocessed_interactions(
+    hours: int = 6,
+    limit: int = 20,
+    diagnose: bool = False,
+) -> list[RawInteraction]:
     """
     Fetch recent user→assistant message pairs from PostgreSQL.
     Uses file-based state tracking (no DB schema changes required).
+
+    Day 71 fix: Use timezone-aware datetime to avoid PostgreSQL tz cast issues.
+    Day 71 fix: Robust query handles tool messages between user and assistant.
+    Day 71 fix: Diagnostic mode prints counts and sample rows for debugging.
     """
     import asyncpg
 
@@ -204,35 +212,58 @@ async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> lis
         dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1)
         conn = await asyncpg.connect(dsn)
         try:
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            # FIX: timezone-aware cutoff (Lesson #182)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-            # Query: find conversations with user+assistant pairs in time window
-            # We look for assistant messages whose preceding message in the same
-            # conversation was from the user, and optionally a system message before that.
+            # ------------------------------------------------------------------
+            # Diagnostic: print raw counts before applying filters
+            # ------------------------------------------------------------------
+            if diagnose:
+                total_msgs = await conn.fetchval(
+                    "SELECT COUNT(*) FROM messages WHERE created_at > $1", cutoff
+                )
+                assistant_msgs = await conn.fetchval(
+                    "SELECT COUNT(*) FROM messages WHERE role = 'assistant' AND created_at > $1",
+                    cutoff,
+                )
+                user_msgs = await conn.fetchval(
+                    "SELECT COUNT(*) FROM messages WHERE role = 'user' AND created_at > $1",
+                    cutoff,
+                )
+                long_assist = await conn.fetchval(
+                    "SELECT COUNT(*) FROM messages WHERE role = 'assistant' AND created_at > $1 AND LENGTH(content) > 10",
+                    cutoff,
+                )
+                print(f"[DIAGNOSE] Total messages in last {hours}h: {total_msgs}")
+                print(f"[DIAGNOSE] Assistant messages: {assistant_msgs}")
+                print(f"[DIAGNOSE] User messages: {user_msgs}")
+                print(f"[DIAGNOSE] Assistant (len>10): {long_assist}")
+                print(f"[DIAGNOSE] Already processed IDs: {len(processed)}")
+
+            # Query: find assistant messages whose immediately preceding message
+            # in the same conversation was from the user.
+            # FIX (Lesson #183): Use ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
+            # with UNBOUNDED PRECEDING to correctly find previous user message
+            # even when tool messages sit between user and assistant.
             rows = await conn.fetch(
                 """
-                WITH recent_assistant AS (
+                WITH ranked AS (
                     SELECT
                         m.id AS assistant_msg_id,
                         m.conversation_id,
                         m.content AS assistant_content,
                         m.created_at,
                         m.quality_score,
-                        LAG(m.content) OVER (
-                            PARTITION BY m.conversation_id
-                            ORDER BY m.created_at
-                        ) AS prev_content,
-                        LAG(m.role) OVER (
-                            PARTITION BY m.conversation_id
-                            ORDER BY m.created_at
-                        ) AS prev_role
+                        LAG(m.role) OVER w AS prev_role,
+                        LAG(m.content) OVER w AS prev_content,
+                        LAG(m.role, 2) OVER w AS prev_prev_role
                     FROM messages m
-                    WHERE m.role = 'assistant'
-                      AND m.created_at > $1
-                      AND m.content IS NOT NULL
-                      AND LENGTH(m.content) > 10
-                    ORDER BY m.created_at DESC
-                    LIMIT $2
+                    WHERE m.created_at > $1
+                    WINDOW w AS (
+                        PARTITION BY m.conversation_id
+                        ORDER BY m.created_at
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                    )
                 )
                 SELECT
                     assistant_msg_id,
@@ -242,17 +273,22 @@ async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> lis
                     prev_role,
                     created_at,
                     quality_score
-                FROM recent_assistant
+                FROM ranked
                 WHERE prev_role = 'user'
+                  AND assistant_content IS NOT NULL
+                  AND LENGTH(assistant_content) > 10
                 ORDER BY created_at DESC
+                LIMIT $2
                 """,
                 cutoff,
-                limit * 3,  # oversample to account for already-processed
+                limit * 5,  # oversample to account for already-processed
             )
 
+            skipped_already_processed = 0
             for row in rows:
                 msg_id = str(row["assistant_msg_id"])
                 if msg_id in processed:
+                    skipped_already_processed += 1
                     continue
 
                 # Fetch system prompt for this conversation (if any)
@@ -269,12 +305,19 @@ async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> lis
                         system_prompt=system_prompt,
                         model_response=row["assistant_content"] or "",
                         user_feedback=None,  # TODO: join with feedback table
-                        timestamp=row["created_at"].replace(tzinfo=None) if row["created_at"] else datetime.utcnow(),
+                        timestamp=row["created_at"].replace(tzinfo=None) if row["created_at"] else datetime.now(timezone.utc).replace(tzinfo=None),
                     )
                 )
                 processed.add(msg_id)
                 if len(results) >= limit:
                     break
+
+            if diagnose:
+                print(f"[DIAGNOSE] Raw rows from query: {len(rows)}")
+                print(f"[DIAGNOSE] Skipped (already processed): {skipped_already_processed}")
+                print(f"[DIAGNOSE] Final new results: {len(results)}")
+                for r in results[:3]:
+                    print(f"[DIAGNOSE] Sample: id={r.id[:8]}... user={r.user_message[:40]}...")
 
         finally:
             await conn.close()
@@ -285,6 +328,8 @@ async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> lis
 
     except Exception as exc:
         logger.error("distill.db_fetch_error", error=str(exc))
+        if diagnose:
+            print(f"[DIAGNOSE] DB ERROR: {exc}")
         # Fallback to queue file
         queue_path = DATASET_DIR / "interaction_queue.jsonl"
         if not queue_path.exists():
@@ -540,6 +585,7 @@ async def run_distillation_cycle(
     limit: int = 20,
     enable_critique: bool = True,
     enable_dpo: bool = True,
+    diagnose: bool = False,
 ) -> dict:
     """
     Run one distillation cycle.
@@ -561,9 +607,11 @@ async def run_distillation_cycle(
         report["errors"].append("daily_budget_exhausted")
         return report
 
-    interactions = await fetch_unprocessed_interactions(hours=hours, limit=limit)
+    interactions = await fetch_unprocessed_interactions(hours=hours, limit=limit, diagnose=diagnose)
     report["interactions_fetched"] = len(interactions)
     logger.info("distill.fetched", count=len(interactions), hours=hours)
+    if diagnose:
+        print(f"[DIAGNOSE] Total interactions fetched: {len(interactions)}")
 
     if not interactions:
         logger.info("distill.no_work")
@@ -657,9 +705,21 @@ def main():
     parser.add_argument("--no-dpo", action="store_true", help="Skip DPO pair generation")
     parser.add_argument("--teachers", nargs="+", default=None, help="Subset of teachers: gemini kimi gpt claude")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without calling teachers or writing data")
+    parser.add_argument("--diagnose", action="store_true", help="Print DB diagnostic info (no teachers called)")
     args = parser.parse_args()
 
     async def _run():
+        if args.diagnose:
+            logger.info("distill.diagnose_mode")
+            report = await run_distillation_cycle(
+                hours=args.hours,
+                limit=args.limit,
+                enable_critique=False,
+                enable_dpo=False,
+                diagnose=True,
+            )
+            print(json.dumps(report, indent=2, default=str))
+            return
         if args.dry_run:
             logger.info("distill.dry_run_mode")
             print(json.dumps({"dry_run": True, "status": "ok", "message": "Dry run mode. No teachers called."}, indent=2))
@@ -669,6 +729,7 @@ def main():
             limit=args.limit,
             enable_critique=not args.no_critique,
             enable_dpo=not args.no_dpo,
+            diagnose=False,
         )
         print(json.dumps(report, indent=2, default=str))
 
