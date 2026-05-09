@@ -35,11 +35,11 @@ async def _cleanup_legacy():
     init_engine()
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
-        await session.execute(text("SET LOCAL app.current_tenant = '00000000-0000-0000-0000-000000000000'"))
-        await session.execute(text(f"DELETE FROM agents WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
-        await session.execute(text(f"DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
-        await session.execute(text(f"DELETE FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}')"))
-        await session.commit()
+        async with session.begin():
+            await session.execute(text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)"))
+            await session.execute(text(f"DELETE FROM agents WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
+            await session.execute(text(f"DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
+            await session.execute(text(f"DELETE FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}')"))
 
 
 async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]:
@@ -47,21 +47,21 @@ async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]
     init_engine()
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
-        tenant = Tenant(name=f"Test {tenant_slug}", slug=tenant_slug)
-        session.add(tenant)
-        await session.flush()
+        async with session.begin():
+            tenant = Tenant(name=f"Test {tenant_slug}", slug=tenant_slug)
+            session.add(tenant)
+            await session.flush()
 
-        # Set tenant context before creating user (RLS enforced)
-        await set_tenant_context(session, str(tenant.id))
+            # Set tenant context before creating user (RLS enforced)
+            await set_tenant_context(session, str(tenant.id))
 
-        user = User(
-            tenant_id=tenant.id,
-            email=email,
-            password_hash=hash_password("TestPass123!"),
-            role="owner",
-        )
-        session.add(user)
-        await session.commit()
+            user = User(
+                tenant_id=tenant.id,
+                email=email,
+                password_hash=hash_password("TestPass123!"),
+                role="owner",
+            )
+            session.add(user)
         return user, tenant
 
 
@@ -80,7 +80,6 @@ async def _cleanup_test_data(session: AsyncSession, tenant_ids: list[uuid.UUID])
             text("DELETE FROM tenants WHERE id = :tid"),
             {"tid": str(tid)},
         )
-    await session.commit()
 
 
 @pytest.mark.asyncio
@@ -97,18 +96,18 @@ async def test_rls_isolation():
     print(f"Tenant A: {tenant_a.id} ({tenant_a.slug})")
     print(f"Tenant B: {tenant_b.id} ({tenant_b.slug})")
 
-    # Create an agent for Tenant A (with RLS context)
+    # Create an agent for Tenant A (with RLS context inside a transaction)
     init_engine()
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
-        await set_tenant_context(session, str(tenant_a.id))
-        agent = Agent(
-            tenant_id=tenant_a.id,
-            name="Secret Agent",
-            slug="secret-agent",
-        )
-        session.add(agent)
-        await session.commit()
+        async with session.begin():
+            await set_tenant_context(session, str(tenant_a.id))
+            agent = Agent(
+                tenant_id=tenant_a.id,
+                name="Secret Agent",
+                slug="secret-agent",
+            )
+            session.add(agent)
         print(f"Agent created for Tenant A: {agent.id}")
 
     failures = []
@@ -117,9 +116,10 @@ async def test_rls_isolation():
     init_engine()
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
-        await set_tenant_context(session, str(tenant_a.id))
-        result = await session.execute(select(Agent))
-        agents = result.scalars().all()
+        async with session.begin():
+            await set_tenant_context(session, str(tenant_a.id))
+            result = await session.execute(select(Agent))
+            agents = result.scalars().all()
         if len(agents) == 1 and agents[0].name == "Secret Agent":
             print("TEST 1 PASS: Tenant A sees their own agent")
         else:
@@ -130,9 +130,10 @@ async def test_rls_isolation():
     init_engine()
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
-        await set_tenant_context(session, str(tenant_b.id))
-        result = await session.execute(select(Agent))
-        agents = result.scalars().all()
+        async with session.begin():
+            await set_tenant_context(session, str(tenant_b.id))
+            result = await session.execute(select(Agent))
+            agents = result.scalars().all()
         if len(agents) == 0:
             print("TEST 2 PASS: Tenant B sees 0 agents (isolation works)")
         else:
@@ -144,8 +145,9 @@ async def test_rls_isolation():
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
         try:
-            result = await session.execute(select(Agent))
-            agents = result.scalars().all()
+            async with session.begin():
+                result = await session.execute(select(Agent))
+                agents = result.scalars().all()
             if len(agents) == 0:
                 print("TEST 3 PASS: No tenant context → 0 agents")
             else:
@@ -162,7 +164,8 @@ async def test_rls_isolation():
     init_engine()
     from models.base import AsyncSessionLocal
     async with AsyncSessionLocal() as session:
-        await _cleanup_test_data(session, [tenant_a.id, tenant_b.id])
+        async with session.begin():
+            await _cleanup_test_data(session, [tenant_a.id, tenant_b.id])
     print("\nTest data cleaned up.")
 
     if failures:
