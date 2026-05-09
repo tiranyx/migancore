@@ -37,8 +37,8 @@ Table(
 )
 
 # Connect as postgres superuser for setup, then tests run as ado_app
-SETUP_DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+asyncpg://postgres:test@localhost:5432/ado_test"
+SETUP_DATABASE_URL = (
+    "postgresql+asyncpg://postgres:test@postgres_test:5432/ado_test"
 )
 
 # RLS policies from baseline migration (PostgreSQL has no IF NOT EXISTS for policies)
