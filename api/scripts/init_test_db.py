@@ -15,6 +15,7 @@ from sqlalchemy import text, Table, Column, String, Integer, Float, DateTime, Fo
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from models.base import Base
+from models.datasets import datasets_table  # noqa: F401 — registers datasets in Base.metadata
 
 # Register the datasets table in Base.metadata so that FK references
 # from owner_datasets work during Base.metadata.create_all().

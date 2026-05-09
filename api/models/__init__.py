@@ -15,6 +15,7 @@ from models.api_key import ApiKey
 from models.hafidz import HafidzContribution
 from models.feedback import FeedbackEvent
 from models.owner_dataset import OwnerDataset
+from models.datasets import datasets_table
 
 __all__ = [
     "Base",

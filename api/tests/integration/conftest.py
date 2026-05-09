@@ -36,7 +36,7 @@ async def db_engine():
 
 @pytest_asyncio.fixture
 async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Provide a transactional DB session that rolls back after each test.
+    """Provide a transactional DB session that cleans up after each test.
 
     Sets a dummy tenant context so RLS-enabled tables can be queried without
     raising 'unrecognized configuration parameter app.current_tenant'.
@@ -48,4 +48,12 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
             text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)")
         )
         yield session
-        await session.rollback()
+        # Some service functions call session.commit(), so a simple rollback
+        # is not enough.  Clean up tables in FK-safe order after each test.
+        await session.execute(text("DELETE FROM interactions_feedback"))
+        await session.execute(text("DELETE FROM preference_pairs"))
+        await session.execute(text("DELETE FROM messages"))
+        await session.execute(text("DELETE FROM conversations"))
+        await session.execute(text("DELETE FROM agents"))
+        await session.execute(text("DELETE FROM tenants WHERE slug LIKE 'test-tenant-%'"))
+        await session.commit()
