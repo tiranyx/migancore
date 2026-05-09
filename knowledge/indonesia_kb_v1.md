@@ -1313,3 +1313,21 @@ Pada tahun 2025, Presiden Prabowo Subianto menetapkan 10 tokoh baru sebagai Pahl
 - **LBH (Lembaga Bantuan Hukum)**: hukum & HAM.
 - **Populi Center**: survei opini publik, pemilu.
 - **Katadata Insight Center**: bisnis, startup, digital economy.
+
+## DATA TERKINI — 2026-05-09 06:00 WIB
+*(Auto-updated by kb_auto_update.py cron)*
+
+### Kurs Rupiah (IDR)
+| Mata Uang | Kurs Beli (IDR) |
+|-----------|-----------------|
+| USD (Dolar AS) | Rp 17,241 |
+| SGD (Dolar Singapura) | Rp 13,699 |
+| EUR (Euro) | Rp 20,408 |
+| JPY (Yen Jepang) | Rp 110 |
+| CNY (Yuan China) | Rp 2,551 |
+| MYR (Ringgit Malaysia) | Rp 4,425 |
+| AUD (Dolar Australia) | Rp 12,500 |
+| GBP (Poundsterling) | Rp 23,256 |
+
+### Pasar Modal
+- **IHSG (IDX Composite):** 6,969
