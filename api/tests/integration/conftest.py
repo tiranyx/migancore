@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -35,8 +36,15 @@ async def db_engine():
 
 @pytest_asyncio.fixture
 async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Provide a transactional DB session that rolls back after each test."""
+    """Provide a transactional DB session that rolls back after each test.
+
+    Sets a dummy tenant context so RLS-enabled tables can be queried without
+    raising 'unrecognized configuration parameter app.current_tenant'.
+    """
     async with AsyncTestingSessionLocal() as session:
         async with session.begin():
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', true)")
+            )
             yield session
         await session.rollback()

@@ -112,15 +112,17 @@ async def test_rls_isolation():
 
     failures = []
 
-    # Ensure engine is initialised before we touch the global engine object.
-    init_engine()
-
     # Use engine-level transactions for RLS verification to avoid any
     # SQLAlchemy session abstraction leaking across connection boundaries.
     # Each block gets a fresh Connection from the pool with its own tx.
+    # Import engine lazily so we pick up the object *after* init_engine().
+    from models.base import engine as _engine
+    if _engine is None:
+        init_engine()
+        _engine = __import__('models.base', fromlist=['engine']).engine
 
     # Test 1: Tenant A can see their own agent
-    async with engine.begin() as conn:
+    async with _engine.begin() as conn:
         await conn.execute(text("SELECT set_config('app.current_tenant', :tid, true)"), {"tid": str(tenant_a.id)})
         result = await conn.execute(select(Agent))
         agents = result.scalars().all()
@@ -131,7 +133,7 @@ async def test_rls_isolation():
         failures.append("TEST 1")
 
     # Test 2: Tenant B cannot see Tenant A's agent
-    async with engine.begin() as conn:
+    async with _engine.begin() as conn:
         await conn.execute(text("SELECT set_config('app.current_tenant', :tid, true)"), {"tid": str(tenant_b.id)})
         result = await conn.execute(select(Agent))
         agents = result.scalars().all()
@@ -142,7 +144,7 @@ async def test_rls_isolation():
         failures.append("TEST 2")
 
     # Test 3: Query without tenant context should fail-closed (error)
-    async with engine.begin() as conn:
+    async with _engine.begin() as conn:
         try:
             result = await conn.execute(select(Agent))
             agents = result.scalars().all()
