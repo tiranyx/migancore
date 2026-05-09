@@ -41,29 +41,17 @@ SETUP_DATABASE_URL = (
     "postgresql+asyncpg://postgres:test@postgres_test:5432/ado_test"
 )
 
-# RLS policies from baseline migration (PostgreSQL has no IF NOT EXISTS for policies)
-RLS_POLICIES = """
-CREATE POLICY tenant_isolation_users ON users
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY tenant_isolation_agents ON agents
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY tenant_isolation_conversations ON conversations
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY tenant_isolation_messages ON messages
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY tenant_isolation_feedback ON interactions_feedback
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY tenant_isolation_memory ON memory_blocks
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY tenant_isolation_archival ON archival_memory
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
-"""
+# RLS policies from baseline migration (PostgreSQL has no IF NOT EXISTS for policies).
+# Each entry is (policy_name, table_name, using_expr).
+RLS_POLICY_DEFS = [
+    ("tenant_isolation_users", "users", "tenant_id = current_setting('app.current_tenant')::uuid"),
+    ("tenant_isolation_agents", "agents", "tenant_id = current_setting('app.current_tenant')::uuid"),
+    ("tenant_isolation_conversations", "conversations", "tenant_id = current_setting('app.current_tenant')::uuid"),
+    ("tenant_isolation_messages", "messages", "tenant_id = current_setting('app.current_tenant')::uuid"),
+    ("tenant_isolation_feedback", "interactions_feedback", "tenant_id = current_setting('app.current_tenant')::uuid"),
+    ("tenant_isolation_memory", "memory_blocks", "tenant_id = current_setting('app.current_tenant')::uuid"),
+    ("tenant_isolation_archival", "archival_memory", "tenant_id = current_setting('app.current_tenant')::uuid"),
+]
 
 SEED_TOOLS = [
     ("web_search", "Web Search", "Search the web for current information", "builtin",
@@ -119,10 +107,12 @@ async def init() -> None:
             await conn.execute(text(f"ALTER TABLE IF EXISTS {tbl} FORCE ROW LEVEL SECURITY"))
 
         # RLS policies (only for tables that exist in models)
-        for stmt in RLS_POLICIES.strip().split(";"):
-            stmt = stmt.strip()
-            if stmt and "memory_blocks" not in stmt and "archival_memory" not in stmt:
-                await conn.execute(text(stmt + ";"))
+        for policy_name, table_name, using_expr in RLS_POLICY_DEFS:
+            if table_name not in ["memory_blocks", "archival_memory"]:
+                await conn.execute(text(f"DROP POLICY IF EXISTS {policy_name} ON {table_name}"))
+                await conn.execute(text(
+                    f"CREATE POLICY {policy_name} ON {table_name} USING ({using_expr})"
+                ))
 
         # Grant all privileges to ado_app
         for tbl in Base.metadata.tables:
