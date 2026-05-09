@@ -558,9 +558,14 @@ def main():
     parser.add_argument("--no-critique", action="store_true", help="Skip CAI critique (faster)")
     parser.add_argument("--no-dpo", action="store_true", help="Skip DPO pair generation")
     parser.add_argument("--teachers", nargs="+", default=None, help="Subset of teachers: gemini kimi gpt claude")
+    parser.add_argument("--dry-run", action="store_true", help="Simulate without calling teachers or writing data")
     args = parser.parse_args()
 
     async def _run():
+        if args.dry_run:
+            logger.info("distill.dry_run_mode")
+            print(json.dumps({"dry_run": True, "status": "ok", "message": "Dry run mode. No teachers called."}, indent=2))
+            return
         report = await run_distillation_cycle(
             hours=args.hours,
             limit=args.limit,
