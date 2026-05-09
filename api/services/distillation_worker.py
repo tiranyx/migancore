@@ -64,7 +64,8 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 # Configurable constants
 # ---------------------------------------------------------------------------
-DATASET_DIR = Path("/opt/ado/data/training")
+# Writable path inside container (mounted from host ./data/training)
+DATASET_DIR = Path("/app/data/training")
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
 # Rolling dataset files

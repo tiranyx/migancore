@@ -137,6 +137,8 @@ services:
       - fastembed_cache:/app/.cache/fastembed   # Persist model downloads across rebuilds
       - ./data/workspace:/app/workspace         # Day 24: sandboxed file system for agents
       - ./eval:/app/eval                       # Day 39: identity eval scripts + persona set
+      - ./data/training:/app/data/training:rw  # Day 71: distillation dataset (SFT + DPO rolling)
+      - ./logs:/app/logs:rw                    # Day 71: distillation + training logs
       - /opt/sidix/tools/hyperx-browser:/app/hyperx:rw     # Day 42: HYPERX browser (Node.js MCP, mounted RO from sidix tools)
     depends_on: [postgres, qdrant, redis, ollama]
     healthcheck:
