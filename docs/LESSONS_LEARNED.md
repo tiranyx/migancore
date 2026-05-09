@@ -1,788 +1,160 @@
-# MIGANCORE — LESSONS LEARNED
-**Living Document — Updated setiap sesi**
-**Last Update:** Day 20 | **Author:** Claude Sonnet 4.6
-
-> Ini adalah cognitive ledger proyek — catatan pelajaran berharga dari kegagalan DAN keberhasilan.
-> Tujuan: **jangan ulangi kegagalan, lipat gandakan keberhasilan.**
-> Format: setiap temuan punya Root Cause, Impact, Fix, dan Generalized Principle.
+# LESSONS LEARNED — MiganCore
+**Status:** LIVING DOCUMENT  
+**Created:** 2026-05-09 14:30 WIB  
+**Owner:** Tiranyx / Chief Engineer  
+**Rule:** Setiap kegagalan atau keberhasilan signifikan WAJIB dicatat di sini sebelum dilupakan.
 
 ---
 
-## 🔴 KEGAGALAN & PELAJARAN KRITIS
-
----
-
-### [F-01] Docker Image Tidak Auto-Update Saat Code Berubah
-**Day:** 15 | **Severity:** HIGH | **Category:** Deployment
-
-**Gejala:** Code baru sudah di-commit dan `git pull` berhasil, tapi container masih menjalankan code lama. Perubahan tidak terlihat sama sekali.
-
-**Root Cause:** `docker compose restart api` hanya me-restart container dari **image yang sudah ada**. Jika API menggunakan `build: { context: ./api }`, code di-bake ke dalam image saat build. `git pull` hanya mengubah file di host, BUKAN di dalam running container.
-
-**Impact:** Semua debugging seolah tidak ada hasilnya — kita fikir ada bug di code baru, padahal code baru tidak pernah running.
-
-**Fix:**
-```bash
-# WAJIB untuk perubahan code:
-docker compose build api && docker compose up -d api
-
-# BUKAN ini:
-docker compose restart api  ← SALAH untuk code changes
-```
-
-**Generalized Principle:**
-> **"Git pull ≠ Deploy."** Untuk project dengan Docker `build:` section (bukan `image:`), code change SELALU butuh `docker compose build`. Bedakan: `restart` = restart process, `build` = compile ulang image, `up -d` = recreate container dari image baru.
-
-**Prevention:** Selalu verifikasi code di dalam container setelah deploy:
-```bash
-docker exec ado-api-1 grep 'keyword_from_new_code' /app/routers/chat.py
-```
-
----
-
-### [F-02] asyncio Task Garbage Collection (Silent Failure)
-**Day:** 15 | **Severity:** HIGH | **Category:** Python Async
-
-**Gejala:** Background task (Qdrant indexing, CAI pipeline) tidak jalan sama sekali. Tidak ada log error. Ollama kadang return 499 (client disconnected).
-
-**Root Cause:** `asyncio.create_task()` mengembalikan task object sebagai **weak reference**. Jika task object tidak disimpan di variable yang live, Python GC bisa menghapus task di tengah eksekusi. Ini menyebabkan `GeneratorExit` exception di dalam task, yang menutup httpx connection ke Ollama.
-
-**Impact:** Semua background tasks (Qdrant embed, knowledge extraction, CAI pipeline) silently gagal tanpa log error apapun.
-
-**Fix:**
-```python
-# Module level:
-_background_tasks: set[asyncio.Task] = set()
-
-# Setiap create_task:
-_t = asyncio.create_task(run_cai_pipeline(...))
-_background_tasks.add(_t)                          # Strong reference
-_t.add_done_callback(_background_tasks.discard)    # Auto-cleanup
-```
-
-**Generalized Principle:**
-> **"asyncio.create_task() is fire-and-forget only if you store the reference."** Setiap background task yang penting HARUS disimpan dalam set/list module-level. `add_done_callback` untuk auto-cleanup.
-
-**COROLLARY:** Jika background task silently tidak jalan → cek apakah task reference tersimpan.
-
----
-
-### [F-03] `from module import value` Freezes Lazily-Initialized Singletons
-**Day:** 15 | **Severity:** HIGH | **Category:** Python Import System
-
-**Gejala:** `AsyncSessionLocal is None` di dalam function yang seharusnya bisa akses DB. Padahal `init_engine()` sudah dipanggil saat startup.
-
-**Root Cause:** `from models.base import AsyncSessionLocal` di module-level **mengikat nilai `None`** pada waktu import (sebelum FastAPI lifespan/startup event memanggil `init_engine()`). Ini adalah Python import binding: yang di-copy adalah VALUE-nya saat import, bukan REFERENCE ke variable.
-
-**Impact:** `_store_preference_pair()` silently return tanpa menyimpan apapun. Pipeline berjalan tapi data tidak tersimpan.
-
-**Fix:**
-```python
-# SALAH:
-from models.base import AsyncSessionLocal  # Freezes None at import time
-
-# BENAR:
-import models.base as _models_base
-# Then at call time:
-if _models_base.AsyncSessionLocal is None:  # Always gets current value
-    return
-async with _models_base.AsyncSessionLocal() as db:
-    ...
-```
-
-**Generalized Principle:**
-> **"from X import Y for lazily-initialized singletons = time bomb."** Jika Y di-set setelah startup (seperti DB session factory, connection pool), gunakan `import X as _x` dan akses via `_x.Y` di runtime.
-
-**APPLIES TO:** Database connections, Redis clients, model singletons, any object initialized in FastAPI lifespan.
-
----
-
-### [F-04] Qdrant RocksDB "Too Many Open Files"
-**Day:** 16 | **Severity:** HIGH | **Category:** Infrastructure / OS
-
-**Gejala:** `qdrant.index_failed: Unexpected Response: 500`. Qdrant log: `IO error: Too many open files (os error 24)`.
-
-**Root Cause:** Qdrant menggunakan RocksDB sebagai storage engine. RocksDB membuka **banyak file descriptor per segment per collection** (Options file, SST files, manifest files). Default Docker container soft limit = 1024 file descriptors. Dengan 6+ Qdrant collections, total FDs melebihi limit saat membuat collection baru.
-
-**Impact:** Collection baru tidak bisa dibuat. Existing collections tidak bisa menerima upsert baru. Semua indexing silently gagal. `collection_created` log muncul tapi upsert langsung 500.
-
-**Fix:**
-```yaml
-# docker-compose.yml, service qdrant:
-ulimits:
-  nofile:
-    soft: 65536
-    hard: 65536
-```
-
-**Generalized Principle:**
-> **"Setiap produk yang pakai RocksDB (Qdrant, Kafka, TiKV, CockroachDB) WAJIB set ulimits nofile ≥65536."** Default Docker limit 1024 selalu tidak cukup untuk RocksDB di production.
-
-**COROLLARY:** Qdrant 500 error pada PUT /collections = selalu cek ulimits sebelum debugging Qdrant code.
-
-**Prevention checklist untuk deploy Qdrant baru:**
-```bash
-docker exec qdrant-container cat /proc/1/limits | grep "open files"
-# Harus menunjukkan soft ≥ 65536
-```
-
----
-
-### [F-05] Score Threshold 0.55 Terlalu Rendah untuk RAG Injection
-**Day:** 16 | **Severity:** MEDIUM | **Category:** ML / Research
-
-**Gejala (potential):** Episodic context injection mungkin membawa noise (irrelevant past turns) ke system prompt, yang bisa membingungkan 7B model.
-
-**Root Cause:** Score threshold 0.55 (diset Day 12) cocok untuk `memory_search` tool (user explicitly searching). Tapi untuk PROACTIVE injection ke system prompt, threshold harus lebih ketat.
-
-**Research Finding:** Zep production dan LlamaIndex merekomendasikan 0.70-0.75 untuk English. Untuk Bahasa Indonesia dengan multilingual MPNet, ada 5-8% deflasi → threshold optimal 0.65.
-
-**Fix Applied (Day 16):** `vector_retrieval.py` menggunakan `RETRIEVAL_SCORE_THRESHOLD = 0.65` saat memanggil `search_semantic()`. Tool executor tetap pakai 0.55 (user-initiated search).
-
-**Generalized Principle:**
-> **"Threshold untuk proactive injection > threshold untuk user-requested search."** User search = user tahu apa yang mereka cari, bisa handle noise. Proactive injection = model tidak tahu apa yang ada di context, noise langsung merusak respons.
-
----
-
-### [F-07] Qdrant Query API Membutuhkan ≥ v1.10.0 — Bukan v1.9.x
-**Day:** 18 | **Severity:** HIGH | **Category:** Infrastructure / Version Compatibility
-
-**Gejala:** `hybrid search plan: Prefetch + FusionQuery(RRF)` tidak ada di Qdrant v1.9.0. Import `Fusion, FusionQuery, Prefetch` dari `qdrant_client.models` berhasil (client-side), tapi `client.query_points()` throw error "unknown endpoint" atau method tidak ada.
-
-**Root Cause:** Qdrant memisahkan fitur antara **client library** dan **server version**. `qdrant-client==1.12.x` bisa import `Prefetch`, `FusionQuery`, dll. Tapi jika server Qdrant-nya versi 1.9.0, Query API endpoint `/collections/{col}/query` tidak exist di server.
-
-**Impact:** Hybrid search plan gagal sepenuhnya, fallback ke dense-only (tidak ada error crash, tapi kehilangan benefit +30-50% recall).
-
-**Fix:** Upgrade Qdrant server ke v1.12.0 di docker-compose.yml:
-```yaml
-qdrant:
-  image: qdrant/qdrant:v1.12.0  # was: v1.9.0
-```
-
-**Generalized Principle:**
-> **"Qdrant client version ≠ Qdrant server version."** Selalu cek server version saat merencanakan fitur baru. Verifikasi via `GET /` endpoint: `{"version": "X.Y.Z"}`. Qdrant 1.10+ untuk hybrid Query API.
-
-**Version Compatibility Table:**
-| Feature | Min Server Version |
-|---------|-------------------|
-| Sparse vectors (basic) | 1.7.0 |
-| Query API + Prefetch | **1.10.0** |
-| Hybrid RRF fusion | **1.10.0** |
-
----
-
-### [F-08] BM42 `embed()` vs `query_embed()` — Silent Wrong Results
-**Day:** 18 | **Severity:** HIGH | **Category:** ML / Embedding
-
-**Gejala:** Search results untuk query "Fahmi Wol CEO" mengembalikan results yang kurang relevan dari yang diharapkan.
-
-**Root Cause:** BM42 adalah asymmetric embedding — menggunakan **berbeda token weighting** untuk documents vs queries. `model.embed()` = document mode (semua tokens weighted equally). `model.query_embed()` = query mode (IDF-weighted, fokus pada discriminative terms). Menggunakan `embed()` untuk queries = silently menggunakan weighting yang salah.
-
-**Impact:** Search precision turun. Bukan error/crash — hasil tetap keluar, tapi dengan lower relevance. Sulit di-detect tanpa benchmarking.
-
-**Fix Applied:**
-```python
-async def embed_sparse_document(text: str) -> QdrantSparseVector | None:
-    result = model.embed([text], batch_size=1)  # Documents: embed()
-
-async def embed_sparse_query(text: str) -> QdrantSparseVector | None:
-    result = model.query_embed(text)  # Queries: query_embed() — WAJIB
-```
-
-**Generalized Principle:**
-> **"BM42 dan semua asymmetric sparse embedding (SPLADE, etc.) WAJIB pakai query_embed() untuk queries."** Baca model card sebelum pakai. Default `embed()` tidak selalu benar.
-
----
-
-### [F-06] Sort-by-Recency untuk RAG Injection = Silent Degradasi
-**Day:** 16 | **Severity:** MEDIUM | **Category:** ML / Research
-
-**Root Cause / Finding:** Research "Lost in the Middle" (arxiv 2505.15561) menunjukkan bahwa 7B model punya primacy attention bias — informasi di AWAL context mendapat perhatian lebih. Jika retrieved chunks diurutkan by recency (oldest first, most recent last), yang paling relevan mungkin jatuh di tengah → diabaikan.
-
-**Impact:** 30% accuracy degradation pada recall tasks jika sort by recency vs sort by relevance.
-
-**Fix Applied:** `format_episodic_context()` sort by `_retrieval_score` descending — yang paling relevan selalu di posisi [1] (pertama).
-
-**Generalized Principle:**
-> **"Untuk 7B injection: sort by relevance descending. Paling relevan = posisi pertama = primacy attention."** Jangan sort by timestamp untuk context injection. Timestamp hanya untuk display kepada user.
-
----
-
-## ✅ KEBERHASILAN & POLA YANG BISA DILIPAT GANDAKAN
-
----
-
-### [S-01] Fire-and-Forget Pattern dengan Strong Reference
-**Day:** 12-15 | **Category:** Architecture
-
-**Pattern:**
-```python
-_background_tasks: set[asyncio.Task] = set()  # Module level
-
-async def chat(...):
-    # After main response ready:
-    _t = asyncio.create_task(heavy_background_work(...))
-    _background_tasks.add(_t)
-    _t.add_done_callback(_background_tasks.discard)
-    # Return response immediately — zero latency impact
-```
-
-**Kenapa berhasil:** Zero response latency impact. Background work (embed, extract, critique) berjalan paralel dengan response HTTP. User tidak menunggu 30-60 detik.
-
-**Replicate untuk:** Logging, analytics, indexing, any non-blocking enrichment task.
-
-**Rule:** Background tasks BOLEH gagal. Main response tidak boleh diblock oleh background work.
-
----
-
-### [S-02] Graceful Degradation di Setiap Layer
-**Day:** 13-16 | **Category:** Resilience
-
-**Pattern:** Setiap service external (Letta, Qdrant, Redis) diakses dengan fallback:
-```python
-# Letta:
-letta_blocks = await get_letta_blocks(agent.letta_agent_id) if agent.letta_agent_id else {}
-# Qdrant:
-results = await asyncio.wait_for(search_semantic(...), timeout=1.5)
-# jika timeout → return []
-```
-
-**Kenapa berhasil:** API tidak pernah down karena Letta/Qdrant unavailable. Core chat selalu berjalan.
-
-**Principle:** **Setiap external call harus punya default empty/None return, bukan exception.** Exception = 500 ke user. Default empty = degraded but working.
-
----
-
-### [S-03] Module-Ref untuk Lazily-Initialized Objects
-**Day:** 15 | **Category:** Python Best Practice
-
-**Pattern:**
-```python
-import models.base as _models_base  # NOT: from models.base import AsyncSessionLocal
-
-# Always access at call time:
-if _models_base.AsyncSessionLocal is None:
-    return
-async with _models_base.AsyncSessionLocal() as db:
-    ...
-```
-
-**Rule:** `import module as _m` untuk semua objek yang diinisialisasi setelah startup. `from module import X` hanya untuk constants dan classes yang tidak berubah.
-
----
-
-### [S-04] Structured JSON Output untuk Small Model (7B)
-**Day:** 15 | **Category:** LLM Engineering
-
-**Pattern:** Critique prompt menggunakan structured JSON format:
-```
-Balas HANYA dengan JSON valid:
-{"score": <1-5>, "violations": [...], "suggestions": [...]}
-```
-
-**Kenapa berhasil:** 7B model lebih reliably output JSON saat:
-1. Format dideskripsikan dengan contoh konkret
-2. Instruksi "HANYA JSON" eksplisit
-3. Model tidak diminta menjelaskan reasoning-nya
-
-**Edge case handling:**
-```python
-start = raw.find("{")
-end = raw.rfind("}") + 1
-if start == -1 or end == 0:
-    logger.warning("cai.critique_no_json", ...)
-    return None
-parsed = json.loads(raw[start:end])
-```
-
-**Generalized:** JSON extraction dengan `find("{")` + `rfind("}")` lebih robust daripada expect output bersih. Model kadang prefix dengan kalimat sebelum JSON.
-
----
-
-### [S-05] Research-First Before Implementation
-**Day:** 16 | **Category:** Process
-
-**What worked:** Sebelum implement RAG retrieval, launch research agent untuk survei arxiv 2024-2026, production systems (Mem0, Zep, LangMem). Temuan langsung mempengaruhi decisions:
-- Top-k = 3 (bukan 5 yang pertama direncanakan)
-- Score threshold = 0.65 (bukan 0.55)
-- Sort by relevance (bukan timestamp)
-
-**Impact:** Keputusan yang lebih baik di pertama kali. Tidak perlu iterasi banyak karena decisions sudah research-backed.
-
-**Generalized:** Untuk setiap feature baru, alokasi 30 menit untuk research sebelum coding. ROI-nya jauh lebih besar dari langsung coding.
-
----
-
-### [S-07] Zero-Loss Migration via Scroll → Delete → Recreate → Re-upsert
-**Day:** 18 | **Category:** Data Migration
-
-**Pattern:** Migrasi collection schema (old unnamed dense → new named dense + sparse) tanpa kehilangan data:
-```python
-# 1. Fetch all with vectors
-scroll_result = await client.scroll(collection_name=name, limit=10000,
-    with_payload=True, with_vectors=True)
-existing_points = scroll_result[0]
-
-# 2. Delete old
-await client.delete_collection(name)
-
-# 3. Recreate hybrid
-await _create_hybrid_collection(client, name)
-
-# 4. Recompute sparse from chunk_text (already in payload)
-for p in existing_points:
-    chunk_text = p.payload.get("chunk_text", "")
-    sparse_vec = await embed_sparse_document(chunk_text)
-    # ... upsert with {dense: old_dense, sparse: sparse_vec}
-```
-
-**Kenapa berhasil:**
-- `chunk_text` sudah tersimpan di payload sejak Day 12 (forward-looking design)
-- Sparse vectors dihitung fresh dari teks yang sama → hasilnya identik
-- Semua metadata/payload preserved as-is
-
-**Generalized Principle:**
-> **"Simpan raw text di payload saat indexing — bukan hanya vectors."** Raw text memungkinkan re-embedding ke schema baru tanpa kehilangan data. Ini adalah migration escape hatch.
-
----
-
-### [S-08] Named Volume untuk Model Cache
-**Day:** 18 | **Category:** Infrastructure / Performance
-
-**Pattern:** Gunakan Docker named volume untuk caching AI model files:
-```yaml
-# docker-compose.yml:
-services:
-  api:
-    volumes:
-      - fastembed_cache:/app/.cache/fastembed
-
-volumes:
-  fastembed_cache:  # Persists across rebuilds
-```
-
-**Result:** BM42 model (90MB ONNX) tidak perlu re-download setiap `docker compose build api`.
-- First time: ~4s download
-- Subsequent starts: 108,100 it/s (instant cache hit)
-- Saves 90MB traffic + 4s startup time per rebuild
-
-**Generalized Principle:**
-> **"AI models, pip cache, apt cache → named volumes, bukan bind mounts."** Named volumes survive `docker compose down` dan `docker compose build`. Data volume (`./data/`) untuk persistence. Model cache volume untuk performance.
-
----
-
-### [F-09] Synthetic Training Data Hallucination Transfer
-**Day:** 19 | **Severity:** HIGH | **Category:** ML Safety
-
-**Gejala Potensial:** Jika content dari SIDIX (QA pairs, corpus_qa, finetune_sft.jsonl) digunakan sebagai seed data untuk synthetic DPO generation, model yang dilatih akan mengadopsi:
-1. Fakta spesifik SIDIX yang mungkin salah (auto-generated hallucinations)
-2. Brand identity SIDIX (persona, tone, sidq/sanad/tabayyun terminology)
-3. Domain bias SIDIX yang tidak relevan untuk MiganCore
-
-**Root Cause:** Training data kontaminasi — model belajar dari data yang mengandung sinyal salah. Synthetic data menggandakan jumlah pairs, bukan hanya memperkenalkan sedikit noise. Skala besar = amplifikasi hallucination.
-
-**Impact:** Fine-tuned MiganCore model bisa hallucinate fakta SIDIX, menjawab dengan gaya SIDIX, atau confuse brand identity.
-
-**Fix:**
-- Import dari SIDIX: **HANYA** category names dan question framing patterns
-- **JANGAN** import: `qa_pairs` answers, `corpus_qa` content, `finetune_sft.jsonl`
-- Tag semua synthetic pairs: `source_method="synthetic_seed_v1"` → filter jika diperlukan
-- Use validation set setelah training: test dengan SIDIX-specific queries untuk deteksi kontaminasi
-
-**Generalized Principle:**
-> **"Synthetic ≠ Safe jika seed dari sumber yang biased."** Sebelum import data dari project lain, identifikasi: (1) Apa yang aman (taxonomy, framing)? (2) Apa yang berbahaya (content, facts, persona)? (3) Bagaimana cara membatasi transfer? Tag source_method selalu — ini adalah recovery hatch jika kontaminasi terjadi.
-
----
-
-### [F-10] `num_ctx` Tidak Pernah Di-set — Silent Context Overflow
-**Day:** 20 | **Severity:** HIGH | **Category:** LLM Inference
-
-**Gejala:** Tidak ada error. Chat response tetap keluar — tapi semakin panjang conversation history (terutama dengan tool calling), respons terasa makin "pelupa" atau "meleset". Tidak ada exception, tidak ada log error.
-
-**Root Cause:** Ollama menggunakan **default `num_ctx` jika tidak di-set**. Untuk Qwen2.5-7B, default Ollama adalah ~2048 tokens. Padahal satu conversation dengan 5 messages + tool output bisa mencapai ~2500 tokens. Ollama **silently truncate** context dari kiri (oldest messages) tanpa memberi tahu caller.
-
-**Impact:** Model tidak bisa referensi bagian awal conversation. Tool call results yang panjang mendorong system prompt keluar dari context window. Tidak ada error — response keluar tapi dengan degraded context.
-
-**Fix:**
-```python
-# Semua call ke Ollama HARUS set num_ctx eksplisit:
-options = {"num_predict": 1024, "temperature": 0, "num_ctx": 4096}
-# Berlaku di: chat.py (sync), chat.py (SSE stream), director.py (default options)
-```
-
-**Generalized Principle:**
-> **"Selalu set `num_ctx` eksplisit pada setiap Ollama call. Default = hidden bug."** Ollama tidak inherit model card max context — ia punya default sendiri yang mungkin jauh lebih rendah. Verifikasi di Ollama log: cari `"n_ctx"` value saat model load.
-
-**Detection:** Cari degraded response pada long conversations dengan tool outputs. Silent truncation tidak melempar exception. Satu-satunya cara detect tanpa log = behavioral regression.
-
----
-
-### [F-11] "Hybrid Search Upgrade Needed" — Tapi Sudah Ada Sejak Day 18
-**Day:** 20 | **Severity:** LOW | **Category:** Process / Documentation
-
-**Gejala:** Day 17 dan 19 notes menyebut `_memory_search` di tool_executor perlu "upgrade ke hybrid search". Day 20 planning mengalokasikan waktu untuk ini. Tapi saat code dibaca, `search_semantic()` di Day 18 sudah hybrid.
-
-**Root Cause:** Documentation lag — notes dari Day 17 tidak di-update setelah Day 18 selesai. "Qdrant semantic" label di return dict tidak diubah ke "qdrant_hybrid" saat Day 18. Menyebabkan false impression bahwa upgrade belum dilakukan.
-
-**Impact:** Waktu perencanaan terbuang untuk masalah yang sudah solved. Fix yang sebenarnya dibutuhkan (timeout) lebih kecil scope-nya.
-
-**Fix Applied:**
-1. Baca kode actual sebelum planning (`_memory_search()` → sudah call `search_semantic()` which is hybrid)
-2. Fix yang benar: tambah timeout + perbaiki stale label `"qdrant_semantic"` → `"qdrant_hybrid"`
-
-**Generalized Principle:**
-> **"Baca kode, jangan percaya catatan yang tidak diupdate."** Setelah setiap implementasi besar, update SEMUA referensi ke modul yang diubah — termasuk dalam notes tentang future work. Stale future-work notes menyebabkan wasted planning.
-
----
-
-### [S-10] Token Budget Trimming Pattern
-**Day:** 20 | **Category:** LLM Engineering
-
-**Pattern:** Two-pass history trimming sebelum Ollama call:
-```python
-CHARS_PER_TOKEN = 3.5
-MAX_MSG_CONTENT_CHARS = 800
-MAX_HISTORY_TOKENS = 1500
-
-def _estimate_tokens(text: str) -> int:
-    return max(1, int(len(text) / CHARS_PER_TOKEN))
-
-def _trim_history_to_budget(history: list[dict]) -> list[dict]:
-    # Pass 1: cap each message at MAX_MSG_CONTENT_CHARS
-    capped = []
-    for msg in history:
-        content = msg["content"]
-        if len(content) > MAX_MSG_CONTENT_CHARS:
-            content = content[:MAX_MSG_CONTENT_CHARS] + "…[disingkat]"
-        capped.append({**msg, "content": content})
-
-    # Pass 2: drop oldest until under budget
-    total_tokens = sum(_estimate_tokens(m["content"]) for m in capped)
-    while capped and total_tokens > MAX_HISTORY_TOKENS:
-        removed = capped.pop(0)
-        total_tokens -= _estimate_tokens(removed["content"])
-    return capped
-```
-
-**Kenapa dua pass, bukan satu?**
-- Pass 1 (content cap): satu message tool-output panjang tidak habiskan seluruh budget
-- Pass 2 (message drop): drop unit terkecil = message (preserves coherence vs character-level truncation)
-
-**Kenapa `CHARS_PER_TOKEN = 3.5` dan bukan tiktoken?**
-- tiktoken membutuhkan model-specific tokenizer + cold start overhead
-- 3.5 chars/token = konservatif untuk Bahasa Indonesia + English mixed (rata-rata 3.5-4.0)
-- Undershooting estimate = lebih aman (keep sedikit lebih banyak dari yang perlu)
-
-**Generalized Principle:**
-> **"Two-pass history trim: cap per-message first, drop oldest second."** Ini mencegah single long message meledakkan budget, dan mempertahankan message unit integrity (tidak potong di tengah kalimat).
-
----
-
-### [S-09] Source Method Tagging untuk Multi-Source Training Data
-**Day:** 19 | **Category:** ML Operations
-
-**Pattern:** Setiap kali menambahkan sumber baru untuk preference pairs, gunakan `source_method` yang berbeda. Ini memungkinkan:
-1. Analisis per-source di `/v1/admin/stats`
-2. Filtering di training script: `WHERE source_method = 'cai_pipeline'` untuk real-only training
-3. Audit trail: bisa debug masalah model dengan melihat distribusi training data
-
-**Implemented sources:**
-- `"cai_pipeline"` — real user conversations yang diproses CAI
-- `"synthetic_seed_v1"` — synthetic generation dari Triple-Source seed bank (Day 19)
-
-**Template untuk sumber baru:**
-```python
-await _store_preference_pair(
-    prompt=..., chosen=..., rejected=..., score=score,
-    source_message_id=None,          # None jika bukan dari message real
-    source_method="new_source_v1",   # Deskriptif + versi
-)
-```
-
-**Generalized Principle:**
-> **"Data provenance adalah fitur, bukan detail."** Schema harus sudah ada kolom `source_method` sejak awal. Setiap sumber baru = tag baru. Ini seperti git blame untuk training data — penting untuk debugging post-training surprises.
-
----
-
-### [S-06] Ulimits sebagai Checklist Deploy
-**Day:** 16 | **Category:** Infrastructure
-
-**Pattern:** Setiap service yang pakai RocksDB atau banyak files → set ulimits di docker-compose sebelum deploy.
-
-```yaml
-ulimits:
-  nofile:
-    soft: 65536
-    hard: 65536
-```
-
-**Services yang butuh ini:** Qdrant, Kafka, TiKV, RocksDB direct, LevelDB, any embedded DB.
-
----
-
-## 📊 PERFORMANCE BASELINES YANG TERUKUR
-
-| Component | Metric | Value | Condition |
-|-----------|--------|-------|-----------|
-| Ollama 7B | Token throughput | 7-14 tok/s | CPU-only, VPS |
-| CAI critique | Latency | ~22s | 7B, non-streaming, CPU |
-| CAI revision | Latency | ~15s | 7B, ~400 tokens, CPU |
-| Embedding (fastembed) | Latency | ~2-5s | paraphrase-multilingual-mpnet, CPU |
-| Qdrant search (dense-only) | Latency | <200ms | <10k vectors, cosine, CPU |
-| Qdrant search (hybrid RRF) | Latency | <300ms | dual Prefetch + FusionQuery |
-| BM42 model load (fresh) | Latency | ~4s | 90MB ONNX download |
-| BM42 model load (cached) | Latency | instant | Named volume cache hit |
-| BM42 sparse embed | Latency | ~100ms | SparseTextEmbedding CPU |
-| Redis ops | Latency | <5ms | local container |
-| Letta get_blocks | Latency | ~500ms | httpx to Letta container |
-| CAI pipeline total | Latency | ~37s | critique + revision + store |
-| HTTP response | Latency | ~30-45s | with tool calling, CPU 7B |
-| Synthetic generation (per seed) | Latency | ~60-120s | generate + critique + revise |
-| Synthetic full run (120 seeds) | Duration | ~2-4 hours | CPU-only, sequential |
-| History trim (token budget) | Latency | <1ms | Pure Python, no tokenizer |
-| Context window (num_ctx) | Value | 4096 tokens | Explicit for all Ollama calls (Day 20) |
-
----
-
-## 🧠 KEPUTUSAN ARSITEKTUR YANG TIDAK BOLEH DIUBAH (sampai ada alasan kuat)
-
-| Keputusan | Alasan Dilock | Risiko Jika Diubah |
-|-----------|---------------|-------------------|
-| Celery DISABLED | RAM overhead tidak worth it untuk seed stage | Resource contention |
-| Letta = PASSIVE STORAGE ONLY | Qwen2.5 Q4 tidak support Letta tool calls | API errors, unpredictable behavior |
-| CAI_SAMPLE_RATE = 0.5 | CPU resource management | Queue buildup, response slowdown |
-| JUDGE_MODEL = 7B | 0.5B fails Chat Hard (<50% accuracy) | Low quality preference pairs |
-| `import module as _m` untuk singletons | Prevent frozen-value bug (F-03) | Silent failures |
-| `_background_tasks` set | Prevent asyncio GC bug (F-02) | Silent task failures |
-| Qdrant ulimits 65536 | RocksDB needs many FDs (F-04) | 500 errors pada collection ops |
-| Score threshold 0.65 untuk injection | Research: 0.55 = noise injection | Model confusion |
-| Sort by relevance (not recency) | Lost-in-middle research (F-06) | 30% accuracy drop |
-| Qdrant ≥ v1.12.0 | Query API requires ≥1.10.0 (F-07) | Hybrid RRF unavailable |
-| BM42 query_embed() untuk queries | Asymmetric embedding (F-08) | Silent precision drop |
-| chunk_text di payload saat indexing | Zero-loss migration (S-07) | Data loss on schema change |
-| Named volume fastembed_cache | Instant model reload (S-08) | 4s+ cold start per rebuild |
-| SIDIX content NOT in seed bank | Hallucination transfer risk (F-09) | Model adopts SIDIX identity |
-| source_method tag on all pairs | Multi-source audit trail (S-09) | Can't filter by provenance |
-| `num_ctx=4096` eksplisit di semua Ollama calls | Silent overflow tanpa error (F-10) | Context truncated = degraded memory |
-| `MAX_MSG_CONTENT_CHARS=800` | Single long tool output tidak habiskan budget | History drop-off too aggressive |
-| `MAX_HISTORY_TOKENS=1500` | Headroom untuk system prompt + response (S-10) | Context overflow |
-| Read actual code before planning (not old notes) | Stale docs menyebabkan false work (F-11) | Wasted planning time |
-| asyncio.Semaphore(1) synthetic task | CPU-only VPS, no competition | Resource contention with inference |
-
----
-
-## 🔮 DEBT TEKNIS YANG HARUS DISELESAIKAN SEBELUM BETA
-
-| ID | Priority | Issue | Fix |
-|----|----------|-------|-----|
-| H4 | HIGH | `.venv` di-track git (membuat repo 1GB+) | `git rm -r --cached api/.venv` |
-| H2 | MEDIUM | Raw SQL migrations (no Alembic) | Setup Alembic sebelum schema changes |
-| M1 | MEDIUM | Chat rate limit pakai IP (harusnya user ID) | `request.state.user_id` sebagai rate limit key |
-| T1 | LOW | `get_db()` duplikat di `models/base.py` | Hapus, gunakan `deps.db.get_db` saja |
-| C2 | LOW | `reasoning_trace` tidak ada di `ChatResponse` schema | Add field ke `schemas/chat.py` |
-
----
-
-## 📋 CHECKLIST SEBELUM DEPLOY (dari lessons learned)
-
-```
-Sebelum docker compose build:
-□ Test kode lokal jika memungkinkan
-□ Verifikasi tidak ada `from module import singleton` pattern
-
-Setelah docker compose up -d api:
-□ curl /health → verifikasi version number correct
-□ docker exec ado-api-1 grep 'keyword_baru' /app/path/to/changed/file.py
-□ Cek tidak ada syntax error di logs: docker logs ado-api-1 --since 30s
-
-Setelah Qdrant restart/recreate:
-□ docker exec ado-qdrant-1 cat /proc/1/limits | grep "open files"
-  → Harus: 65536
-
-Jika ada background task baru:
-□ Verifikasi task disimpan di _background_tasks set
-□ Verifikasi add_done_callback untuk cleanup
-□ Test dengan 1 chat dan cek log untuk task confirmation
-
-Jika ada import baru yang merupakan singleton:
-□ Gunakan `import module as _m` pattern, bukan `from module import value`
-```
-
----
-
----
-
-## 🔴 LESSONS BARU — Executor Remap Day 0 (2026-05-08)
-
-### [F-12] ORPO is WRONG TOOL for Voice/Length/Identity Targets
-**Day:** 63-71d | **Severity:** CRITICAL | **Category:** Training / ML
-
-**Gejala:** Setiap cycle yang target voice, length, atau identity menggunakan ORPO menghasilkan rewards/margins NEGATIVE. Model malah regress di kategori tersebut.
-
-**Root Cause:** ORPO (Odds Ratio Preference Optimization) mengoptimasi likelihood ratio chosen vs rejected. Ini efektif untuk preference yang jelas (A lebih baik dari B). Tapi untuk voice/identity — yang merupakan pattern konsisten bukan preference relatif — ORPO tidak bisa meng-encode pattern dengan baik.
-
-**Impact:** 5 cycles gagal berturut-turut (Cycles 4, 7, 7b, 7c). Brain stuck di Day 60.
-
-**Fix:**
-- Voice/Identity → SFT (Supervised Fine-Tuning). Direct pattern learning.
-- User thumbs → KTO (Kahneman-Tversky Optimization). No pairing needed.
-- General chat preference → SimPO/ORPO. Preference-based, appropriate.
-- Complex reasoning → GRPO (future). Group relative optimization.
-
-**Generalized Principle:**
-> **"Beda masalah = beda tool. ORPO adalah hammer — jangan pukul semua paku dengan hammer yang sama."** SFT untuk pattern/fact. DPO/KTO untuk preference. ORPO/SimPO untuk chat ranking. GRPO untuk reasoning.
-
----
-
-### [F-13] Signal Density < 15% Causes Regression in Other Categories
-**Day:** 63-71d | **Severity:** HIGH | **Category:** Training / ML
-
-**Gejala:** Setiap cycle yang mix domain pairs (creative + evolution-aware + voice + tool) menghasilkan regression di kategori yang tidak di-target. Cycle 4: voice improve tapi creative regress. Cycle 7c: voice improve tapi creative -0.193.
-
-**Root Cause:** Multi-task learning dengan signal density rendah. Ketika satu kategori hanya 10-15% dari dataset, model "lupa" kategori lain untuk mengakomodasi kategori baru. Ini adalah catastrophic forgetting dalam skala mini.
-
-**Impact:** Tidak pernah bisa advance semua gate sekaligus. Selalu ada trade-off.
-
-**Fix:**
-- ONE category per cycle. Tidak boleh mix.
-- Minimum 25% signal density per category.
-- Anchor samples (50 fixed) di setiap dataset untuk mencegah forgetting.
-
-**Generalized Principle:**
-> **"Satu cycle, satu target."** Multi-task fine-tuning hanya works jika semua task punya density tinggi. Untuk low-resource categories, train sequential — bukan parallel.
-
----
-
-### [F-14] Baseline-Gate Coupling Causes False-Fail
-**Day:** 67-71d | **Severity:** MEDIUM | **Category:** Training / Evaluation
-
-**Gejala:** Cycle eval FAIL padahal model sebenarnya tidak regress. Gate threshold bergantung pada baseline score cycle sebelumnya.
-
-**Root Cause:** Gate threshold di-set sebagai "baseline + 0.02" atau similar relative metric. Ketika baseline itu sendiri noisy (beda eval set, beda judge), gate menjadi unstable.
-
-**Impact:** False rollback. Model yang sebenarnya bagus di-rollback karena gate terlalu ketat.
-
-**Fix:**
-- Gate = threshold ABSOLUTE, bukan relative.
-- Identity: cosine > 0.85 (absolute)
-- Tool-use: accuracy > 80% (absolute)
-- Quality: judge_score > 0.7 (absolute)
-- Regression: known-good scenarios must not degrade (absolute)
-
-**Generalized Principle:**
-> **"Gate harus absolute, tidak boleh relative ke baseline."** Baseline adalah reference, bukan gate. Gate adalah contract dengan user: "model ini harus bisa X".
-
----
-
-### [F-15] 99% Synthetic Data = Circular Training
-**Day:** 71d | **Severity:** CRITICAL | **Category:** Data Pipeline
-
-**Gejala:** 3,354 preference pairs di DB. Hanya 29 pairs (0.9%) dari data nyata (user, owner, teacher). Sisanya 99.1% synthetic/anchor. Brain training kelaparan data nyata.
+## Lesson #178: Alembic Migration dengan asyncpg — JSON Literal & DO Block Pitfalls
+
+**Tanggal:** 2026-05-09  
+**Konteks:** Deployment migration `007_schema_hardening` ke production VPS  
+**Kesalahan:** Migration gagal 4× berturut-turut dengan error berbeda:
+1. `InsufficientPrivilegeError: must be owner of function` — `auth_lookup_user_by_email` sudah ada, dibuat manual oleh superuser
+2. `PostgresSyntaxError: syntax error at or near "BEGIN"` — `DO $$ BEGIN ... EXCEPTION ... END $$` tidak bisa dijalankan via `connection.execute(text(...))`
+3. `PostgresSyntaxError: syntax error at or near ":"` — `text()` mem-parse `:policy::jsonb` sebagai bind parameter
+4. `InvalidRequestError: A value is required for bind parameter 'false'` — JSON literal `{"requires_approval":false}` di-parse sebagai bind param `:false`
+5. `AmbiguousParameterError: inconsistent types deduced for parameter $1` — parameter yang sama digunakan di SELECT dan WHERE clause
 
 **Root Cause:**
-- User thumbs UI ada tapi backend worker MISSING
-- Owner data pathway tidak ada endpoint
-- Self-growth 50% sample rate, mostly idle
-- Teacher distillation manual, 10 pairs total
-
-**Impact:** Model dilatih dengan synthetic data yang di-generate oleh model itu sendiri. Circular loop = reinforcement of existing patterns, tidak ada learning baru.
+- `asyncpg` tidak support multiple commands dalam satu prepared statement
+- SQLAlchemy `text()` mengenali semua `:` diikuti karakter alfanumerik sebagai bind parameter, bahkan di dalam string literal JSON
+- `asyncpg` tidak bisa infer tipe parameter yang digunakan di multiple places dengan tipe berbeda
 
 **Fix:**
-- Build 4 pathways (M1). Target: real-data ratio ≥ 50% dalam 2 minggu.
-- User feedback: fix endpoint + hourly worker
-- Owner pathway: 5 endpoints + UI
-- Self-growth: 100% sample + auto-loop
-- Teacher: continuous 6h cycle, $5/day cap
+| Statement Type | Solusi |
+|---|---|
+| DDL sederhana (ALTER, CREATE POLICY) | `connection.execute(text("..."))` |
+| DO block (PL/pgSQL) | `op.execute("...")` dengan plain string |
+| JSON literal dengan `::jsonb` cast | `connection.exec_driver_sql("...")` — bypass SQLAlchemy parsing |
+| Parameter binding yang aman | Gunakan parameter binding hanya untuk values tanpa JSON/ colon |
 
-**Generalized Principle:**
-> **"Synthetic data adalah junk food untuk model. Boleh dimakan, tapi tidak boleh jadi makanan utama."** Minimum 50% real data untuk meaningful improvement. 99% synthetic = model talking to itself.
+**Prevention:**
+- Selalu gunakan `exec_driver_sql()` untuk statement yang mengandung JSON literal atau `::` cast
+- Hindari parameter binding untuk static seed data di migration
+- Test migration di Docker test runner sebelum deploy ke production
+
+**Referensi Commit:** `9eaa2a1`, `450fade`, `1c48724`, `f6b8dee`, `c3779dd`, `3c9899a`
 
 ---
 
-### [F-16] Identity Fragile — Scaffolding Dependency
-**Day:** 70-71d | **Severity:** HIGH | **Category:** Identity / Product
+## Lesson #177: Baseline-Gate Coupling → False-Fail
 
-**Gejala:** Dengan SOUL.md system prompt: "Saya Mighan-Core". Tanpa SOUL.md: "Saya Qwen, Alibaba Cloud". LoRA adapter (Cycle 3) tidak cukup kuat override base model identity.
+**Tanggal:** 2026-05-06  
+**Konteks:** Training Cycle 6-7  
+**Kesalahan:** Eval gate membandingkan model baru dengan baseline model sebelumnya. Jika baseline sudah jelek, model baru yang lebih baik tetap "fail" karena gap tidak cukup besar.
 
-**Root Cause:** Identity 0.953 di eval TINGGI karena eval selalu pakai system prompt. Eval tidak pernah test tanpa system prompt. LoRA rank 16 terlalu kecil untuk override identity base model yang kuat.
+**Root Cause:** Gate threshold relative terhadap baseline, bukan absolute quality metric.
 
-**Impact:** White-label tidak bisa jalan. Kalau client matikan SOUL.md = identitas lenyap. White-label premise rentan.
+**Fix:** Decouple baseline dari gate. Gate = threshold absolute (misal: identity cosine sim > 0.85, tool-use > 80%). Baseline = reference untuk A/B comparison.
+
+**Prevention:** Gate harus absolute. A/B test baru pakai baseline comparison.
+
+**Referensi Commit:** D-002 di `MIGANCORE_ARCHITECTURE_REMAP_v2026.md`
+
+---
+
+## Lesson #176: Signal Density < 15% → Regression
+
+**Tanggal:** 2026-05-04  
+**Konteks:** Training Cycle 5-6  
+**Kesalahan:** Dataset training mengandung < 15% signal untuk kategori tertentu (misal: voice/tone). Hasil: model belajar kategori lain tapi regression di kategori dengan signal rendah.
+
+**Root Cause:** Curriculum mixing tanpa density check. Kategori dengan data sedikit "drowning" di noise kategori lain.
+
+**Fix:** Minimum signal density ≥ 25% per kategori per cycle. Kalau tidak cukup, skip kategori itu.
+
+**Prevention:** Dataset builder WAJIB cek signal density sebelum training.
+
+---
+
+## Lesson #175: ORPO Wrong Tool untuk Voice/Identity
+
+**Tanggal:** 2026-05-02  
+**Konteks:** Training Cycle 3-4  
+**Kesalahan:** Menggunakan ORPO untuk voice/identity tuning. Rewards/margins NEGATIF di setiap cycle. Identitas tidak terbentuk, malah semakin fragile.
+
+**Root Cause:** ORPO adalah "odds ratio preference optimization" — cocok untuk preference pairs (A vs B). Tapi voice dan identity adalah pattern recognition, bukan preference. Perlu SFT (supervised fine-tuning) untuk pattern.
+
+**Fix:** One Problem = One Tool. SFT untuk identity/voice. DPO/SimPO untuk preference. KTO untuk direct user signals.
+
+**Prevention:** Decision matrix loss function di `MIGANCORE_ARCHITECTURE_REMAP_v2026.md` Section 6.
+
+---
+
+## Lesson #174: 99% Synthetic Data = Circular Training
+
+**Tanggal:** 2026-04-28  
+**Konteks:** Training Cycle 1-3  
+**Kesalahan:** Data training hampir 100% synthetic (dari Magpie/self-play). Model belajar dari output model sendiri → circular degradation. Identitas tidak terbentuk, quality menurun.
+
+**Root Cause:** User feedback pipeline BROKEN, owner data pathway NOT BUILT, teacher distillation MANUAL (10 pairs). Hanya self-growth yang jalan tapi 18 pairs total.
 
 **Fix:**
-- SFT Identity Anchor: 200 pairs pure identity
-- LoRA rank 32, alpha 64 (LEBIH BESAR)
-- 5 epochs (lebih banyak)
-- LR 1e-4 (lebih hati-hati)
-- Eval MANDATORY tanpa system prompt
+1. Fix user feedback endpoint + worker (done 2026-05-09)
+2. Build owner data pathway (5 endpoints)
+3. Automate teacher distillation (cron, $5/day cap)
+4. Target: real-data ratio ≥ 20% dalam 2 minggu, ≥ 50% dalam 1 bulan
 
-**Generalized Principle:**
-> **"Identity harus baked into weights, bukan scaffolding prompt."** Prompt adalah makeup — weights adalah DNA. White-label hanya aman kalau DNA tidak bisa dihapus.
+**Prevention:** Data curator engine dengan MTLD diversity scoring + dedup.
 
 ---
 
-### [F-17] Documentation Inflation vs Test Coverage
-**Day:** 71d | **Severity:** MEDIUM | **Category:** Process / Quality
+## Lesson #173: Identity Prompt ≠ Identity Weights
 
-**Gejala:** 150+ markdown files dokumentasi. Hanya 1 file test (test_rls.py). Coverage < 5%. Docs di-update setiap hari, tests tidak pernah ditambah.
+**Tanggal:** 2026-04-25  
+**Konteks:** Identity consistency test  
+**Kesalahan:** Mengira SOUL.md sebagai system prompt cukup untuk identitas. Tanpa SOUL.md, model jawab "Saya Qwen" bukan "Saya Mighan-Core".
 
-**Root Cause:** Fokus pada "visible progress" (docs, features) daripada "invisible progress" (tests, infrastructure). Setiap agent celebrate docs tapi tidak ada yang celebrate tests.
+**Root Cause:** LoRA adapter tidak cukup kuat override base model identity. Base model Qwen2.5-7B punya "identity weight" sendiri yang lebih kuat dari LoRA.
 
-**Impact:**
-- Regressions tidak ketauan sampai production
-- Deploy risky — tidak ada safety net
-- Code quality degrades over time
-- New agents break things without knowing
+**Fix:** SFT Identity Anchor — 200 pairs pure identity training dengan rank 32, alpha 64, 5 epochs. Target: tanpa system prompt, model tetap bilang "Saya Mighan-Core".
 
-**Fix:**
-- M0: Test suite v1 (50+ tests, coverage ≥ 40%)
-- M0: CI/CD pipeline (test must pass before deploy)
-- Rule: Setiap PR harus punya tests
-- Rule: Coverage tidak boleh turun dari baseline
-
-**Generalized Principle:**
-> **"Tests are the immune system of codebase. Tanpa tests, setiap change adalah infection."** 150 docs + 1 test = project yang bisa berbicara tentang dirinya sendiri tapi tidak bisa membuktikan klaimnya.
+**Prevention:** Identity test MANDATORY sebelum deploy. Cosine similarity > 0.85.
 
 ---
 
-### [F-18] Context Loss Between AI Agent Sessions
-**Day:** 71d | **Severity:** HIGH | **Category:** Process / Agent Protocol
+## Lesson #172: Docker Test Runner > Local Testing (Windows)
 
-**Gejala:** Claude Code sessions berulang-ulang mengulang pekerjaan, merubah keputusan yang sudah di-lock, tidak ingat lessons learned.
+**Tanggal:** 2026-05-07  
+**Konteks:** Integration tests  
+**Kesalahan:** Coba run pytest di Windows lokal. Python 3.14 dependency hell. asyncpg tidak compile. Waktu terbuang 4+ jam.
 
-**Root Cause:** Claude Code memory window terbatas (~200K tokens). Setelah beberapa tool calls, context ter-compact dan detail hilang. Agent tidak membaca semua docs sebelum eksekusi.
+**Root Cause:** Windows environment tidak compatible dengan stack Linux-native (asyncpg, pgvector, etc).
 
-**Impact:**
-- 5 training cycles gagal karena agent lupa Lesson #175
-- Keputusan arsitektur diubah tanpa approval
-- Circular loops (optimize infra → celebrate → new cycle → rollback)
+**Fix:** `docker-compose.test.yml` dengan `alembic upgrade head` + pytest. Semua testing via Docker.
 
-**Fix:**
-- Agent Onboarding Protocol MANDATORY (25 menit sebelum kerja)
-- CONTEXT.md sebagai "RAM" proyek — selalu up-to-date
-- Daily log ritual — wrap sebelum session end
-- Handoff note untuk cross-session continuity
-- Decision Registry — keputusan tidak boleh diubah tanpa catatan
-
-**Generalized Principle:**
-> **"AI agent tidak punya memory persistence. Protocol adalah memory-nya."** Tanpa protocol ketat, setiap session adalah agent baru yang harus belajar dari nol.
+**Prevention:** Jangan pernah coba run backend tests di Windows. Docker mandatory.
 
 ---
 
-### [S-11] Brutal Honest Audit Prevents Circular Celebration
-**Day:** 71d | **Category:** Process / Culture
+## Lesson #171: Manual SQL Patches → Schema Drift Hell
 
-**Pattern:** Setiap kali ada kegagalan, agent celebrate "infra wins" (latency cut, tools enabled, PWA) seolah brain quality naik.
+**Tanggal:** 2026-04-20  
+**Konteks:** Database schema  
+**Kesalahan:** 25 manual SQL patches (001-025) tanpa version control. Production DB dan dev DB punya schema berbeda. Migration tidak reproducible.
 
-**What worked:** Owner meminta "honest audit" yang memisahkan:
-- Brain wins vs Infra wins
-- Real progress vs Illusion progress
-- Day 60 baseline vs Day 71d state
+**Root Cause:** Tidak pakai Alembic dari hari pertama.
 
-**Result:** Truth revealed: brain ZERO progress since Day 60. Ini painful tapi necessary.
+**Fix:** Convert semua patches ke Alembic migration. `007_schema_hardening` konsolidasi patches 005-011 + 024. Semua schema change ke depan via Alembic.
 
-**Generalized Principle:**
-> **"Celebrate real wins, not comfort wins."** Infra wins are real — tapi mereka adalah foundation, bukan product. Product = brain quality. Jangan confuse foundation progress dengan product progress.
+**Prevention:** Alembic MANDATORY. CI gagal kalau tidak ada migration.
 
 ---
 
-*Dokumen ini adalah cognitive asset terpenting proyek. Update setiap sesi.*
+## Lesson #170: Clone Mechanism Needs Identity Anchor First
+
+**Tanggal:** 2026-04-15  
+**Konteks:** Clone endpoint  
+**Kesalahan:** Coba implement clone mechanism tapi child agent tidak inherit identity. Child = "Qwen", bukan "Mighan-Core descendant".
+
+**Root Cause:** Cloning butuh DNA (identity weights). Tanpa DNA, clone = shell kosong.
+
+**Fix:** Phase 1 = Identity Anchor SFT. Phase 3 = Clone mechanism. Jangan terbalik.
+
+**Prevention:** Roadmap `MIGANCORE_ARCHITECTURE_REMAP_v2026.md` Section 10.
+
+---
+
+*Catatan: Lesson #001-169 tercatat di `CONTEXT.md` dan `docs/logs/`.*
