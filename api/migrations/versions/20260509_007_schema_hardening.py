@@ -52,7 +52,11 @@ def upgrade() -> None:
     # if the function already exists (e.g. created manually by superuser)
     # we swallow the duplicate_function exception rather than failing
     # with "must be owner of function".
-    connection.execute(text("""
+    #
+    # NOTE: We use op.execute with a plain string (not sa.text) because
+    # asyncpg does not support multiple commands in a prepared statement.
+    # The DO block is a single PL/pgSQL anonymous block.
+    op.execute("""
         DO $$
         BEGIN
             CREATE FUNCTION auth_lookup_user_by_email(p_email VARCHAR)
@@ -66,7 +70,7 @@ def upgrade() -> None:
                 last_login_at TIMESTAMPTZ,
                 created_at TIMESTAMPTZ
             ) SECURITY DEFINER
-            AS $$
+            AS $func$
             BEGIN
                 RETURN QUERY
                 SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role,
@@ -74,12 +78,12 @@ def upgrade() -> None:
                 FROM users u
                 WHERE u.email = p_email;
             END;
-            $$ LANGUAGE plpgsql;
+            $func$ LANGUAGE plpgsql;
         EXCEPTION WHEN duplicate_function THEN
             RAISE NOTICE 'auth_lookup_user_by_email already exists, skipping creation.';
         END $$;
-    """))
-    connection.execute(text("GRANT EXECUTE ON FUNCTION auth_lookup_user_by_email(VARCHAR) TO ado_app;"))
+    """)
+    op.execute("GRANT EXECUTE ON FUNCTION auth_lookup_user_by_email(VARCHAR) TO ado_app;")
 
     # ------------------------------------------------------------------
     # 4. RLS â€” fix policies to NULLIF fail-closed (patch 008 + 009)
