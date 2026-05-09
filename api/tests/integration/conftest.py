@@ -46,23 +46,24 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
     raising 'unrecognized configuration parameter app.current_tenant'.
     Uses SET (session-level, false) because NullPool gives each test its own
     dedicated connection that is closed afterwards — no pool leakage risk.
+
+    The fixture wraps the test in a savepoint (begin_nested) inside an outer
+    transaction.  Services that call session.commit() will only commit the
+    savepoint; the outer transaction is rolled back on teardown so no data
+    leaks between tests.
     """
     async with AsyncTestingSessionLocal() as session:
-        # Wrap the test in an explicit transaction so uncommitted changes are
-        # rolled back automatically when the test ends (unless the test itself
-        # calls commit).  set_config must live INSIDE the begin() block so
-        # autobegin does not start a transaction before we call begin().
-        async with session.begin():
+        async with session.begin() as _outer_tx:
             await session.execute(
                 text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)")
             )
-            yield session
+            async with session.begin_nested():
+                yield session
 
-        # Safety: reset the connection if a previous flush left it in an
-        # aborted transaction state (e.g. IntegrityError inside pytest.raises).
+        # If a test or service committed the outer transaction explicitly
+        # (rare), the automatic rollback above won't fire.  Run explicit
+        # cleanup as a safety net.
         await session.rollback()
-
-        # Explicit cleanup for rows that may have been committed by services.
         try:
             await session.execute(text("DELETE FROM interactions_feedback"))
             await session.execute(text("DELETE FROM preference_pairs"))
@@ -72,6 +73,4 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
             await session.execute(text("DELETE FROM tenants WHERE slug LIKE 'test-tenant-%'"))
             await session.commit()
         except Exception:
-            # If cleanup itself fails (e.g. connection still broken), just
-            # rollback so the session closes cleanly.
             await session.rollback()
