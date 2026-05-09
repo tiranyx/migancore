@@ -200,7 +200,9 @@ async def fetch_unprocessed_interactions(hours: int = 6, limit: int = 20) -> lis
     results: list[RawInteraction] = []
 
     try:
-        conn = await asyncpg.connect(settings.DATABASE_URL)
+        # asyncpg expects 'postgresql://' not 'postgresql+asyncpg://'
+        dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1)
+        conn = await asyncpg.connect(dsn)
         try:
             cutoff = datetime.utcnow() - timedelta(hours=hours)
 
