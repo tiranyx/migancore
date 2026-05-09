@@ -15,6 +15,8 @@
 
 services:
   ollama:
+    ports:
+      - 11434:11434
     image: ollama/ollama:0.6.5
     restart: unless-stopped
     volumes:
