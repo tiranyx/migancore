@@ -112,31 +112,30 @@ async def test_rls_isolation():
 
     failures = []
 
-    # Use engine-level transactions for RLS verification to avoid any
-    # SQLAlchemy session abstraction leaking across connection boundaries.
-    # Each block gets a fresh Connection from the pool with its own tx.
-    # Import engine lazily so we pick up the object *after* init_engine().
-    from models.base import engine as _engine
-    if _engine is None:
-        init_engine()
-        _engine = __import__('models.base', fromlist=['engine']).engine
-
     # Test 1: Tenant A can see their own agent
-    async with _engine.begin() as conn:
-        await conn.execute(text("SELECT set_config('app.current_tenant', :tid, true)"), {"tid": str(tenant_a.id)})
-        result = await conn.execute(select(Agent))
-        agents = result.scalars().all()
-    if len(agents) == 1 and agents[0].name == "Secret Agent":
+    init_engine()
+    from models.base import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            await set_tenant_context(session, str(tenant_a.id))
+            result = await session.execute(text("SELECT id, name, tenant_id FROM agents"))
+            rows = result.fetchall()
+            agents = [{"id": r[0], "name": r[1], "tenant_id": r[2]} for r in rows]
+    if len(agents) == 1 and agents[0]["name"] == "Secret Agent":
         print("TEST 1 PASS: Tenant A sees their own agent")
     else:
         print(f"TEST 1 FAIL: Tenant A sees {len(agents)} agents")
         failures.append("TEST 1")
 
     # Test 2: Tenant B cannot see Tenant A's agent
-    async with _engine.begin() as conn:
-        await conn.execute(text("SELECT set_config('app.current_tenant', :tid, true)"), {"tid": str(tenant_b.id)})
-        result = await conn.execute(select(Agent))
-        agents = result.scalars().all()
+    init_engine()
+    from models.base import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            await set_tenant_context(session, str(tenant_b.id))
+            result = await session.execute(text("SELECT id, name, tenant_id FROM agents"))
+            rows = result.fetchall()
+            agents = [{"id": r[0], "name": r[1], "tenant_id": r[2]} for r in rows]
     if len(agents) == 0:
         print("TEST 2 PASS: Tenant B sees 0 agents (isolation works)")
     else:
@@ -144,10 +143,14 @@ async def test_rls_isolation():
         failures.append("TEST 2")
 
     # Test 3: Query without tenant context should fail-closed (error)
-    async with _engine.begin() as conn:
+    init_engine()
+    from models.base import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
         try:
-            result = await conn.execute(select(Agent))
-            agents = result.scalars().all()
+            async with session.begin():
+                result = await session.execute(text("SELECT id, name, tenant_id FROM agents"))
+                rows = result.fetchall()
+                agents = [{"id": r[0], "name": r[1], "tenant_id": r[2]} for r in rows]
             if len(agents) == 0:
                 print("TEST 3 PASS: No tenant context → 0 agents")
             else:

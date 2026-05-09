@@ -15,6 +15,7 @@ from typing import Optional
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from deps.db import set_tenant_context
 from models.feedback import FeedbackEvent
 from models.preference_pair import PreferencePair
 
@@ -36,6 +37,9 @@ async def record_feedback(
 
     Returns {"feedback_id": uuid, "pair_id": uuid | None, "status": str}
     """
+    # Set RLS tenant context so INSERT into interactions_feedback passes policy.
+    await set_tenant_context(session, str(tenant_id))
+
     # 1. Audit trail
     event = FeedbackEvent(
         message_id=message_id,
@@ -106,6 +110,9 @@ async def get_feedback_stats(
 ) -> dict:
     """Return feedback statistics for a tenant."""
     from sqlalchemy import select, func
+
+    # Set RLS tenant context so SELECT on interactions_feedback passes policy.
+    await set_tenant_context(session, str(tenant_id))
 
     total = await session.scalar(
         select(func.count()).where(FeedbackEvent.tenant_id == tenant_id)
