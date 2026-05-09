@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 # Override DATABASE_URL for integration tests
 TEST_DATABASE_URL = os.getenv(
@@ -13,7 +14,7 @@ TEST_DATABASE_URL = os.getenv(
     "postgresql+asyncpg://ado:test@localhost:5432/ado_test",
 )
 
-async_engine = create_async_engine(TEST_DATABASE_URL, echo=False, future=True)
+async_engine = create_async_engine(TEST_DATABASE_URL, echo=False, future=True, poolclass=NullPool)
 AsyncTestingSessionLocal = async_sessionmaker(
     async_engine, class_=AsyncSession, expire_on_commit=False
 )

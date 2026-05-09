@@ -112,6 +112,9 @@ async def test_rls_isolation():
 
     failures = []
 
+    # Ensure engine is initialised before we touch the global engine object.
+    init_engine()
+
     # Use engine-level transactions for RLS verification to avoid any
     # SQLAlchemy session abstraction leaking across connection boundaries.
     # Each block gets a fresh Connection from the pool with its own tx.
