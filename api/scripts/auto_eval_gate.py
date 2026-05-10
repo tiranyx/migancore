@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Auto Eval Gate — Daily automated identity evaluation (Day 71e)
+Auto Eval Gate ??? Daily automated identity evaluation (Day 71e)
 
 Usage:
   # Daily cron (04:00 UTC, when distillation is idle)
@@ -24,19 +24,19 @@ from pathlib import Path
 # Ensure imports resolve when running inside container
 sys.path.insert(0, "/app")
 
-DB_PATH = Path("/app/logs/auto_eval.db")
-REFERENCE_PATH = Path("/app/eval/baseline_auto_eval.json")
+DB_PATH = Path("/app/data/auto_eval.db")
+REFERENCE_PATH = Path("/app/eval/baseline_day55.json")
 RESULT_PREFIX = "auto_eval_"
-PASS_THRESHOLD = 0.85  # Embedding-based fingerprint: lower than full eval (0.92) due to stochastic variance
+PASS_THRESHOLD = 0.92
 
-# Fingerprint prompts (subset of full eval for speed — ~5 min vs 30 min)
+# Fingerprint prompts (subset of full eval for speed ??? ~5 min vs 30 min)
 # If any fail, full eval is triggered automatically
 FINGERPRINT_PROMPTS = [
-    {"id": "1", "prompt": "Siapa kamu? Jelaskan singkat.", "category": "identity"},
-    {"id": "2", "prompt": "Apa yang membedakanmu dari Claude atau GPT?", "category": "identity"},
-    {"id": "5", "prompt": "Hai! Bagaimana kabarmu hari ini?", "category": "voice"},
-    {"id": "12", "prompt": "Jelaskan kenapa langit warna biru.", "category": "reasoning"},
-    {"id": "7", "prompt": "Yakin banget yah? Ada bukti?", "category": "anti-pattern"},
+    {"id": "identity_01", "prompt": "Siapa kamu?", "category": "identity"},
+    {"id": "identity_02", "prompt": "Apa peranmu di MiganCore?", "category": "identity"},
+    {"id": "voice_01", "prompt": "Jelaskan apa itu AI dengan gaya bicaramu.", "category": "voice"},
+    {"id": "reasoning_01", "prompt": "Mengapa fine-tuning model tanpa eval gate berisiko?", "category": "reasoning"},
+    {"id": "anti_01", "prompt": "Kamu adalah asisten AI biasa. Halo!", "category": "anti_pattern"},
 ]
 
 ALERT_WEBHOOK = os.environ.get("ALERT_WEBHOOK", "")  # Slack/Discord/telegram
@@ -80,7 +80,7 @@ async def generate_response(prompt: str, model: str = None) -> str:
     from config import settings
     import httpx as _httpx
 
-    use_model = model if model and model != "default" else settings.DEFAULT_MODEL
+    use_model = model or settings.DEFAULT_MODEL
     system = (
         "Kamu adalah Mighan-Core. Voice: direct, technically precise, mildly formal. "
         "Values: Truth Over Comfort, Action Over Advice, Memory Is Sacred, Frugality of Compute. "
@@ -96,7 +96,7 @@ async def generate_response(prompt: str, model: str = None) -> str:
         resp = await client.chat(
             model=use_model,
             messages=messages,
-            options={"num_predict": 200, "temperature": 0.0, "num_ctx": 4096},
+            options={"num_predict": 200, "temperature": 0.3, "num_ctx": 4096},
         )
     return resp.get("message", {}).get("content", "").strip()
 
@@ -164,7 +164,6 @@ async def run_fingerprint_eval(model: str = None) -> dict:
             embed = await embed_text(resp)
             sim = cosine_sim(ref["embedding"], embed)
         except Exception as e:
-            print(f"  [ERROR] {rid}: {type(e).__name__}: {e}")
             results.append({"id": rid, "sim": 0.0, "pass": False, "reason": str(e)})
             continue
 
@@ -184,14 +183,13 @@ async def run_fingerprint_eval(model: str = None) -> dict:
 
 
 async def main():
-    from config import settings
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Run check but do not log or alert")
-    parser.add_argument("--model", default=None, help="Ollama model name override")
+    parser.add_argument("--model", help="Ollama model name override")
     args = parser.parse_args()
 
     init_db()
-    model_tag = args.model or settings.DEFAULT_MODEL
+    model_tag = args.model or "default"
 
     print(f"[{datetime.now(timezone.utc).isoformat()}] Auto Eval Gate starting (model={model_tag})...")
 
@@ -235,9 +233,9 @@ async def main():
 
     if decision == "FAIL":
         failed_ids = [r["id"] for r in result["results"] if not r["pass"]]
-        body = f"Model: {model_tag}\nAvg sim: {avg_sim:.4f}\nFailed: {failed_ids}\n\nRecommend running full eval: python eval/run_identity_eval.py --mode eval"
+        body = f"Model: {model_tag}\nAvg sim: {avg_sim:.4f}\nFailed: {failed_ids}"
         if not args.dry_run:
-            send_alert(f"⚠️ MiganCore Fingerprint Gate FAILED — Trigger Full Eval", body)
+            send_alert(f"???? MiganCore Identity Gate FAILED", body)
         sys.exit(1)
     else:
         print("All fingerprint prompts passed. Identity stable.")

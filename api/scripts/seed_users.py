@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed Beta Users + Agent — Day 71e"""
+"""Seed Beta Users + Agent ??? Day 71e"""
 import asyncio
 import random
 import uuid
@@ -7,22 +7,8 @@ from datetime import datetime, timezone, timedelta
 
 import asyncpg
 
-try:
-    from pwdlib import PasswordHash
-    _password_hasher = PasswordHash.recommended()
-    def _hash_password(pw: str) -> str:
-        return _password_hasher.hash(pw)
-except ImportError:
-    # Fallback: script run outside container without pwdlib
-    def _hash_password(pw: str) -> str:
-        raise RuntimeError(
-            "pwdlib not available. Run this script inside the API container: "
-            "docker compose exec api python /tmp/seed_users.py"
-        )
-
 PG_PASSWORD = "gY2UkMePh,Zvt6)6"
 DSN_SUPER = f"postgresql://ado:{PG_PASSWORD}@postgres:5432/ado"
-BETA_PASSWORD_PLAIN = "beta123"  # Change this before running in production
 
 SAMPLE_PROMPTS = [
     "Halo Mighan, apa kabar? Bisa bantu saya buat business plan untuk UMKM?",
@@ -103,8 +89,8 @@ async def seed():
 
     for i in range(10):
         user_id = uuid.uuid4()
-        email = f"beta{i+1}@migancore.io"
-        pw_hash = _hash_password(BETA_PASSWORD_PLAIN)
+        email = f"beta{i+1}@migancore.test"
+        pw_hash = "$argon2id$v=19$m=65536,t=3,p=4$placeholder$placeholder"
         display = f"Beta User {i+1}"
         
         try:
@@ -119,7 +105,7 @@ async def seed():
 
         for c in range(random.randint(2, 5)):
             conv_id = uuid.uuid4()
-            title = f"Conv {c+1} — {random.choice(['Business', 'Tech', 'Creative', 'Research'])}"
+            title = f"Conv {c+1} ??? {random.choice(['Business', 'Tech', 'Creative', 'Research'])}"
             
             await conn.execute(
                 "INSERT INTO conversations (id, tenant_id, agent_id, user_id, title, status, message_count, started_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())",

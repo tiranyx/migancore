@@ -398,6 +398,25 @@ async def request_context_middleware(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def prometheus_metrics_middleware(request: Request, call_next):
+    """Track request count and latency for Prometheus metrics."""
+    from routers.metrics import REQUEST_COUNT, REQUEST_LATENCY
+    import time
+
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+
+    method = request.method
+    endpoint = request.url.path
+    status_code = str(response.status_code)
+
+    REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=status_code).inc()
+    REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(duration)
+
+    return response
+
 # CORS â€” restrict to known domains in production
 # TODO: move to environment variable for flexibility
 _cors_origins = [

@@ -59,6 +59,21 @@ DB_CONNECTIONS = Gauge(
     "Active database connections",
 )
 
+# ─── Model Inference Metrics ────────────────────────────────────────────────
+INFERENCE_DURATION = Histogram(
+    "migancore_inference_duration_seconds",
+    "Model inference latency",
+    ["model", "endpoint"],
+    buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0],
+)
+
+INFERENCE_ERRORS = Counter(
+    "migancore_inference_errors_total",
+    "Model inference errors",
+    ["model", "error_type"],
+)
+
+
 # ─── Endpoint ───────────────────────────────────────────────────────────────
 
 @router.get("/metrics")
