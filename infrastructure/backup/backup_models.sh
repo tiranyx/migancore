@@ -1,5 +1,4 @@
 #!/bin/bash
-# MiganCore Model Artifact Backup — Day 72b
 set -euo pipefail
 
 BACKUP_DIR=/opt/ado/backup
@@ -23,7 +22,6 @@ tar -cf - \
     migancore_0.4_f16.gguf \
     adapter_pkg.tar.gz \
     Modelfile* \
-    eval_*.json \
   | $COMPRESSOR > $ARCHIVE
 
 ARCHIVE_SIZE=$(du -sh $ARCHIVE | cut -f1)
