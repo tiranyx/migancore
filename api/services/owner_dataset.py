@@ -199,6 +199,8 @@ async def convert_to_pairs(
         raise FileNotFoundError("Dataset file missing")
 
     created = 0
+    skipped_dup = 0
+    seen = set()
     file_path = Path(dataset.file_path)
 
     try:
@@ -208,7 +210,7 @@ async def convert_to_pairs(
                 if not isinstance(data, list):
                     data = [data]
                 for row in data:
-                    pair = _row_to_pair(row, dataset)
+                    pair = _row_to_pair(row, dataset, seen)
                     if pair:
                         session.add(pair)
                         created += 1
@@ -217,7 +219,7 @@ async def convert_to_pairs(
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
                     row = json.loads(line)
-                    pair = _row_to_pair(row, dataset)
+                    pair = _row_to_pair(row, dataset, seen)
                     if pair:
                         session.add(pair)
                         created += 1
@@ -226,7 +228,7 @@ async def convert_to_pairs(
             with open(file_path, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    pair = _row_to_pair(row, dataset)
+                    pair = _row_to_pair(row, dataset, seen)
                     if pair:
                         session.add(pair)
                         created += 1
@@ -245,22 +247,47 @@ async def convert_to_pairs(
     return created
 
 
-def _row_to_pair(row: dict, dataset: OwnerDataset) -> PreferencePair | None:
-    """Convert a single row to PreferencePair if valid."""
+def _row_to_pair(row: dict, dataset: OwnerDataset, seen: set) -> PreferencePair | None:
+    """Convert a single row to PreferencePair if valid.
+
+    Args:
+        row: Dictionary with prompt/chosen/rejected keys.
+        dataset: The owner dataset being converted.
+        seen: Set of (prompt_hash, chosen_hash) tuples to deduplicate.
+
+    Returns:
+        PreferencePair or None if invalid/duplicate.
+    """
+    import hashlib
+
     prompt = row.get("prompt") or row.get("instruction") or row.get("input")
     chosen = row.get("chosen") or row.get("response") or row.get("output")
     rejected = row.get("rejected") or row.get("bad_response")
 
+    # Validation: non-empty prompt and chosen
     if not prompt or not chosen:
         return None
+    prompt = str(prompt).strip()
+    chosen = str(chosen).strip()
+    if len(prompt) < 3 or len(chosen) < 3:
+        return None
+
+    # Deduplication: skip identical (prompt, chosen) pairs
+    key = (
+        hashlib.sha256(prompt.encode()).hexdigest()[:16],
+        hashlib.sha256(chosen.encode()).hexdigest()[:16],
+    )
+    if key in seen:
+        return None
+    seen.add(key)
 
     # If no rejected, use a placeholder (worker fills later)
     if not rejected:
         rejected = "__AWAITING_REJECTED__"
 
     return PreferencePair(
-        prompt=str(prompt),
-        chosen=str(chosen),
+        prompt=prompt,
+        chosen=chosen,
         rejected=str(rejected),
         judge_score=float(row.get("score", 0.5)),
         judge_model="owner_dataset",

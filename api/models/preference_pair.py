@@ -40,3 +40,6 @@ class PreferencePair(Base):
     used_in_training_run_id: Mapped[uuid.UUID | None] = mapped_column(
         nullable=True, default=None
     )
+    processing_attempts: Mapped[int] = mapped_column(
+        nullable=False, default=0
+    )

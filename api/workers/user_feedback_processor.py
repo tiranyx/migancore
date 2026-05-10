@@ -39,7 +39,7 @@ MAX_PAIRS_PER_RUN = 50
 MAX_RETRIES = 3
 
 # How often the worker runs (seconds)
-WORKER_INTERVAL_SECONDS = 3600  # 1 hour
+WORKER_INTERVAL_SECONDS = 600   # 10 minutes (was 1 hour)
 
 
 async def _get_awaiting_pairs(session: AsyncSession) -> list[PreferencePair]:
@@ -50,8 +50,8 @@ async def _get_awaiting_pairs(session: AsyncSession) -> list[PreferencePair]:
                 (PreferencePair.chosen.like("__AWAITING_CHOSEN__%"))
                 | (PreferencePair.rejected.like("__AWAITING_REJECTED__%"))
             )
-            # TODO: add retry tracking column (e.g. processing_attempts < MAX_RETRIES)
-        ).limit(MAX_PAIRS_PER_RUN)
+            & (PreferencePair.processing_attempts < MAX_RETRIES)
+        ).order_by(PreferencePair.created_at.asc()).limit(MAX_PAIRS_PER_RUN)
     )
     return list(result.scalars().all())
 
@@ -172,6 +172,7 @@ async def _process_batch() -> dict:
         logger.info("feedback.worker.batch_start", count=len(pairs))
 
         for pair in pairs:
+            pair.processing_attempts += 1
             ok = False
             if pair.chosen.startswith("__AWAITING_CHOSEN__"):
                 ok = await _complete_awaiting_chosen(session, pair, cost_tracker)
