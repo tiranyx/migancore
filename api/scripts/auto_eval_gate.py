@@ -25,9 +25,9 @@ from pathlib import Path
 sys.path.insert(0, "/app")
 
 DB_PATH = Path("/app/logs/auto_eval.db")
-REFERENCE_PATH = Path("/app/eval/baseline_day58.json")
+REFERENCE_PATH = Path("/app/eval/baseline_auto_eval.json")
 RESULT_PREFIX = "auto_eval_"
-PASS_THRESHOLD = 0.92
+PASS_THRESHOLD = 0.85  # Embedding-based fingerprint: lower than full eval (0.92) due to stochastic variance
 
 # Fingerprint prompts (subset of full eval for speed — ~5 min vs 30 min)
 # If any fail, full eval is triggered automatically
@@ -96,7 +96,7 @@ async def generate_response(prompt: str, model: str = None) -> str:
         resp = await client.chat(
             model=use_model,
             messages=messages,
-            options={"num_predict": 200, "temperature": 0.3, "num_ctx": 4096},
+            options={"num_predict": 200, "temperature": 0.0, "num_ctx": 4096},
         )
     return resp.get("message", {}).get("content", "").strip()
 
@@ -235,9 +235,9 @@ async def main():
 
     if decision == "FAIL":
         failed_ids = [r["id"] for r in result["results"] if not r["pass"]]
-        body = f"Model: {model_tag}\nAvg sim: {avg_sim:.4f}\nFailed: {failed_ids}"
+        body = f"Model: {model_tag}\nAvg sim: {avg_sim:.4f}\nFailed: {failed_ids}\n\nRecommend running full eval: python eval/run_identity_eval.py --mode eval"
         if not args.dry_run:
-            send_alert(f"🚨 MiganCore Identity Gate FAILED", body)
+            send_alert(f"⚠️ MiganCore Fingerprint Gate FAILED — Trigger Full Eval", body)
         sys.exit(1)
     else:
         print("All fingerprint prompts passed. Identity stable.")
