@@ -15,6 +15,33 @@ jobs:
       run:
         working-directory: ./api
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ado_app
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ado
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        env:
+          REDIS_PASSWORD: test
+        options: >-
+          --health-cmd "redis-cli -a test ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
