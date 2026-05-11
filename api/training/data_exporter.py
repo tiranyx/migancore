@@ -63,11 +63,12 @@ def export_dpo_pairs(
     and the assistant responses as chosen/rejected.
     """
     sources_filter = ""
-    params: list = [min_judge_score, max_pairs]
+    params: list = [min_judge_score]
     if include_sources:
         placeholders = ", ".join(["%s"] * len(include_sources))
         sources_filter = f"AND source_method IN ({placeholders})"
-        params = include_sources + params
+        params.extend(include_sources)
+    params.append(max_pairs)
 
     used_filter = "AND used_in_training_run_id IS NULL" if exclude_used else ""
 
@@ -316,9 +317,9 @@ def main():
     }
     summary_path = args.output_dir / "export_summary.json"
     with open(summary_path, "w") as f:
-        json.dump(summary, f, indent=2, ensure_ascii=False)
+        json.dump(summary, f, indent=2, ensure_ascii=False, default=str)
 
-    print(json.dumps(summary, indent=2, ensure_ascii=False))
+    print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
     conn.close()
 
 
