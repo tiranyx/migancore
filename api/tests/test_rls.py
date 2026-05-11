@@ -145,6 +145,8 @@ async def test_rls_isolation():
         print("TEST 2 PASS: Tenant B sees 0 agents (isolation works)")
     else:
         print(f"TEST 2 FAIL: Tenant B sees {len(agents)} agents — DATA LEAK!")
+        for a in agents:
+            print(f"  LEAKED: id={a['id']}, name={a['name']}, tenant_id={a['tenant_id']}")
         failures.append("TEST 2")
 
     # Test 3: Query without tenant context should fail-closed (error)
@@ -160,6 +162,8 @@ async def test_rls_isolation():
                 print("TEST 3 PASS: No tenant context → 0 agents")
             else:
                 print(f"TEST 3 WARN: No tenant context → {len(agents)} agents (RLS not strict?)")
+                for a in agents:
+                    print(f"  ORPHAN: id={a['id']}, name={a['name']}, tenant_id={a['tenant_id']}")
         except Exception as exc:
             print(f"TEST 3 PASS: No tenant context → error (fail-closed): {exc}")
 
