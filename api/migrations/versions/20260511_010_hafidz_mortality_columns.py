@@ -29,10 +29,15 @@ def upgrade() -> None:
         "hafidz_contributions",
         sa.Column("child_death_at", sa.DateTime(timezone=True), nullable=True),
     )
+    op.add_column(
+        "hafidz_contributions",
+        sa.Column("final_knowledge_extracted", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+    )
 
 
 def downgrade() -> None:
     """Remove child mortality columns."""
+    op.drop_column("hafidz_contributions", "final_knowledge_extracted")
     op.drop_column("hafidz_contributions", "child_death_at")
     op.drop_column("hafidz_contributions", "child_death_reason")
     op.drop_column("hafidz_contributions", "child_alive")
