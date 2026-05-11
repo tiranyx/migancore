@@ -77,6 +77,20 @@ class Settings(BaseSettings):
     DISTILL_BUDGET_USD_HARD_CAP: float = 5.0   # Pipeline aborts if estimated spend > this
     DISTILL_MARGIN_THRESHOLD: float = 2.0      # Only keep pairs with judge_diff >= this
 
+    # MiganForge — Training Loop (Day 72e)
+    DEFAULT_MODEL: str = "migancore:0.4"       # Current production model
+    TRAINING_OUTPUT_DIR: str = "/opt/ado/data/training"
+    TRAINING_EVAL_DIR: str = "/opt/ado/data/eval"
+    TRAINING_MIN_DPO_PAIRS: int = 30           # Minimum pairs before training
+    TRAINING_MIN_SFT_PAIRS: int = 50           # Minimum identity pairs
+    TRAINING_MAX_DAILY_BUDGET_USD: float = 15.0
+    TRAINING_GPU_PROVIDER: str = "runpod"      # runpod | vastai | local
+    TRAINING_AUTO_TRIGGER: bool = False        # Auto-trigger when threshold reached
+    TRAINING_AUTO_DEPLOY: bool = False         # Auto-deploy if eval win rate > 55%
+    TRAINING_WIN_RATE_THRESHOLD: float = 55.0  # Minimum win rate for auto-deploy
+    RUNPOD_API_KEY: Optional[str] = None
+    VAST_API_KEY: Optional[str] = None
+
     # Day 37: CAI judge backend selection (research: 2-of-N quorum > single judge, -30% bad pairs)
     # Options: "ollama" (default, free, slow ~10-20s), "quorum" (Kimi+Gemini, fast 1-2s, ~$0.001/critique)
     # Fallback chain on quorum mode: Kimi -> Gemini -> Ollama (graceful degrade)
