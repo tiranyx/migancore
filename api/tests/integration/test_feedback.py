@@ -33,7 +33,8 @@ async def _create_dummy_message(session, tenant_id: uuid.UUID) -> uuid.UUID:
         session.add(tenant)
         await session.flush()
 
-    agent = Agent(tenant_id=tenant_id, name="Test Agent", slug="test-agent")
+    agent_slug = f"test-agent-{uuid.uuid4().hex[:8]}"
+    agent = Agent(tenant_id=tenant_id, name="Test Agent", slug=agent_slug)
     session.add(agent)
     await session.flush()
 

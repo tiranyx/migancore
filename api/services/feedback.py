@@ -37,6 +37,15 @@ async def record_feedback(
 
     Returns {"feedback_id": uuid, "pair_id": uuid | None, "status": str}
     """
+    # Validate rating before any DB writes
+    if rating not in ("thumbs_up", "thumbs_down"):
+        logger.warning("feedback.unknown_rating", rating=rating)
+        return {
+            "feedback_id": None,
+            "pair_id": None,
+            "status": "unknown_rating",
+        }
+
     # Set RLS tenant context so INSERT into interactions_feedback passes policy.
     await set_tenant_context(session, str(tenant_id))
 
@@ -74,14 +83,6 @@ async def record_feedback(
             source_method="user_thumbs_down",
             source_message_id=message_id,
         )
-    else:
-        logger.warning("feedback.unknown_rating", rating=rating)
-        return {
-            "feedback_id": event.id,
-            "pair_id": None,
-            "status": "unknown_rating",
-        }
-
     session.add(pair)
     await session.flush()
 

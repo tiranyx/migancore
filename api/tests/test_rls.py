@@ -37,9 +37,12 @@ async def _cleanup_legacy():
     async with AsyncSessionLocal() as session:
         async with session.begin():
             await session.execute(text("SELECT set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', false)"))
-            await session.execute(text(f"DELETE FROM agents WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
-            await session.execute(text(f"DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}'))"))
-            await session.execute(text(f"DELETE FROM tenants WHERE slug IN ('{TEST_SLUG_A}', '{TEST_SLUG_B}')"))
+            # Clean up all test data (including from integration tests)
+            await session.execute(text("DELETE FROM agents WHERE slug LIKE 'test-agent-%'"))
+            await session.execute(text("DELETE FROM conversations WHERE title = 'Test'"))
+            await session.execute(text("DELETE FROM messages WHERE content = 'hello'"))
+            await session.execute(text("DELETE FROM users WHERE tenant_id IN (SELECT id FROM tenants WHERE slug IN ('test-tenant-%', 'rls-test-a', 'rls-test-b'))"))
+            await session.execute(text("DELETE FROM tenants WHERE slug LIKE 'test-tenant-%' OR slug IN ('rls-test-a', 'rls-test-b')"))
 
 
 async def _create_test_user(email: str, tenant_slug: str) -> tuple[User, Tenant]:

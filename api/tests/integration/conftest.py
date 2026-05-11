@@ -68,7 +68,7 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
             await session.execute(text("DELETE FROM preference_pairs"))
             await session.execute(text("DELETE FROM messages"))
             await session.execute(text("DELETE FROM conversations"))
-            await session.execute(text("DELETE FROM agents"))
+            await session.execute(text("DELETE FROM agents WHERE slug LIKE 'test-agent-%'"))
             await session.execute(text("DELETE FROM tenants WHERE slug LIKE 'test-tenant-%'"))
             await session.commit()
         except Exception:
