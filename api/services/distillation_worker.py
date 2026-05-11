@@ -620,6 +620,13 @@ async def run_distillation_cycle(
     for interaction in interactions:
         pair_id = interaction.id
         try:
+            # M1.4: Pre-pair budget guard — estimate max cost before calling teachers.
+            # If we can't afford at least $0.05 (rough per-pair max), stop the cycle.
+            if not budget.can_spend(0.05):
+                logger.error("distill.budget_exhausted_mid_cycle", spent=budget.today_spend(), cap=budget.hard_cap)
+                report["errors"].append("daily_budget_exhausted_mid_cycle")
+                break
+
             # Step 1: Gather teacher responses
             teachers_resp = await gather_teacher_responses(
                 prompt=interaction.user_message,

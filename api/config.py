@@ -74,7 +74,7 @@ class Settings(BaseSettings):
 
 
     # Distillation budget caps
-    DISTILL_BUDGET_USD_HARD_CAP: float = 10.0  # Pipeline aborts if estimated spend > this
+    DISTILL_BUDGET_USD_HARD_CAP: float = 5.0   # Pipeline aborts if estimated spend > this
     DISTILL_MARGIN_THRESHOLD: float = 2.0      # Only keep pairs with judge_diff >= this
 
     # Day 37: CAI judge backend selection (research: 2-of-N quorum > single judge, -30% bad pairs)

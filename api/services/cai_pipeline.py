@@ -330,20 +330,23 @@ async def run_cai_pipeline(
     user_message: str,
     assistant_response: str,
     source_message_id: uuid.UUID,
+    sample_rate: float | None = None,
 ) -> None:
     """Constitutional AI pipeline entry point — fire-and-forget.
 
     Called via asyncio.create_task after each sync chat turn.
     50% sampling gate prevents CPU overload on CPU-only VPS.
+    Beta tenants can override sample_rate via tenant.settings.
 
     Flow:
-      1. Sampling gate (50% pass rate) — skip if random > CAI_SAMPLE_RATE
+      1. Sampling gate — skip if random > sample_rate (default CAI_SAMPLE_RATE)
       2. Critique: 7B judge evaluates response vs. 10 Constitution principles
       3. If score <= CRITIQUE_THRESHOLD: generate improved revision
       4. Store (revised=chosen, original=rejected) as DPO preference pair
     """
-    logger.info("cai.pipeline_entered", source_message_id=str(source_message_id))
-    if random.random() > CAI_SAMPLE_RATE:
+    _rate = sample_rate if sample_rate is not None else CAI_SAMPLE_RATE
+    logger.info("cai.pipeline_entered", source_message_id=str(source_message_id), sample_rate=_rate)
+    if random.random() > _rate:
         logger.info("cai.pipeline_sampled_out", source_message_id=str(source_message_id))
         return
 

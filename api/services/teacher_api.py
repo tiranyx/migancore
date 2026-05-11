@@ -29,6 +29,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
@@ -41,6 +42,43 @@ logger = structlog.get_logger()
 
 class TeacherError(Exception):
     """Raised when a teacher API call fails after retries."""
+
+
+class TeacherHealthMonitor:
+    """Circuit-breaker style health monitor for teacher APIs.
+
+    Tracks consecutive failures per teacher. After threshold failures,
+    the teacher is banned for a cooldown period. Success resets the counter.
+    """
+
+    def __init__(self, failure_threshold: int = 3, cooldown_minutes: int = 30):
+        self.failures: dict[str, int] = {}
+        self.banned_until: dict[str, datetime] = {}
+        self.threshold = failure_threshold
+        self.cooldown = timedelta(minutes=cooldown_minutes)
+
+    def record_failure(self, teacher: str) -> None:
+        self.failures[teacher] = self.failures.get(teacher, 0) + 1
+        if self.failures[teacher] >= self.threshold:
+            self.banned_until[teacher] = datetime.utcnow() + self.cooldown
+            self.failures[teacher] = 0
+            logger.warning("teacher.banned", teacher=teacher, cooldown_minutes=30)
+
+    def record_success(self, teacher: str) -> None:
+        if self.failures.get(teacher):
+            self.failures[teacher] = 0
+
+    def is_healthy(self, teacher: str) -> bool:
+        until = self.banned_until.get(teacher)
+        if until and datetime.utcnow() < until:
+            return False
+        if until and datetime.utcnow() >= until:
+            del self.banned_until[teacher]
+        return True
+
+
+# Global singleton — shared across all callers
+health_monitor = TeacherHealthMonitor()
 
 
 @dataclass
@@ -347,11 +385,22 @@ TEACHER_REGISTRY = {
 async def call_teacher(
     teacher: str, prompt: str, system: str = "", max_tokens: int = 600
 ) -> TeacherResponse:
-    """Generic dispatch: call_teacher('kimi', prompt, system, 600)"""
+    """Generic dispatch: call_teacher('kimi', prompt, system, 600)
+
+    M1.4: Health-check gate — skips teachers that are circuit-broken.
+    """
+    if not health_monitor.is_healthy(teacher):
+        raise TeacherError(f"Teacher {teacher} is temporarily unhealthy (circuit open)")
     fn = TEACHER_REGISTRY.get(teacher)
     if not fn:
         raise TeacherError(f"Unknown teacher: {teacher}. Available: {list(TEACHER_REGISTRY)}")
-    return await fn(prompt, system, max_tokens)
+    try:
+        resp = await fn(prompt, system, max_tokens)
+        health_monitor.record_success(teacher)
+        return resp
+    except TeacherError:
+        health_monitor.record_failure(teacher)
+        raise
 
 
 def is_teacher_available(teacher: str) -> bool:
@@ -366,4 +415,8 @@ def is_teacher_available(teacher: str) -> bool:
 
 
 def list_available_teachers() -> list[str]:
-    return [t for t in TEACHER_REGISTRY if is_teacher_available(t)]
+    """Return teachers that have API keys configured AND are healthy."""
+    return [
+        t for t in TEACHER_REGISTRY
+        if is_teacher_available(t) and health_monitor.is_healthy(t)
+    ]

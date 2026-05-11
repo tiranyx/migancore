@@ -240,11 +240,16 @@ async def chat(
         _t.add_done_callback(_background_tasks.discard)
 
     # Day 15: Background CAI critique-revise — generates preference pairs for DPO training
+    # M1.3: Beta tenants get 100% CAI sampling via tenant.settings
+    _cai_sample_rate = tenant.settings.get("cai_sampling_rate", 0.5)
+    if tenant.settings.get("cai_auto_loop"):
+        _cai_sample_rate = 1.0
     _t = asyncio.create_task(
         run_cai_pipeline(
             user_message=data.message,
             assistant_response=assistant_content,
             source_message_id=assistant_msg.id,
+            sample_rate=_cai_sample_rate,
         )
     )
     _background_tasks.add(_t)
@@ -590,6 +595,21 @@ async def chat_stream(
             )
 
             yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
+
+            # M1.3: CAI auto-loop for streaming endpoint (was missing)
+            _cai_sample_rate_stream = tenant_for_stream.settings.get("cai_sampling_rate", 0.5)
+            if tenant_for_stream.settings.get("cai_auto_loop"):
+                _cai_sample_rate_stream = 1.0
+            _t = asyncio.create_task(
+                run_cai_pipeline(
+                    user_message=data.message,
+                    assistant_response=full_text,
+                    source_message_id=assistant_msg_id,
+                    sample_rate=_cai_sample_rate_stream,
+                )
+            )
+            _background_tasks.add(_t)
+            _t.add_done_callback(_background_tasks.discard)
 
             # Day 53 — telemetry: engine, TTFB, sustained throughput.
             _stream_total_s = asyncio.get_event_loop().time() - _stream_t0
