@@ -19,13 +19,15 @@ services:
   postgres_test:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ado_app
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: test
       POSTGRES_DB: ado_test
     ports:
       - "5433:5432"
+    volumes:
+      - ./api/tests/integration/init_test_db.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "ado_app", "-d", "ado_test"]
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "ado_test"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -173,6 +175,8 @@ services:
     volumes:
       # Mount test code so we can iterate without rebuild
       - ./api/tests:/app/tests:ro
+      # Mount migrations so latest alembic revisions are available in container
+      - ./api/migrations:/app/migrations:ro
       # Mount pytest config
       - ./api/pytest.ini:/app/pytest.ini:ro
       - ./api/.coveragerc.docker:/app/.coveragerc:ro

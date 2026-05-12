@@ -451,6 +451,13 @@ app.include_router(hafidz_router.router)  # Day 72: Sprint 1 Hafidz Ledger
 app.include_router(brain_router.router)  # Day 72: Parent Brain â€” knowledge distribution
 app.include_router(owner_datasets_router.router)  # Sprint 1: Owner Data Pathway
 
+# Day 72e: MiganForge — Training orchestrator (closed-loop self-improvement)
+try:
+    from routers import training as training_router
+    app.include_router(training_router.router)
+except Exception as _e:
+    logger.warning("training_router.import_failed", error=str(_e))
+
 # Day 71d Phase 2.1: system telemetry (status + metrics, public, no auth)
 try:
     from routers import system as system_router

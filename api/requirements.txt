@@ -62,3 +62,16 @@ prometheus-client==0.21.0
 
 # Test coverage
 pytest-cov==6.0.0
+
+# ---------------------------------------------------------------------------
+# MiganForge Training Dependencies (install on GPU machine, not VPS)
+# ---------------------------------------------------------------------------
+# torch>=2.1.0              # PyTorch (CUDA required for training)
+# transformers>=4.40.0     # HuggingFace Transformers
+# datasets>=2.18.0         # HuggingFace Datasets
+# trl>=0.8.0               # Transformers Reinforcement Learning (DPO, SFT)
+# peft>=0.10.0             # Parameter-Efficient Fine-Tuning (LoRA, QLoRA)
+# accelerate>=0.28.0       # Distributed training
+# bitsandbytes>=0.43.0     # 4-bit quantization (QLoRA)
+# gguf>=0.6.0              # GGUF format for Ollama
+# ---------------------------------------------------------------------------
