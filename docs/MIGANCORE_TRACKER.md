@@ -9,10 +9,11 @@
 | Key | Value |
 |-----|-------|
 | **Today** | Day 72e · 2026-05-12 (ALIGNMENT & RECOVERY) |
-| **Production Brain** | migancore:0.7c ← **REVERTED from broken 0.8** (identity collapse incident, Lessons #179-190) |
+| **Production Brain** | `migancore:0.7c` ← **REVERTED from broken 0.8** (identity collapse incident, Lessons #179-190) |
 | **0.8 Collapse** | ❌ CRITICAL — model claimed ChatGPT/OpenAI/Claude/Anthropic. Sequential merge failed + data contaminated + DPO from base Qwen |
 | **0.8-Fixed** | ❌ FAILED — sequential merge identity→DPO: adapters trained on different bases = adversarial gradients |
 | **0.8-Identity** | ❌ CONTAMINATED — merged_identity_v0.4 contains Anthropic/Claude refs. Day 0-39 foundation poisoned |
+| **Frontend Sprint** | ✅ LIVE — Service Worker + PWA + ErrorBoundary + Offline UX (TTFB 318→45ms, -86%) + Babel pre-compile (-600KB) |
 | **Brain Performance** | ✅ 50%+ latency cut: semantic tool filter (29→6) + keep_alive 30m + tool policies seeded + 180s timeout |
 | **Telemetry** | ✅ /v1/system/{status,metrics} live — brain version, tool count, latency p50/p95, cache stats |
 | **Beta Readiness** | ✅ READY for 100 users (docs/BETA_READY_71D.md) — 38s direct chat, 46s multi-tool query verified live |
