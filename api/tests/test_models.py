@@ -96,7 +96,7 @@ class TestAgentModel:
 
     def test_agent_default_model_version(self):
         default = _get_col_default(Agent, "model_version")
-        assert default == "migancore:0.3"
+        assert default == "migancore:0.7c"
 
     def test_agent_has_persona_blob_column(self):
         mapper = inspect(Agent)

@@ -462,7 +462,7 @@ async def critique_with_ollama(
     prompt: str,
     response: str,
     system: str = "",
-    model: str = "migancore:0.4",
+    model: str = "migancore:0.7c",
 ) -> dict:
     """
     Use local MiganCore as CAI judge to critique a response.

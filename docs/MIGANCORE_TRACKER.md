@@ -8,11 +8,11 @@
 <!-- Section tag: QUICK_STATUS — auto-updated by tracker.py update -->
 | Key | Value |
 |-----|-------|
-| **Today** | Day 71d · 2026-05-08 (BETA-READY sprint) |
-| **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
-| **Cycle 7b Result** | ❌ ROLLBACK — voice 0.771 (+0.050), Q5=0.609, weighted_avg 0.8870 (gate 0.92). Root cause: Q5 brief gap |
-| **Cycle 7c Result** | ❌ ROLLBACK — voice 0.789 (Δ+0.018), Q5=0.625 (Δ+0.016), w_avg 0.8829 (Δ-0.004 vs C7b WORSE). Lessons #172-175 |
-| **Frontend Sprint** | ✅ LIVE — Service Worker + PWA + ErrorBoundary + Offline UX (TTFB 318→45ms, -86%) + Babel pre-compile (-600KB) |
+| **Today** | Day 72e · 2026-05-12 (ALIGNMENT & RECOVERY) |
+| **Production Brain** | migancore:0.7c ← **REVERTED from broken 0.8** (identity collapse incident, Lessons #179-190) |
+| **0.8 Collapse** | ❌ CRITICAL — model claimed ChatGPT/OpenAI/Claude/Anthropic. Sequential merge failed + data contaminated + DPO from base Qwen |
+| **0.8-Fixed** | ❌ FAILED — sequential merge identity→DPO: adapters trained on different bases = adversarial gradients |
+| **0.8-Identity** | ❌ CONTAMINATED — merged_identity_v0.4 contains Anthropic/Claude refs. Day 0-39 foundation poisoned |
 | **Brain Performance** | ✅ 50%+ latency cut: semantic tool filter (29→6) + keep_alive 30m + tool policies seeded + 180s timeout |
 | **Telemetry** | ✅ /v1/system/{status,metrics} live — brain version, tool count, latency p50/p95, cache stats |
 | **Beta Readiness** | ✅ READY for 100 users (docs/BETA_READY_71D.md) — 38s direct chat, 46s multi-tool query verified live |
@@ -21,12 +21,14 @@
 | **API Version** | v0.5.16 — BUILD_DAY=Day 70, commit_sha=2d87c7b ✅ |
 | **API Health** | https://api.migancore.com/health |
 | **Chat App** | https://app.migancore.com |
-| **Beta Users** | 53 registered · 65 conversations · **0 feedback signals** ← P0 fix deployed Day 69 |
-| **Total Pairs** | ~3,044 in DB (40 Q5 casual pairs added for Cycle 7c) |
-| **Current Phase** | **Phase A — Stabilization** (Day 68–80) |
+| **Beta Users** | 53 registered · 109 conversations · 602 messages · **6 feedback signals** (5 thumbs_up, 1 thumbs_down) |
+| **Total Pairs** | 3,359 in DB (0.9% real, 99.1% synthetic/anchor) |
+| **Current Phase** | **Phase 0 — DATA AUDIT & ALIGNMENT** (Day 72e-73) |
 | **Revenue** | $0 · First client target: Day 101–130 |
 | **Compute Budget** | Vast.ai ~$6.15 remaining · VPS ~$11-12/mo |
-| **Lessons Cumulative** | 185 (Day 71d adds #181-185: docker mount gotcha · semantic tool filter · Babel precompile · Ollama keep_alive · nginx headers reaffirmed) |
+| **Backlog** | docs/BACKLOG_ALIGNMENT.md — P0-P6 prioritized |
+| **Mapping** | docs/AGENT_SYNC/KIMI_MAPPING_REMEDIATION_2026-05-12.md |
+| **Lessons Cumulative** | 190 (Day 72e adds #179-190: contamination · merge failure · DPO base · model mismatch · eval false positive · 0.7c fragility · disk crisis) |
 
 ---
 
@@ -38,7 +40,7 @@
 
 | # | Prinsip | Status | Gap / Evidence |
 |---|---------|--------|----------------|
-| P1 | Otak sendiri belajar dari interaksi | ⚠️ PARTIAL | Training pipeline live, **tapi 0 real-user signal 16 hari beta**. Flywheel mati di source. Fix: P0 feedback UI + Hafidz Ledger. |
+| P1 | Otak sendiri belajar dari interaksi | ⚠️ PARTIAL | Training pipeline live, **tapi 0.9% real-data**. Flywheel hampir mati. Fix: P0 data audit + P2 pipeline hardening. |
 | P2 | White-label, per-org clone | ⚠️ PARTIAL | clone_manager.py dry-run ✅. **Real deploy ke client VPS = BELUM**. Per-org Docker template belum live. |
 | P3 | Self-hosted, zero data leak | ✅ LIVE | VPS 72.62.125.6, semua data lokal, SSL, gitignore clean. |
 | P4 | License system (BERLIAN/EMAS/PERAK/PERUNGGU) | ✅ LIVE | HMAC-SHA256 Day 62. Ed25519 upgrade defer Phase D (air-gapped). |
@@ -206,7 +208,7 @@
 
 **Costs:** Cycle 7 = $0.054 · Cycle 7b = $0.0887 · Cycle 7c v1 (FAILED format) = $0.02 · Cycle 7c v2 = $0.10 (incl. recovery) · Day 71+71c total ≈ **$0.27**
 
-**Cycle 7c verdict: ROLLBACK** — weighted_avg 0.8829 (gate 0.92, day70 voice-fixed baseline), voice 0.789 (gate 0.85), Q5=0.625 (target 0.75+). migancore:0.3 STAYS as production (validated 0.9082 against day58 baseline).
+**Cycle 7c verdict: ROLLBACK** — weighted_avg 0.8829 (gate 0.92, day70 voice-fixed baseline), voice 0.789 (gate 0.85), Q5=0.625 (target 0.75+). migancore:0.7c is production (0.3 = fallback) (validated 0.9082 against day58 baseline).
 
 **Cycle 7d plan: SFT pivot** — 200 voice-only pairs, LR 5e-7, 5 epochs, lora-r=8. Awaiting Kimi+Codex review of CLAUDE_PLAN_71D.
 
@@ -551,4 +553,4 @@ curl -I https://app.migancore.com/      # frontend 200?
 
 *MIGANCORE_TRACKER.md — owned by Claude (implementator), reviewed by Kimi, QA'd by Codex.*  
 *Update protocol: `python scripts/tracker.py update` for Quick Status; manual for Vision Map and Roadmap.*  
-*Last updated: Day 69 · 2026-05-08*
+*Last updated: Day 72e · 2026-05-12 · by Kimi · post-identity-collapse-recovery*
