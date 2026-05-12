@@ -469,6 +469,20 @@ async def chat_stream(
                             )
                             yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
                             logger.info("chat.stream.done_via_toolcall", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
+                            # M1.3: CAI auto-loop — MUST run before return
+                            _cai_sample_rate_tool = tenant_for_stream.settings.get("cai_sampling_rate", 0.5)
+                            if tenant_for_stream.settings.get("cai_auto_loop"):
+                                _cai_sample_rate_tool = 1.0
+                            _t = asyncio.create_task(
+                                run_cai_pipeline(
+                                    user_message=data.message,
+                                    assistant_response=full_text,
+                                    source_message_id=assistant_msg_id,
+                                    sample_rate=_cai_sample_rate_tool,
+                                )
+                            )
+                            _background_tasks.add(_t)
+                            _t.add_done_callback(_background_tasks.discard)
                             return
                         # Empty content + no tool calls — degenerate state. At iter 0
                         # let the streaming branch try once more (may recover); at >0
