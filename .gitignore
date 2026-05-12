@@ -100,3 +100,6 @@ TASK_BOARD.md
 *.bundle
 migancore-push*.bundle
 
+archive/
+*.gguf
+*.safetensors
