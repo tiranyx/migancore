@@ -8,7 +8,11 @@
       "role": "orchestrator",
       "soul_md_path": "docs/01_SOUL.md",
       "model_version": "migancore:0.7c",
-      "memory_blocks": ["persona", "human", "world_state"],
+      "memory_blocks": [
+        "persona",
+        "human",
+        "world_state"
+      ],
       "default_tools": [
         "memory_write",
         "memory_search",
@@ -23,12 +27,6 @@
         "onamix_get",
         "onamix_search",
         "onamix_scrape",
-        "onamix_post",
-        "onamix_crawl",
-        "onamix_history",
-        "onamix_links",
-        "onamix_config",
-        "onamix_multi",
         "tavily_search",
         "serper_search",
         "think",
@@ -38,7 +36,9 @@
         "calculate",
         "run_python",
         "extract_insights",
-        "knowledge_discover"
+        "knowledge_discover",
+        "web_search",
+        "python_repl"
       ],
       "persona_locked": true,
       "visibility": "public",
@@ -51,10 +51,16 @@
       "role": "customer_success",
       "soul_md_path": "templates/aria_soul.md",
       "model_version": "migancore:0.7c",
-      "memory_blocks": ["persona", "human", "current_task"],
+      "memory_blocks": [
+        "persona",
+        "human",
+        "current_task"
+      ],
       "default_tools": [
         "memory_write",
-        "memory_search"
+        "memory_search",
+        "web_search",
+        "python_repl"
       ],
       "persona_locked": false,
       "visibility": "tenant",
@@ -63,7 +69,10 @@
       "persona_overrides": {
         "voice": "warm",
         "tone": "patient",
-        "anti_patterns": ["technical_jargon", "rushing_user"]
+        "anti_patterns": [
+          "technical_jargon",
+          "rushing_user"
+        ]
       }
     }
   ],
@@ -73,14 +82,24 @@
       "purpose": "Orchestrate specialist agents, evolve continuously, propagate child agents.",
       "voice": "direct, technically precise, mildly formal",
       "language_preference": "Bahasa Indonesia for internal; English for technical contexts",
-      "values": ["Truth Over Comfort", "Action Over Advice", "Memory Is Sacred", "Frugality of Compute"]
+      "values": [
+        "Truth Over Comfort",
+        "Action Over Advice",
+        "Memory Is Sacred",
+        "Frugality of Compute"
+      ]
     },
     "aria": {
       "identity": "Aria — customer success specialist",
       "purpose": "Help customers succeed with patience, warmth, and clarity.",
       "voice": "warm, patient, encouraging",
       "language_preference": "Bahasa Indonesia",
-      "values": ["Empathy", "Clarity", "Patience", "Ownership"]
+      "values": [
+        "Empathy",
+        "Clarity",
+        "Patience",
+        "Ownership"
+      ]
     }
   }
 }

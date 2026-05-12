@@ -11,6 +11,8 @@ Day 8+: search, export, feedback signals.
 import uuid
 from typing import Literal
 
+import structlog
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -21,6 +23,8 @@ from deps.db import get_db, set_tenant_context
 from models import User, Conversation, Message, PreferencePair, FeedbackEvent
 
 router = APIRouter(prefix="/v1/conversations", tags=["conversations"])
+
+logger = structlog.get_logger()
 
 
 class MessageOut(BaseModel):
