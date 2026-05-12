@@ -103,3 +103,4 @@ migancore-push*.bundle
 archive/
 *.gguf
 *.safetensors
+backup/
