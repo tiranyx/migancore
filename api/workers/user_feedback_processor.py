@@ -121,8 +121,6 @@ async def _complete_awaiting_rejected(
         logger.warning("feedback.worker.local_budget_exceeded", pair_id=str(pair.id))
         return False
 
-    # Use Ollama with a lightweight prompt to generate a worse/different response
-    client = OllamaClient(base_url=settings.OLLAMA_URL)
     prompt = (
         f"User asked:\n{pair.prompt}\n\n"
         f"The assistant gave this good response:\n{pair.chosen}\n\n"
@@ -131,15 +129,16 @@ async def _complete_awaiting_rejected(
     )
 
     try:
-        resp_text = await client.generate(
-            model=settings.DEFAULT_MODEL,
-            prompt=prompt,
-            options={"temperature": 0.9, "num_predict": 300},
-        )
+        async with OllamaClient(base_url=settings.OLLAMA_URL) as client:
+            resp_text = await client.generate(
+                model=settings.DEFAULT_MODEL,
+                prompt=prompt,
+                options={"temperature": 0.9, "num_predict": 300},
+            )
         # Rough cost estimate: local inference â‰ˆ $0.001 per 1K tokens (electricity/GPU amortized)
         cost_tracker["local"] += 0.001
 
-        pair.rejected = resp_text.strip()
+        pair.rejected = resp_text.get("response", "").strip()
         pair.judge_model = f"local:{settings.DEFAULT_MODEL}"
         await session.flush()
 

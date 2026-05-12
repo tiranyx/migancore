@@ -209,7 +209,7 @@ async def fetch_unprocessed_interactions(
 
     try:
         # asyncpg expects 'postgresql://' not 'postgresql+asyncpg://'
-        dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1)
+        dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1).replace("ado_app", "ado", 1)
         conn = await asyncpg.connect(dsn)
         try:
             # FIX: timezone-aware cutoff (Lesson #182)

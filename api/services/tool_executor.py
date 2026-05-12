@@ -1868,8 +1868,8 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     # Handler functions retained in module for back-compat — re-add by
     # uncommenting one line if a use case re-emerges. ONAMIX = web; sandbox
     # tooling = E2B (Bulan 3 Day 50+ per VISION compass).
-    # "web_search": _web_search,
-    # "python_repl": _python_repl,
+    "web_search": _web_search,
+    "python_repl": _python_repl,
     "memory_write": _memory_write,
     "memory_search": _memory_search,
     # Day 24 — Tool Expansion
@@ -1888,13 +1888,13 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "onamix_get": _onamix_get,
     "onamix_search": _onamix_search,
     "onamix_scrape": _onamix_scrape,
-    # Day 44 — ONAMIX MCP-only tools (require persistent stdio client)
-    "onamix_post": _onamix_post,
-    "onamix_crawl": _onamix_crawl,
-    "onamix_history": _onamix_history,
-    "onamix_links": _onamix_links,
-    "onamix_config": _onamix_config,
-    "onamix_multi": _onamix_multi,
+    # Day 44 — ONAMIX MCP-only tools DISABLED (MCP client not running in container)
+    # "onamix_post": _onamix_post,
+    # "onamix_crawl": _onamix_crawl,
+    # "onamix_history": _onamix_history,
+    # "onamix_links": _onamix_links,
+    # "onamix_config": _onamix_config,
+    # "onamix_multi": _onamix_multi,
     # Day 67 — Cognitive Tools
     **COGNITIVE_TOOLS,
 }
