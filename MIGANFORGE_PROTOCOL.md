@@ -1,3 +1,11 @@
+⚠️ WARNING — UPDATED Day 72e
+Base model changed from Qwen/Qwen2.5-7B-Instruct → migancore:0.7c
+See: LESSONS_LEARNED.md #186 (DPO from base Qwen overwrites identity)
+See: KIMI_MAPPING_REMEDIATION_2026-05-12.md Section 2
+
+Original protocol trained from base Qwen = identity collapse.
+All future training MUST start from production checkpoint.
+
 # MIGANFORGE PROTOCOL — Closed-Loop Self-Improvement
 
 > Version: 1.0 | Date: 2026-05-11 | Day 72e | Analyst: Kimi Code CLI
@@ -62,9 +70,9 @@ Files:
 
 ### 2.2 Training Configuration
 ```yaml
-Base model: Qwen/Qwen2.5-7B-Instruct
+Base model: migancore:0.7c (HF checkpoint)  # CHANGED from Qwen — see Lesson #186
 Method: DPO (Direct Preference Optimization)
-Warm-start: SFT identity anchoring (3 epochs)
+Warm-start: SFT identity from 0.7c (NOT base Qwen) — 3 epochs
 LoRA: r=16, alpha=32, dropout=0.05
 QLoRA: 4-bit NF4 (load_in_4bit=true)
 Batch: 1 × grad_accum=4 = effective batch 4

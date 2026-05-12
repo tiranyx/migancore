@@ -44,7 +44,7 @@ async def system_status() -> dict:
     return {
         "status": "operational",
         "brain": {
-            "model": getattr(settings, 'OLLAMA_DEFAULT_MODEL', 'migancore:0.3'),
+            "model": getattr(settings, 'OLLAMA_DEFAULT_MODEL', 'migancore:0.7c'),
             "available_tools": 29,
         },
         "tool_relevance": {

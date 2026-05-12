@@ -72,7 +72,7 @@ async def seed():
             """INSERT INTO agents (id, tenant_id, name, slug, description, generation, model_version, system_prompt, persona_blob, persona_locked, visibility, status, interaction_count, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())""",
             agent_id, tenant_id, "Mighan-Core", "core_brain", "Orchestrator agent",
-            0, "migancore:0.4", "You are Mighan-Core. Direct. Precise. Indonesian-first.",
+            0, "migancore:0.7c", "You are Mighan-Core. Direct. Precise. Indonesian-first.",
             '{"identity": "Mighan-Core"}', True, "public", "active", 0
         )
         print(f"Created agent: {agent_id}")

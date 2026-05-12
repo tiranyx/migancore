@@ -158,3 +158,165 @@
 ---
 
 *Catatan: Lesson #001-169 tercatat di `CONTEXT.md` dan `docs/logs/`.*
+
+---
+
+## Lesson #179: Identity Training Data Contaminated by Competitor References
+
+**Tanggal:** 2026-05-12
+**Konteks:** Recovery from migancore:0.8 identity collapse
+**Kesalahan:** identity_sft_200.jsonl (Day 0-39 foundation) mengandung referensi Anthropic/Claude. Ketika di-merge ke base Qwen, model bilang  Saya primanya Claude 2.
+**Root Cause:** Synthetic data generation pipeline (generate_identity_pairs.py) tidak difilter untuk competitor references. Magpie/self-play menghasilkan data yang memanggil identitas AI lain.
+**Fix:**
+1. Audit manual SEMUA pasang identitas
+2. Blocklist: Anthropic, Claude, OpenAI, ChatGPT, Google, Gemini, Alibaba, Qwen, Moonshot, Kimi, DeepSeek
+3. Block meta-instructions: Jangan jawab..., Kamu harus...
+4. Generate ulang dari nol kalau < 100 pasang bersih
+**Prevention:** Semua dataset WAJIB lewat contamination filter sebelum training.
+
+---
+
+## Lesson #180: Sequential Adapter Merge Fails When Bases Differ
+
+**Tanggal:** 2026-05-12
+**Konteks:** Attempted fix for 0.8 identity collapse via sequential merge
+**Kesalahan:** Merge identity_adapter (trained on Qwen) lalu DPO_adapter (trained on Qwen) diharapkan berhasil. Tapi DPO gradien relative ke W_base Qwen, bukan ke W_merged_identity.
+**Root Cause:** LoRA adapter menghitung B*A relatif terhadap base model training. Sequential merge dari adapter dengan base berbeda = gradien saling lawan.
+**Fix:**
+1. Semua adapter untuk merge HARUS dilatih dari base yang SAMA
+2. Atau: retrain DPO dari checkpoint identitas (bukan dari Qwen base)
+3. Atau: gunakan SVD-weighted merge dengan alpha tuning (jika ada RAM)
+**Prevention:** Training script WAJIB verifikasi base model sebelum training. Guard: exit if base ≠ production checkpoint.
+
+---
+
+## Lesson #181: Docker Code Changes Need uild, Not Just estart
+
+**Tanggal:** 2026-05-08
+**Konteks:** Day 71d deploy attempts
+**Kesalahan:** docker compose restart api setelah edit Python file. Container restart dengan image LAMA. Perubahan kode tidak ter-deploy.
+**Root Cause:** Docker container menggunakan image, bukan bind mount. Code baru tidak masuk image tanpa docker compose build.
+**Fix:** Selalu docker compose build api && docker compose up -d api setelah edit kode.
+**Prevention:** Check BUILD_COMMIT_SHA di health endpoint. Must match git rev-parse --short HEAD.
+
+---
+
+## Lesson #182: Semantic Tool Filter = Highest-Impact Perf Fix
+
+**Tanggal:** 2026-05-08
+**Konteks:** Day 71d performance optimization
+**Kesalahan:** Kirim SEMUA 29 tools ke LLM setiap query. Prompt bloat, latency 60-90s.
+**Root Cause:** No tool relevance filtering. LLM harus parse 29 tool descriptions per query.
+**Fix:** services/tool_relevance.py — embed query, cosine similarity vs tool descriptions, kirim hanya top-K (default 6) + 2 always-on.
+**Result:** 29 → 6 tools, latency 60-90s → 38-46s (-50%).
+**Prevention:** Tool relevance mandatory untuk > 10 tools.
+
+---
+
+## Lesson #183: Babel Pre-Compile Cuts 600KB Per Page Load
+
+**Tanggal:** 2026-05-08
+**Konteks:** Day 71d frontend optimization
+**Kesalahan:** Babel CDN (600KB) di-load setiap page load untuk compile JSX di browser.
+**Root Cause:** JSX tidak di-precompile. Browser menjalankan Babel setiap load.
+**Fix:** Pre-compile JSX ke JS lokal menggunakan Babel CLI. Hapus Babel CDN dari HTML.
+**Result:** 2.1MB → 1.5MB page load.
+**Prevention:** Build step mandatory untuk production frontend.
+
+---
+
+## Lesson #184: Ollama keep_alive Default 5min Too Short
+
+**Tanggal:** 2026-05-08
+**Konteks:** Day 71d latency investigation
+**Kesalahan:** OLLAMA_KEEP_ALIVE=5m. Model unload setelah idle 5 menit. Query berikutnya = cold start 30-60s.
+**Root Cause:** Default Ollama terlalu agresif untuk production API.
+**Fix:** OLLAMA_KEEP_ALIVE=24h (atau 30m minimum). Model tetap loaded.
+**Result:** Eliminates cold start penalty.
+**Prevention:** Ollama config review mandatory untuk production deploy.
+
+---
+
+## Lesson #185: nginx add_header Does Not Cascade
+
+**Tanggal:** 2026-05-08
+**Konteks:** Day 71d CORS/header debugging
+**Kesalahan:** dd_header di nginx location block tidak cascade ke nested blocks.
+**Root Cause:** nginx dd_header inheritance behavior — child blocks override parent, tidak merge.
+**Fix:** Ulangi header di setiap location block yang membutuhkan.
+**Prevention:** nginx config review dengan 
+ginx -t sebelum reload.
+
+---
+
+## Lesson #186: DPO Trained from Base Qwen Overwrites Identity
+
+**Tanggal:** 2026-05-12
+**Konteks:** migancore:0.8 total identity collapse
+**Kesalahan:** DPO adapter dilatih dari Qwen/Qwen2.5-7B-Instruct dengan 951 utility pairs + 5 identity pairs. Identity drowned.
+**Root Cause:** 99.5% utility signal = identity statistically irrelevant. Gradien utility pull ke generic assistant space.
+**Fix:**
+1. DPO harus dilatih dari checkpoint identitas (bukan base Qwen)
+2. Minimum 20% identity pairs dalam DPO dataset
+3. Atau: train DPO separately, merge via SVD dengan weight identitas > utility
+**Prevention:** Dataset builder WAJIB cek category mix sebelum training.
+
+---
+
+## Lesson #187: Production Model is 0.7c, Not 0.3
+
+**Tanggal:** 2026-05-12
+**Konteks:** Kimi audit post-handoff
+**Kesalahan:** Dokumen handoff Claude menyatakan production = migancore:0.3. Audit live VPS menunjukkan production = migancore:0.7c.
+**Root Cause:** Handoff dokumen tidak di-update setelah Cycle 4-7c. 0.7c adalah hasil Cycle 7 series (terakhir sebelum rollback).
+**Fix:**
+1. Semua handoff WAJIB verifikasi live state via VPS audit
+2. Health endpoint harus expose production model name
+3. Tracker di-update setiap cycle promote/rollback
+**Prevention:** curl http://api/health | jq .model = single source of truth.
+
+---
+
+## Lesson #188: Eval with System Prompt = False Positive for Identity
+
+**Tanggal:** 2026-05-12
+**Konteks:** Identity eval methodology review
+**Kesalahan:** Eval gate selalu inject SOUL.md sebagai system prompt. Model pass identitas karena parroting prompt, bukan karena weight-embedded identity.
+**Root Cause:** Test tidak membedakan prompt-following vs weight-embedded knowledge.
+**Fix:**
+1. Identity eval MANDATORY tanpa system prompt (EMPTY)
+2. Prompt-following eval = terpisah (WITH system prompt)
+3. Kedua-duanya harus pass untuk promote
+**Prevention:** Eval script harus ada 2 mode: --with-soul dan --without-soul.
+
+---
+
+## Lesson #189: 0.7c WITHOUT System Prompt Falls Back to Qwen by Alibaba
+
+**Tanggal:** 2026-05-12
+**Konteks:** Live identity test on migancore:0.7c
+**Kesalahan:** 0.7c dianggap stable production model. Tapi tanpa SOUL.md, model bilang Saya Qwen asisten virtual Alibaba Cloud.
+**Root Cause:** 0.7c tidak punya identity yang di-embed di weights. Identitas hanya via prompt injection.
+**Implikasi:** White-label client yang ganti system prompt = identitas lenyap. Clone = jadi Qwen.
+**Fix:** SFT identity anchor (Lesson #173) MANDATORY sebelum white-label.
+**Prevention:** Identity weight-embedded = gate promotion.
+
+---
+
+## Lesson #190: Disk Space Crisis Corrupts GGUF Files
+
+**Tanggal:** 2026-05-12
+**Konteks:** GGUF conversion during sequential merge fix
+**Kesalahan:** Disk 100% penuh (388GB/388GB) saat convert_hf_to_gguf.py berjalan. Output file 15GB ter-create tapi isinya zeros (sparse file).
+**Root Cause:** Linux create file dengan allocate — alokasi metadata tanpa write data. Disk penuh = write gagal silently.
+**Fix:**
+1. Monitor disk sebelum conversion: df -h /
+2. Minimum 30GB free untuk 7B model GGUF
+3. Cleanup backup lama sebelum conversion
+**Result:** Hapus backup lama → 102GB free → conversion sukses.
+**Prevention:** Pre-flight disk check mandatory untuk semua model operations.
+
+---
+
+*Lessons #191+ await future failures and successes.*
+*Last updated: Day 72e · 2026-05-12 · by Kimi*
