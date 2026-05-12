@@ -9,9 +9,9 @@
 | Key | Value |
 |-----|-------|
 | **Today** | Day 71d · 2026-05-08 (BETA-READY sprint) |
-| **Production Brain** | `migancore:0.3` — Qwen2.5-7B LoRA, weighted_avg 0.9082, Cycle 3 ← STAYS |
-| **Cycle 7b Result** | ❌ ROLLBACK — voice 0.771 (+0.050), Q5=0.609, weighted_avg 0.8870 (gate 0.92). Root cause: Q5 brief gap |
-| **Cycle 7c Result** | ❌ ROLLBACK — voice 0.789 (Δ+0.018), Q5=0.625 (Δ+0.016), w_avg 0.8829 (Δ-0.004 vs C7b WORSE). Lessons #172-175 |
+| **Production Brain** | `migancore:0.7c` — Qwen2.5-7B LoRA, Cycle 7c rollback survivor ← STAYS |
+| **Cycle 7c Result** | ❌ ROLLBACK — voice 0.789, Q5=0.625, w_avg 0.8829. 6 consecutive rollbacks since Cycle 3 |
+| **0.8 Identity Collapse** | 🔴 CRITICAL — Model said "Saya Claude/ChatGPT". Reverted to 0.7c. See IDENTITY_COLLAPSE_INCIDENT_2026-05-12.md |
 | **Frontend Sprint** | ✅ LIVE — Service Worker + PWA + ErrorBoundary + Offline UX (TTFB 318→45ms, -86%) + Babel pre-compile (-600KB) |
 | **Brain Performance** | ✅ 50%+ latency cut: semantic tool filter (29→6) + keep_alive 30m + tool policies seeded + 180s timeout |
 | **Telemetry** | ✅ /v1/system/{status,metrics} live — brain version, tool count, latency p50/p95, cache stats |
