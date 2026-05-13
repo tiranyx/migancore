@@ -1903,6 +1903,35 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
 
 
 # ---------------------------------------------------------------------------
+# M1.7 — Dev Organ signal: fire proposal on unexpected tool failures
+# ---------------------------------------------------------------------------
+
+# Dedup set: track (skill_id, error_fingerprint) combos seen in last 5 min.
+# Prevents proposal spam from flapping tools.
+_signal_dedup: dict[str, float] = {}
+_SIGNAL_COOLDOWN_S = 300  # 5 minutes between proposals for same tool+error
+
+
+async def _fire_tool_failure_signal(tenant_id: str, skill_id: str, error: str) -> None:
+    """Background coroutine — creates a Dev Organ proposal for an unexpected tool error."""
+    import time
+    key = f"{skill_id}:{error[:80]}"
+    now = time.monotonic()
+    if now - _signal_dedup.get(key, 0) < _SIGNAL_COOLDOWN_S:
+        return  # already proposed recently
+    _signal_dedup[key] = now
+
+    try:
+        from deps.db import tenant_session
+        from services.proposal_signal import signal_tool_failure
+        async with tenant_session(tenant_id) as db:
+            await signal_tool_failure(db, skill_id, error, context={"tenant_id": tenant_id})
+        logger.info("dev_organ.signal.tool_failure.sent", skill=skill_id)
+    except Exception as sig_exc:
+        logger.warning("dev_organ.signal.tool_failure.failed", error=str(sig_exc))
+
+
+# ---------------------------------------------------------------------------
 # Executor
 # ---------------------------------------------------------------------------
 
@@ -1973,6 +2002,10 @@ class ToolExecutor:
             return {"result": None, "error": str(exc), "success": False}
         except Exception as exc:
             logger.error("tool.unexpected", skill=skill_id, error=str(exc))
+            # M1.7: fire Dev Organ proposal — best-effort, never blocks the caller
+            asyncio.create_task(
+                _fire_tool_failure_signal(self.ctx.tenant_id, skill_id, str(exc))
+            )
             return {"result": None, "error": f"Unexpected error: {exc}", "success": False}
 
 
