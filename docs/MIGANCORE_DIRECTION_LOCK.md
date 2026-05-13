@@ -123,7 +123,33 @@ conversation/data -> preference pairs -> ORPO training -> eval gate -> promote o
 This is the foundation for "AI that learns from its own experience", but the
 claim must stay grounded: each promotion must pass explicit eval gates.
 
-## 8. Agent Rules
+## 8. Self-Improvement Dev Organ
+
+MiganCore's self-improvement loop must evolve from model-only training into a
+full Dev Organ:
+
+```text
+observe -> diagnose -> propose -> sandbox patch -> test -> iterate -> validate -> promote -> monitor -> learn
+```
+
+The Dev Organ may create tools, patch workflows, update prompts, prepare code
+changes, and write tests. It must never edit live production directly. A change
+can move toward production only when it has a problem statement, hypothesis,
+test evidence, risk classification, validation gates, and rollback plan.
+
+Autonomy unlocks by tier:
+
+| Tier | Scope |
+|---|---|
+| 0 | Observe and summarize. |
+| 1 | Propose changes and classify risk. |
+| 2 | Patch in sandbox/branch and run QA. |
+| 3 | Promote low-risk changes only after every gate passes. Disabled by default. |
+| 4 | Promote high-risk changes only after owner approval. |
+
+Canonical reference: `docs/SELF_IMPROVEMENT_NORTHSTAR.md`.
+
+## 9. Agent Rules
 
 When an agent works on MiganCore:
 
@@ -135,4 +161,3 @@ When an agent works on MiganCore:
 6. Record findings, lessons, tests, eval results, and rollback plans.
 7. Before deployment, report git status, diff stat, tests, deploy command, and rollback plan.
 8. If multiple agents are active, use one main implementor and keep others as QA/review.
-
