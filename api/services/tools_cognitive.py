@@ -568,18 +568,135 @@ async def _knowledge_discover(args: dict, ctx) -> str:
 
 
 # ---------------------------------------------------------------------------
+# M1.7 Coding Tools — code_analyze, code_debug, code_review, propose_improvement
+# ---------------------------------------------------------------------------
+
+async def _code_analyze(args: dict, ctx) -> str:
+    from services.teacher_api import call_teacher, is_teacher_available
+    code = args.get("code", "").strip()
+    language = args.get("language", "auto")
+    focus = args.get("focus", "all")
+    if not code:
+        return "ERROR: code wajib diisi"
+    system = (
+        f"Kamu adalah senior code reviewer. Analisis kode "
+        f"{'ini' if language == 'auto' else language} berikut.\n"
+        f"Focus: {focus}. Output format:\n"
+        "**ISSUES DITEMUKAN:**\n"
+        "- [CRITICAL/HIGH/MEDIUM/LOW] Deskripsi issue dan lokasi\n"
+        "**REKOMENDASI:**\n"
+        "- Fix konkret per issue\n"
+        "**SUMMARY:** Satu kalimat penilaian keseluruhan."
+    )
+    teacher = "gemini" if is_teacher_available("gemini") else "claude"
+    try:
+        return await call_teacher(teacher, prompt=f"```\n{code[:4000]}\n```", system=system, max_tokens=1000)
+    except Exception as e:
+        return f"ERROR code_analyze: {e}"
+
+
+async def _code_debug(args: dict, ctx) -> str:
+    from services.teacher_api import call_teacher, is_teacher_available
+    code = args.get("code", "").strip()
+    error = args.get("error", "").strip()
+    context = args.get("context", "")
+    if not code or not error:
+        return "ERROR: code dan error wajib diisi"
+    system = (
+        "Kamu adalah expert debugger. Analisis bug ini.\n"
+        "Output:\n"
+        "**ROOT CAUSE:** Penjelasan teknis penyebab error\n"
+        "**TRACE:** Step-by-step kenapa error terjadi\n"
+        "**FIX:** Kode yang sudah diperbaiki (full function/class)\n"
+        "**PREVENTION:** Cara hindari di masa depan"
+    )
+    prompt = f"Code:\n```\n{code[:3000]}\n```\n\nError:\n{error[:500]}\n\nContext: {context[:500]}"
+    teacher = "gemini" if is_teacher_available("gemini") else "claude"
+    try:
+        return await call_teacher(teacher, prompt=prompt, system=system, max_tokens=1200)
+    except Exception as e:
+        return f"ERROR code_debug: {e}"
+
+
+async def _code_review(args: dict, ctx) -> str:
+    from services.teacher_api import call_teacher, is_teacher_available
+    code = args.get("code", "").strip()
+    context = args.get("context", "")
+    style = args.get("style", "standard")
+    if not code:
+        return "ERROR: code wajib diisi"
+    depth = {"quick": 500, "standard": 1000, "thorough": 1500}.get(style, 1000)
+    system = (
+        f"Kamu adalah senior engineer melakukan code review "
+        f"{'singkat' if style == 'quick' else 'menyeluruh'}.\n"
+        f"Context: {context or 'General code review'}\n"
+        "Output:\n"
+        "**VERDICT:** LGTM ✅ / Request Changes ⚠️ / Block 🚫\n"
+        "**HIGHLIGHTS:** Apa yang bagus dari kode ini\n"
+        "**ISSUES:** Issues dengan inline reference (baris/fungsi)\n"
+        "**SUGGESTIONS:** Perbaikan konkret dengan contoh kode"
+    )
+    teacher = "gemini" if is_teacher_available("gemini") else "claude"
+    try:
+        return await call_teacher(teacher, prompt=f"```\n{code[:4000]}\n```", system=system, max_tokens=depth)
+    except Exception as e:
+        return f"ERROR code_review: {e}"
+
+
+async def _propose_improvement(args: dict, ctx) -> str:
+    import httpx
+    from config import settings
+    title = args.get("title", "").strip()
+    problem = args.get("problem", "").strip()
+    if not title or not problem:
+        return "ERROR: title dan problem wajib diisi"
+    payload = {
+        "title": title,
+        "problem": problem,
+        "hypothesis": args.get("hypothesis", ""),
+        "touched_paths": args.get("touched_paths", []),
+        "rollback_plan": args.get("rollback_plan", "revert ke commit sebelumnya"),
+        "source": args.get("source", "auto"),
+        "created_by": getattr(ctx, "agent_id", None) or "core_brain",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "http://localhost:8000/v1/sandbox/proposals",
+                json=payload,
+                headers={"X-Admin-Key": settings.ADMIN_SECRET_KEY or ""},
+            )
+        if resp.status_code == 201:
+            data = resp.json()
+            return (
+                f"✅ Proposal berhasil dibuat!\n"
+                f"ID: {data['id']}\n"
+                f"Risk: {data['risk_level']}\n"
+                f"Stage: {data['stage']}\n"
+                f"Cek di Playground: https://app.migancore.com/sandbox.html"
+            )
+        return f"ERROR: API returned {resp.status_code}: {resp.text[:200]}"
+    except Exception as e:
+        return f"ERROR propose_improvement: {e}"
+
+
+# ---------------------------------------------------------------------------
 # Registry export — imported by tool_executor.py
 # ---------------------------------------------------------------------------
 
 COGNITIVE_TOOLS = {
-    "tavily_search":     _tavily_search,
-    "serper_search":     _serper_search,
-    "think":             _think,
-    "synthesize":        _synthesize,
-    "teacher_ask":       _teacher_ask,
-    "multi_teacher":     _multi_teacher,
-    "calculate":         _calculate,
-    "run_python":        _run_python,
-    "extract_insights":  _extract_insights,
-    "knowledge_discover": _knowledge_discover,
+    "tavily_search":       _tavily_search,
+    "serper_search":       _serper_search,
+    "think":               _think,
+    "synthesize":          _synthesize,
+    "teacher_ask":         _teacher_ask,
+    "multi_teacher":       _multi_teacher,
+    "calculate":           _calculate,
+    "run_python":          _run_python,
+    "extract_insights":    _extract_insights,
+    "knowledge_discover":  _knowledge_discover,
+    "code_analyze":        _code_analyze,
+    "code_debug":          _code_debug,
+    "code_review":         _code_review,
+    "propose_improvement": _propose_improvement,
 }
