@@ -144,6 +144,15 @@ async def chat(
     episodic_results = await retrieve_episodic_context(agent_id=agent_id, query=data.message)
     episodic_context = format_episodic_context(episodic_results)
 
+    # Day 73: KG recall — prepend known facts to episodic context
+    try:
+        from services.kg_extractor import recall_for_prompt as _kg_recall
+        _kg_ctx = await _kg_recall(tenant_id=tenant_id, user_text=data.message)
+        if _kg_ctx:
+            episodic_context = _kg_ctx + episodic_context
+    except Exception:
+        pass
+
     system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks, episodic_context, current_user)
 
     conversation, history = await _get_or_create_conversation(
@@ -625,6 +634,24 @@ async def chat_stream(
             )
             _background_tasks.add(_t)
             _t.add_done_callback(_background_tasks.discard)
+
+            # Day 73: KG extraction — learn facts from every response
+            try:
+                from services.kg_extractor import extract_and_store as _kg_extract
+                _kg_t = asyncio.create_task(
+                    _kg_extract(
+                        tenant_id=tenant_id,
+                        conversation_id=str(conversation_id),
+                        assistant_text=full_text,
+                        user_text=data.message,
+                        ollama_url=settings.OLLAMA_URL,
+                        model=settings.DEFAULT_MODEL,
+                    )
+                )
+                _background_tasks.add(_kg_t)
+                _kg_t.add_done_callback(_background_tasks.discard)
+            except Exception as _kg_exc:
+                logger.debug("chat.kg_skip", error=str(_kg_exc)[:60])
 
             # Day 53 — telemetry: engine, TTFB, sustained throughput.
             _stream_total_s = asyncio.get_event_loop().time() - _stream_t0

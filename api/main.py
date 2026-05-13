@@ -283,6 +283,59 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("tool_relevance.boot_failed", error=str(exc))
 
+    # 9c. Day 73: Auto-training watchdog — triggers GPU training when real data threshold met
+    auto_train_task = None
+    try:
+        from services.auto_train_watchdog import watchdog_loop as auto_train_loop
+        auto_train_task = asyncio.create_task(auto_train_loop())
+        logger.info("auto_train.watchdog.started")
+    except Exception as exc:
+        logger.warning("auto_train.watchdog.start_failed", error=str(exc))
+
+    # 9d. Day 73: Apply DB migration 028 (chat KG tables) if not yet applied
+    try:
+        from sqlalchemy import text
+        from models.base import engine
+        async with engine.begin() as conn:
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS chat_entities (
+                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    tenant_id UUID NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    entity_type VARCHAR(64) NOT NULL DEFAULT 'CONCEPT',
+                    mention_count INTEGER NOT NULL DEFAULT 1,
+                    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (tenant_id, name, entity_type)
+                )
+            """))
+            await conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chat_entities_tenant ON chat_entities (tenant_id, mention_count DESC)
+            """))
+            await conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chat_entities_name ON chat_entities (tenant_id, LOWER(name))
+            """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS chat_relations (
+                    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    tenant_id UUID NOT NULL,
+                    subject TEXT NOT NULL,
+                    predicate TEXT NOT NULL,
+                    object TEXT NOT NULL,
+                    conversation_id UUID,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """))
+            await conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chat_relations_tenant ON chat_relations (tenant_id, created_at DESC)
+            """))
+            await conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_chat_relations_subject ON chat_relations (tenant_id, subject)
+            """))
+        logger.info("chat_kg.tables.ensured")
+    except Exception as exc:
+        logger.warning("chat_kg.tables.ensure_failed", error=str(exc))
+
     # 10. Day 61: License validation at startup (GAP-03 Phase 2)
     #     Inspired by Ixonomic coin minting â€” each ADO instance carries a
     #     cryptographically signed license.json (HMAC-SHA256). Offline-capable.

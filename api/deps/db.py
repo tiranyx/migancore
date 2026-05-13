@@ -36,6 +36,19 @@ async def set_tenant_context(session: AsyncSession, tenant_id: str) -> None:
 
 
 @asynccontextmanager
+async def get_admin_db():
+    """Context manager: yield a session without RLS (superuser cross-tenant queries).
+
+    Uses the same DATABASE_URL (ado superuser) but skips tenant context so
+    background workers can query across all tenants — distillation, watchdog, etc.
+    """
+    if _base.AsyncSessionLocal is None:
+        raise RuntimeError("Database engine not initialized. Call init_engine() first.")
+    async with _base.AsyncSessionLocal() as session:
+        yield session
+
+
+@asynccontextmanager
 async def tenant_session(tenant_id: str | None):
     """Context manager: yield a DB session with RLS tenant context set.
     

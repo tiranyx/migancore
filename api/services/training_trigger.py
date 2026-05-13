@@ -47,8 +47,11 @@ MIN_SFT_PAIRS = 50
 MIN_DPO_PAIRS = 30
 MAX_DAILY_TRAIN_BUDGET_USD = 15.0
 
-# Vast.ai config
-VAST_API_KEY = os.environ.get("VAST_API_KEY", settings.RUNPOD_API_KEY)  # fallback
+# Vast.ai config — read from secrets file (same pattern as cycle7c_orpo_vast.py)
+_VAST_KEY_PATH = "/opt/secrets/migancore/vastai_api_key"
+VAST_API_KEY = os.environ.get("VAST_API_KEY") or (
+    open(_VAST_KEY_PATH).read().strip() if os.path.exists(_VAST_KEY_PATH) else ""
+)
 
 
 @dataclass
