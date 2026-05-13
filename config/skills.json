@@ -968,6 +968,157 @@
           "topic"
         ]
       }
+    },
+    {
+      "id": "code_analyze",
+      "name": "Code Analyze",
+      "description": "MANDATORY untuk analisis kode: review kualitas, temukan bug, security issue, performance bottleneck, dan saran perbaikan. Dukung Python, JS/TS, SQL, Bash. Output: daftar issues (severity: critical/high/medium/low) + rekomendasi konkret.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Kode yang ingin dianalisis"
+          },
+          "language": {
+            "type": "string",
+            "description": "python|javascript|typescript|sql|bash|auto",
+            "default": "auto"
+          },
+          "focus": {
+            "type": "string",
+            "description": "security|performance|quality|bugs|all",
+            "default": "all"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "permissions": [
+        "code.execute"
+      ],
+      "npc_assignable": true,
+      "cost_estimate": "free (local analysis)"
+    },
+    {
+      "id": "code_debug",
+      "name": "Code Debug",
+      "description": "MANDATORY untuk debug: terima kode + error message + context, hasilkan root cause analysis, step-by-step trace, dan solusi fix siap pakai. Lebih mendalam dari code_analyze — fokus pada error spesifik.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Kode yang bermasalah"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message atau traceback"
+          },
+          "context": {
+            "type": "string",
+            "description": "Informasi tambahan: environment, input, expected output",
+            "default": ""
+          }
+        },
+        "required": [
+          "code",
+          "error"
+        ]
+      },
+      "permissions": [
+        "code.execute"
+      ],
+      "npc_assignable": true,
+      "cost_estimate": "free (local analysis)"
+    },
+    {
+      "id": "code_review",
+      "name": "Code Review (Full)",
+      "description": "Full code review seperti senior engineer: architecture, patterns, naming, tests, docs, security, performance. Output: structured review dengan LGTM / Request Changes + inline comments.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Kode yang ingin di-review (paste full file atau diff)"
+          },
+          "context": {
+            "type": "string",
+            "description": "Tujuan kode ini, PR description, atau area fokus",
+            "default": ""
+          },
+          "style": {
+            "type": "string",
+            "description": "quick|standard|thorough",
+            "default": "standard"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "permissions": [
+        "code.execute"
+      ],
+      "npc_assignable": true,
+      "cost_estimate": "free (local analysis)"
+    },
+    {
+      "id": "propose_improvement",
+      "name": "Propose Improvement (Dev Organ)",
+      "description": "MANDATORY ketika ADO menemukan masalah, bug, atau peluang perbaikan sistem: kirim improvement proposal ke Sandbox queue untuk direview Fahmi. Proposal akan muncul di Playground UI. Jangan perbaiki produksi langsung — selalu propose dulu.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Judul singkat improvement (max 100 char)"
+          },
+          "problem": {
+            "type": "string",
+            "description": "Masalah yang ditemukan — spesifik dan faktual"
+          },
+          "hypothesis": {
+            "type": "string",
+            "description": "Hipotesis solusi dan cara validasinya"
+          },
+          "touched_paths": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "File/path yang akan diubah",
+            "default": []
+          },
+          "rollback_plan": {
+            "type": "string",
+            "description": "Cara rollback jika gagal",
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "description": "tool_failure|eval_failure|owner_command|auto",
+            "default": "auto"
+          }
+        },
+        "required": [
+          "title",
+          "problem"
+        ]
+      },
+      "permissions": [
+        "sandbox.propose"
+      ],
+      "npc_assignable": true,
+      "cost_estimate": "free (local DB write)"
     }
   ]
 }

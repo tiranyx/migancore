@@ -38,7 +38,11 @@
         "extract_insights",
         "knowledge_discover",
         "web_search",
-        "python_repl"
+        "python_repl",
+        "code_analyze",
+        "code_debug",
+        "code_review",
+        "propose_improvement"
       ],
       "persona_locked": true,
       "visibility": "public",

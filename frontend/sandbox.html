@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiganCore — Dev Organ Playground</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      --bg-0: #07100e;
+      --bg-1: #0d1f1a;
+      --bg-2: #142920;
+      --bg-3: #1a3429;
+      --orange: #ff8a24;
+      --orange-dim: rgba(255,138,36,0.12);
+      --orange-border: rgba(255,138,36,0.4);
+      --green: #2fe39a;
+      --green-dim: rgba(47,227,154,0.10);
+      --green-border: rgba(47,227,154,0.25);
+      --red: #ff5577;
+      --red-dim: rgba(255,85,119,0.12);
+      --yellow: #f5cc44;
+      --yellow-dim: rgba(245,204,68,0.12);
+      --blue: #5fb8ff;
+      --purple: #b58aff;
+      --text: #e9f5ee;
+      --text-dim: #93b3a5;
+      --text-faint: #5a7a6e;
+      --border: rgba(47,227,154,0.15);
+      --mono: 'JetBrains Mono', monospace;
+      --display: 'Orbitron', sans-serif;
+      --sans: 'Inter', sans-serif;
+      --radius: 8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg-0); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+    body { overflow-x: hidden; padding: 0 0 4rem; }
+
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+      background: var(--bg-1); position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    .brand { display: flex; align-items: center; gap: 0.75rem; font-family: var(--display);
+      font-weight: 900; letter-spacing: 0.12em; font-size: 0.9rem; color: var(--orange); }
+    .brand-mark { width: 24px; height: 24px; border-radius: 6px;
+      background: linear-gradient(135deg, var(--orange), var(--green)); flex-shrink: 0; }
+    .nav-links { display: flex; gap: 1.25rem; align-items: center; }
+    .nav-link { color: var(--text-dim); text-decoration: none; font-size: 0.85rem;
+      font-weight: 500; transition: color .2s; }
+    .nav-link:hover, .nav-link.active { color: var(--green); }
+    .admin-key-input { background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0.4rem 0.75rem; color: var(--text);
+      font-family: var(--mono); font-size: 0.78rem; width: 200px; outline: none; }
+    .admin-key-input:focus { border-color: var(--orange-border); }
+
+    main { max-width: 1300px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .page-header { margin-bottom: 2rem; }
+    .page-title { font-family: var(--display); font-size: 1.6rem; font-weight: 700;
+      color: var(--orange); letter-spacing: 0.08em; margin-bottom: 0.35rem; }
+    .page-subtitle { color: var(--text-dim); font-size: 0.92rem; max-width: 600px; line-height: 1.5; }
+
+    /* Stats bar */
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1rem; text-align: center; }
+    .stat-value { font-family: var(--mono); font-size: 1.8rem; font-weight: 700;
+      color: var(--green); line-height: 1; margin-bottom: 0.3rem; }
+    .stat-label { color: var(--text-faint); font-size: 0.75rem; text-transform: uppercase;
+      letter-spacing: 0.08em; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+    .filter-btn { padding: 0.4rem 0.9rem; border-radius: 20px; font-size: 0.82rem; font-weight: 500;
+      cursor: pointer; border: 1px solid var(--border); background: var(--bg-2);
+      color: var(--text-dim); transition: all .2s; }
+    .filter-btn:hover { border-color: var(--green-border); color: var(--green); }
+    .filter-btn.active { background: var(--green-dim); border-color: var(--green-border);
+      color: var(--green); }
+    .refresh-btn { margin-left: auto; padding: 0.4rem 0.9rem; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer; border: 1px solid var(--orange-border);
+      background: var(--orange-dim); color: var(--orange); transition: all .2s; }
+    .refresh-btn:hover { background: rgba(255,138,36,0.2); }
+
+    /* Proposals grid */
+    .proposals-grid { display: grid; gap: 1rem; }
+
+    .proposal-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.25rem 1.5rem; transition: border-color .2s; }
+    .proposal-card:hover { border-color: var(--green-border); }
+    .proposal-card.risk-critical { border-left: 3px solid var(--red); }
+    .proposal-card.risk-high { border-left: 3px solid var(--orange); }
+    .proposal-card.risk-medium { border-left: 3px solid var(--yellow); }
+    .proposal-card.risk-low { border-left: 3px solid var(--green); }
+
+    .card-header { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 0.9rem; }
+    .card-title { font-weight: 600; font-size: 0.95rem; color: var(--text); flex: 1; line-height: 1.4; }
+    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.6rem; border-radius: 12px;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; flex-shrink: 0; }
+    .badge-risk-critical { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,85,119,.3); }
+    .badge-risk-high { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange-border); }
+    .badge-risk-medium { background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(245,204,68,.3); }
+    .badge-risk-low { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+    .badge-stage { background: var(--bg-3); color: var(--text-dim); border: 1px solid var(--border);
+      margin-left: 0.4rem; }
+    .badge-verdict-approved { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+    .badge-verdict-rejected { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,85,119,.3); }
+    .badge-pending { background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(245,204,68,.3); }
+
+    .card-meta { display: flex; gap: 1.2rem; font-size: 0.78rem; color: var(--text-faint);
+      margin-bottom: 0.8rem; flex-wrap: wrap; }
+    .card-meta span { display: flex; align-items: center; gap: 0.3rem; }
+
+    .card-problem { color: var(--text-dim); font-size: 0.85rem; line-height: 1.55;
+      margin-bottom: 0.8rem; }
+    .card-hypothesis { color: var(--text-faint); font-size: 0.8rem; font-style: italic;
+      line-height: 1.5; margin-bottom: 0.9rem; padding-left: 0.75rem;
+      border-left: 2px solid var(--border); }
+
+    .card-paths { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+    .path-chip { background: var(--bg-2); border: 1px solid var(--border); border-radius: 4px;
+      padding: 0.15rem 0.5rem; font-family: var(--mono); font-size: 0.72rem; color: var(--blue); }
+
+    .gates-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+    .gate-chip { display: flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.55rem;
+      border-radius: 4px; font-size: 0.72rem; font-family: var(--mono); }
+    .gate-pass { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+    .gate-fail { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,85,119,.3); }
+
+    .card-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.75rem; padding-top: 0.75rem;
+      border-top: 1px solid var(--border); }
+    .btn-approve { padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; background: var(--green-dim); border: 1px solid var(--green-border);
+      color: var(--green); transition: all .2s; }
+    .btn-approve:hover { background: rgba(47,227,154,0.2); }
+    .btn-reject { padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; background: var(--red-dim); border: 1px solid rgba(255,85,119,.3);
+      color: var(--red); transition: all .2s; }
+    .btn-reject:hover { background: rgba(255,85,119,0.2); }
+    .btn-detail { padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.82rem; font-weight: 500;
+      cursor: pointer; background: var(--bg-2); border: 1px solid var(--border);
+      color: var(--text-dim); transition: all .2s; }
+    .btn-detail:hover { border-color: var(--border); color: var(--text); }
+
+    /* Submit panel */
+    .submit-panel { background: var(--bg-1); border: 1px solid var(--orange-border);
+      border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+    .submit-title { font-family: var(--display); font-size: 0.85rem; color: var(--orange);
+      letter-spacing: 0.08em; font-weight: 700; margin-bottom: 1rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .form-field { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-label { font-size: 0.76rem; color: var(--text-faint); text-transform: uppercase;
+      letter-spacing: 0.06em; }
+    .form-input { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.5rem 0.75rem; color: var(--text); font-size: 0.85rem; font-family: var(--sans);
+      outline: none; width: 100%; }
+    .form-input:focus { border-color: var(--orange-border); }
+    textarea.form-input { resize: vertical; min-height: 80px; font-family: var(--mono); font-size: 0.8rem; }
+    .form-full { grid-column: 1 / -1; }
+    .btn-submit { padding: 0.55rem 1.5rem; border-radius: 6px; font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; background: var(--orange-dim); border: 1px solid var(--orange-border);
+      color: var(--orange); transition: all .2s; letter-spacing: 0.04em; }
+    .btn-submit:hover { background: rgba(255,138,36,0.22); }
+
+    /* Detail modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100;
+      display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .modal { background: var(--bg-1); border: 1px solid var(--orange-border); border-radius: 12px;
+      max-width: 700px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 2rem; }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 1.25rem; }
+    .modal-title { font-family: var(--display); font-size: 1rem; font-weight: 700; color: var(--orange);
+      letter-spacing: 0.06em; line-height: 1.4; flex: 1; }
+    .modal-close { background: none; border: none; color: var(--text-faint); font-size: 1.3rem;
+      cursor: pointer; padding: 0.2rem 0.5rem; transition: color .2s; }
+    .modal-close:hover { color: var(--text); }
+    .modal-section { margin-bottom: 1.25rem; }
+    .modal-section-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-faint); margin-bottom: 0.4rem; }
+    .modal-section-body { color: var(--text-dim); font-size: 0.85rem; line-height: 1.6; }
+    pre.modal-code { background: var(--bg-0); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.75rem; font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim);
+      overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+    .verdict-area { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; }
+    .verdict-notes { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.5rem 0.75rem; color: var(--text); font-size: 0.85rem; font-family: var(--sans);
+      resize: vertical; min-height: 60px; outline: none; width: 100%; }
+    .verdict-notes:focus { border-color: var(--orange-border); }
+    .verdict-actions { display: flex; gap: 0.6rem; }
+
+    .empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-faint); }
+    .empty-state h3 { font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--text-dim); }
+    .loading { text-align: center; padding: 3rem; color: var(--text-faint); font-family: var(--mono); }
+    .error-msg { background: var(--red-dim); border: 1px solid rgba(255,85,119,.3); border-radius: 6px;
+      padding: 0.75rem 1rem; color: var(--red); font-size: 0.85rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    const API = window.location.origin.replace(/:\d+$/, ':8000');
+
+    function riskBadge(risk) {
+      return <span className={`badge badge-risk-${risk}`}>{risk.toUpperCase()}</span>;
+    }
+
+    function stageBadge(stage) {
+      return <span className="badge badge-stage">{stage}</span>;
+    }
+
+    function verdictBadge(verdict) {
+      if (!verdict) return <span className="badge badge-pending">PENDING REVIEW</span>;
+      return <span className={`badge badge-verdict-${verdict}`}>{verdict.toUpperCase()}</span>;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    // ---- Stats Bar ----
+    function StatsBar({ stats }) {
+      if (!stats) return null;
+      const sc = stats.stage_counts || {};
+      const rc = stats.risk_counts || {};
+      const items = [
+        { label: 'Pending Review', value: stats.pending_creator_review ?? 0, color: 'var(--yellow)' },
+        { label: 'Proposed', value: sc.proposed ?? 0, color: 'var(--blue)' },
+        { label: 'Approved', value: (sc.diagnosed || 0) + (sc.patched || 0) + (sc.tested || 0) + (sc.validated || 0) + (sc.deployable || 0), color: 'var(--green)' },
+        { label: 'Deployed', value: sc.deployed ?? 0, color: 'var(--purple)' },
+        { label: 'Blocked', value: sc.blocked ?? 0, color: 'var(--red)' },
+        { label: 'High Risk', value: (rc.high || 0) + (rc.critical || 0), color: 'var(--orange)' },
+      ];
+      return (
+        <div className="stats-bar">
+          {items.map(i => (
+            <div key={i.label} className="stat-card">
+              <div className="stat-value" style={{ color: i.color }}>{i.value}</div>
+              <div className="stat-label">{i.label}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ---- Proposal Card ----
+    function ProposalCard({ p, onApprove, onReject, onDetail }) {
+      return (
+        <div className={`proposal-card risk-${p.risk_level}`}>
+          <div className="card-header">
+            <div className="card-title">{p.title}</div>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {riskBadge(p.risk_level)}
+              {stageBadge(p.stage)}
+              {verdictBadge(p.creator_verdict)}
+            </div>
+          </div>
+          <div className="card-meta">
+            <span>📡 {p.source}</span>
+            <span>🤖 {p.created_by}</span>
+            <span>🕐 {formatDate(p.created_at)}</span>
+            {p.gate_run_at && <span>🧪 Gates: {formatDate(p.gate_run_at)}</span>}
+          </div>
+          <div className="card-problem">{p.problem}</div>
+          {p.hypothesis && (
+            <div className="card-hypothesis">💡 {p.hypothesis}</div>
+          )}
+          {p.touched_paths && p.touched_paths.length > 0 && (
+            <div className="card-paths">
+              {p.touched_paths.map(path => (
+                <span key={path} className="path-chip">{path}</span>
+              ))}
+            </div>
+          )}
+          {p.gate_results && p.gate_results.length > 0 && (
+            <div className="gates-row">
+              {p.gate_results.map(g => (
+                <span key={g.name} className={`gate-chip ${g.passed ? 'gate-pass' : 'gate-fail'}`}>
+                  {g.passed ? '✓' : '✗'} {g.name}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="card-actions">
+            <button className="btn-detail" onClick={() => onDetail(p)}>Detail</button>
+            {!p.creator_verdict && (
+              <>
+                <button className="btn-approve" onClick={() => onApprove(p)}>✓ Approve</button>
+                <button className="btn-reject" onClick={() => onReject(p)}>✗ Reject</button>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ---- Detail Modal ----
+    function DetailModal({ proposal, onClose, onApprove, onReject }) {
+      const [notes, setNotes] = useState('');
+      if (!proposal) return null;
+
+      return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+          <div className="modal">
+            <div className="modal-header">
+              <div className="modal-title">{proposal.title}</div>
+              <button className="modal-close" onClick={onClose}>✕</button>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+              {riskBadge(proposal.risk_level)}
+              {stageBadge(proposal.stage)}
+              {verdictBadge(proposal.creator_verdict)}
+            </div>
+
+            <div className="modal-section">
+              <div className="modal-section-label">Problem</div>
+              <div className="modal-section-body">{proposal.problem}</div>
+            </div>
+
+            <div className="modal-section">
+              <div className="modal-section-label">Hypothesis</div>
+              <div className="modal-section-body">{proposal.hypothesis || '—'}</div>
+            </div>
+
+            {proposal.touched_paths && proposal.touched_paths.length > 0 && (
+              <div className="modal-section">
+                <div className="modal-section-label">Files Touched</div>
+                <pre className="modal-code">{proposal.touched_paths.join('\n')}</pre>
+              </div>
+            )}
+
+            {proposal.tests && proposal.tests.length > 0 && (
+              <div className="modal-section">
+                <div className="modal-section-label">Test Plan</div>
+                <pre className="modal-code">{proposal.tests.join('\n')}</pre>
+              </div>
+            )}
+
+            <div className="modal-section">
+              <div className="modal-section-label">Rollback Plan</div>
+              <div className="modal-section-body">{proposal.rollback_plan || '—'}</div>
+            </div>
+
+            {proposal.gate_results && proposal.gate_results.length > 0 && (
+              <div className="modal-section">
+                <div className="modal-section-label">QA Gates</div>
+                <div className="gates-row">
+                  {proposal.gate_results.map(g => (
+                    <span key={g.name} className={`gate-chip ${g.passed ? 'gate-pass' : 'gate-fail'}`}>
+                      {g.passed ? '✓' : '✗'} {g.name} {g.detail ? `— ${g.detail}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {proposal.creator_verdict && (
+              <div className="modal-section">
+                <div className="modal-section-label">Creator Decision</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {verdictBadge(proposal.creator_verdict)}
+                  {proposal.creator_notes && (
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+                      "{proposal.creator_notes}"
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!proposal.creator_verdict && (
+              <div className="modal-section">
+                <div className="modal-section-label">Your Decision</div>
+                <div className="verdict-area">
+                  <textarea
+                    className="verdict-notes"
+                    placeholder="Catatan / feedback (opsional)..."
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                  />
+                  <div className="verdict-actions">
+                    <button className="btn-approve" onClick={() => onApprove(proposal, notes)}>✓ Approve</button>
+                    <button className="btn-reject" onClick={() => onReject(proposal, notes)}>✗ Reject</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-faint)', marginTop: '1.5rem' }}>
+              ID: {proposal.id} · Dibuat: {formatDate(proposal.created_at)} · Sumber: {proposal.source}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ---- Submit Form ----
+    function SubmitForm({ adminKey, onSubmitted }) {
+      const [open, setOpen] = useState(false);
+      const [form, setForm] = useState({ title: '', problem: '', hypothesis: '', touched_paths: '', rollback_plan: '' });
+      const [submitting, setSubmitting] = useState(false);
+      const [error, setError] = useState('');
+
+      const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+      const handleSubmit = async () => {
+        if (!form.title.trim() || !form.problem.trim()) {
+          setError('Title dan Problem wajib diisi.'); return;
+        }
+        setSubmitting(true); setError('');
+        try {
+          const paths = form.touched_paths.split('\n').map(s => s.trim()).filter(Boolean);
+          const resp = await fetch(`${API}/v1/sandbox/proposals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+            body: JSON.stringify({
+              title: form.title,
+              problem: form.problem,
+              hypothesis: form.hypothesis,
+              touched_paths: paths,
+              rollback_plan: form.rollback_plan,
+              source: 'manual',
+              created_by: 'creator',
+            }),
+          });
+          if (!resp.ok) throw new Error((await resp.json()).detail || resp.statusText);
+          setForm({ title: '', problem: '', hypothesis: '', touched_paths: '', rollback_plan: '' });
+          setOpen(false);
+          onSubmitted();
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      return (
+        <div className="submit-panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="submit-title">+ PROPOSAL BARU</div>
+            <button className="btn-detail" onClick={() => setOpen(!open)} style={{ fontSize: '0.82rem' }}>
+              {open ? 'Tutup' : 'Buat Proposal Manual'}
+            </button>
+          </div>
+          {open && (
+            <div style={{ marginTop: '1rem' }}>
+              {error && <div className="error-msg">{error}</div>}
+              <div className="form-row">
+                <div className="form-field form-full">
+                  <label className="form-label">Title *</label>
+                  <input className="form-input" value={form.title} onChange={e => set('title', e.target.value)} placeholder="Singkat, max 100 char" />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-field form-full">
+                  <label className="form-label">Problem *</label>
+                  <textarea className="form-input" value={form.problem} onChange={e => set('problem', e.target.value)} placeholder="Apa masalahnya? Spesifik dan faktual." />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-field form-full">
+                  <label className="form-label">Hypothesis</label>
+                  <textarea className="form-input" value={form.hypothesis} onChange={e => set('hypothesis', e.target.value)} placeholder="Bagaimana solusinya? Bagaimana cara validasinya?" />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-field">
+                  <label className="form-label">Files Touched (satu baris = satu path)</label>
+                  <textarea className="form-input" value={form.touched_paths} onChange={e => set('touched_paths', e.target.value)} placeholder="api/services/tool_executor.py&#10;config/skills.json" style={{ minHeight: '60px' }} />
+                </div>
+                <div className="form-field">
+                  <label className="form-label">Rollback Plan</label>
+                  <textarea className="form-input" value={form.rollback_plan} onChange={e => set('rollback_plan', e.target.value)} placeholder="Cara rollback jika gagal..." style={{ minHeight: '60px' }} />
+                </div>
+              </div>
+              <button className="btn-submit" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'MENGIRIM...' : 'KIRIM PROPOSAL →'}
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ---- Main App ----
+    function App() {
+      const [adminKey, setAdminKey] = useState(localStorage.getItem('mgn_admin_key') || '');
+      const [proposals, setProposals] = useState([]);
+      const [stats, setStats] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+      const [filter, setFilter] = useState('pending');
+      const [selectedProposal, setSelectedProposal] = useState(null);
+
+      const saveKey = (k) => { setAdminKey(k); localStorage.setItem('mgn_admin_key', k); };
+
+      const headers = useCallback(() => ({
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey,
+      }), [adminKey]);
+
+      const fetchData = useCallback(async () => {
+        if (!adminKey) return;
+        setLoading(true); setError('');
+        try {
+          const params = new URLSearchParams({ limit: '50', offset: '0' });
+          if (filter === 'pending') params.set('verdict', 'pending');
+          else if (filter === 'approved') params.set('verdict', 'approved');
+          else if (filter === 'rejected') params.set('verdict', 'rejected');
+          else if (filter !== 'all') params.set('stage', filter);
+
+          const [propResp, statsResp] = await Promise.all([
+            fetch(`${API}/v1/sandbox/proposals?${params}`, { headers: headers() }),
+            fetch(`${API}/v1/sandbox/stats`, { headers: headers() }),
+          ]);
+
+          if (propResp.status === 401) { setError('Admin key salah.'); setLoading(false); return; }
+          if (!propResp.ok) throw new Error(`${propResp.status}: ${propResp.statusText}`);
+
+          const propData = await propResp.json();
+          const statsData = statsResp.ok ? await statsResp.json() : null;
+
+          setProposals(propData.items || []);
+          setStats(statsData);
+        } catch (e) {
+          setError(e.message);
+        } finally {
+          setLoading(false);
+        }
+      }, [adminKey, filter, headers]);
+
+      useEffect(() => { fetchData(); }, [fetchData]);
+
+      const handleVerdict = async (proposal, verdict, notes = '') => {
+        try {
+          const resp = await fetch(`${API}/v1/sandbox/proposals/${proposal.id}/verdict`, {
+            method: 'PATCH',
+            headers: headers(),
+            body: JSON.stringify({ verdict, notes }),
+          });
+          if (!resp.ok) throw new Error((await resp.json()).detail || resp.statusText);
+          setSelectedProposal(null);
+          fetchData();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      };
+
+      const filters = [
+        { key: 'pending', label: '⏳ Pending Review' },
+        { key: 'approved', label: '✓ Approved' },
+        { key: 'rejected', label: '✗ Rejected' },
+        { key: 'all', label: 'All' },
+        { key: 'deployed', label: '🚀 Deployed' },
+        { key: 'blocked', label: '🚫 Blocked' },
+      ];
+
+      return (
+        <>
+          <div className="top-bar">
+            <div className="brand">
+              <div className="brand-mark" />
+              MIGANCORE · PLAYGROUND
+            </div>
+            <div className="nav-links">
+              <a href="/chat.html" className="nav-link">Chat</a>
+              <a href="/dashboard.html" className="nav-link">Admin</a>
+              <a href="/sandbox.html" className="nav-link active">Sandbox</a>
+            </div>
+            <input
+              className="admin-key-input"
+              type="password"
+              placeholder="Admin key..."
+              value={adminKey}
+              onChange={e => saveKey(e.target.value)}
+            />
+          </div>
+
+          <main>
+            <div className="page-header">
+              <h1 className="page-title">DEV ORGAN PLAYGROUND</h1>
+              <p className="page-subtitle">
+                MiganCore mengusulkan perbaikan di sini. Kamu review, approve atau reject.
+                Proposal yang di-approve masuk ke sandbox QA sebelum ke live production.
+              </p>
+            </div>
+
+            {!adminKey && (
+              <div className="error-msg">
+                Masukkan admin key untuk melihat proposals. Key tersimpan di browser.
+              </div>
+            )}
+
+            {adminKey && (
+              <>
+                <StatsBar stats={stats} />
+
+                <SubmitForm adminKey={adminKey} onSubmitted={fetchData} />
+
+                <div className="filter-bar">
+                  {filters.map(f => (
+                    <button
+                      key={f.key}
+                      className={`filter-btn ${filter === f.key ? 'active' : ''}`}
+                      onClick={() => setFilter(f.key)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                  <button className="refresh-btn" onClick={fetchData}>↻ Refresh</button>
+                </div>
+
+                {error && <div className="error-msg">{error}</div>}
+
+                {loading ? (
+                  <div className="loading">Memuat proposals...</div>
+                ) : proposals.length === 0 ? (
+                  <div className="empty-state">
+                    <h3>Tidak ada proposal</h3>
+                    <p>MiganCore belum mengusulkan perbaikan, atau semua sudah direview.</p>
+                  </div>
+                ) : (
+                  <div className="proposals-grid">
+                    {proposals.map(p => (
+                      <ProposalCard
+                        key={p.id}
+                        p={p}
+                        onApprove={(p) => handleVerdict(p, 'approved')}
+                        onReject={(p) => handleVerdict(p, 'rejected')}
+                        onDetail={setSelectedProposal}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </main>
+
+          {selectedProposal && (
+            <DetailModal
+              proposal={selectedProposal}
+              onClose={() => setSelectedProposal(null)}
+              onApprove={(p, notes) => handleVerdict(p, 'approved', notes)}
+              onReject={(p, notes) => handleVerdict(p, 'rejected', notes)}
+            />
+          )}
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
