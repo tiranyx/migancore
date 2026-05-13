@@ -70,3 +70,13 @@ Scope: M1.5 Autonomy Hardening, starting from `docs/MIGANCORE_AI_HANDOFF_2026-05
 - ONAMIX validated: Node/NPM present, `/app/hyperx/bin/hyperx.js` present, `/app/hyperx/bin/hyperx-mcp.js` present, `onamix.mcp.lifespan_started` logged.
 - Found startup contract errors: `core_brain` and `aria_template` referenced `web_search` and `python_repl`, but `skills.json` had no schemas for those IDs.
 - Patched `config/skills.json` to restore lightweight schemas for `web_search` and `python_repl`.
+
+### 00:57 WIB - Hotfix deploy + QA pass
+- Pushed hotfix commit `6c7991a`.
+- Pulled `6c7991a` on VPS and restarted API with `BUILD_COMMIT_SHA=6c7991a`.
+- Health endpoint returned `status=healthy`, `model=migancore:0.7c`, `commit_sha=6c7991a`, `day=M1.5`.
+- Log scan showed no `contracts.boot.error`, `Traceback`, or startup failure.
+- ONAMIX MCP startup confirmed again.
+- ONAMIX CLI smoke test fetched `https://example.com` with HTTP 200 and non-empty text.
+- Creator flag validated in production DB: `fahmiwol@gmail.com | is_creator=t | role=owner`.
+- KG tables currently still show `0` rows; this is expected until new chat turns trigger fact extraction.
