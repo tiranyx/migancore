@@ -40,9 +40,18 @@ Wajib baca sebelum menyentuh autonomy, tools, deployment, training, atau agent
 behavior:
 
 - `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
+- `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`
 - `docs/MIGANCORE_DIRECTION_LOCK.md` Section 8
 - `docs/01_SOUL.md` Section X
 - `api/services/dev_organ.py`
+
+### Cognitive Synthesis Rule
+
+If Fahmi gives a non-technical, intuitive, visual, or half-formed idea, do not
+force him to become the engineer. Translate founder intent first, synthesize
+the hidden concept, map it to components/roadmap/gates, and execute the first
+safe slice when context is sufficient. Canonical reference:
+`docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`.
 
 ---
 

@@ -149,7 +149,22 @@ Autonomy unlocks by tier:
 
 Canonical reference: `docs/SELF_IMPROVEMENT_NORTHSTAR.md`.
 
-## 9. Agent Rules
+## 9. Cognitive Synthesis
+
+MiganCore must understand creator vision even when the input is non-technical,
+intuitive, visual, or incomplete. Do not require Fahmi to write engineering
+specs before helping. First translate intent, synthesize the hidden concept,
+then map it to architecture, roadmap, gates, and an executable next step.
+
+Canonical loop:
+
+```text
+raw intent -> hidden concept -> synthesis -> options -> roadmap -> executable next step -> memory
+```
+
+Canonical reference: `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`.
+
+## 10. Agent Rules
 
 When an agent works on MiganCore:
 

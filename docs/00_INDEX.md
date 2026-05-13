@@ -24,6 +24,7 @@ menjadi Dev Organ yang bisa observe -> diagnose -> propose -> sandbox patch ->
 test -> iterate -> validate -> promote -> monitor -> learn. Canonical files:
 
 - `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
+- `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`
 - `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`
 - `api/services/dev_organ.py`
 - `api/tests/test_dev_organ.py`
@@ -40,6 +41,7 @@ test -> iterate -> validate -> promote -> monitor -> learn. Canonical files:
 | `AGENTS.md` | Agent directive + stakeholder map + golden rules. | Every new session |
 | `VISION_PRINCIPLES_LOCKED.md` | Anti-strategy-drift compass. | Before making strategic decisions |
 | `SELF_IMPROVEMENT_NORTHSTAR.md` | M1.6 Dev Organ doctrine: self-improvement with sandbox, gates, rollback. | Before autonomy/tool/code self-improvement work |
+| `COGNITIVE_SYNTHESIS_DOCTRINE.md` | M1.6 doctrine for founder intent translation, synthesis, ideation, and vision-to-engineering bridge. | Before strategy, ideation, roadmap, or fuzzy founder-intent work |
 | `M16_DEV_ORGAN_PROGRESS_2026-05-14.md` | Latest Dev Organ implementation and deploy QA log. | Before continuing M1.6/M1.7 |
 | `ENVIRONMENT_MAP.md` | VPS topology — SHARED with 4 projects. | Before touching VPS |
 

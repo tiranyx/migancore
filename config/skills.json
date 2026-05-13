@@ -753,7 +753,7 @@
     {
       "id": "think",
       "name": "Think (Structured Reasoning)",
-      "description": "MANDATORY untuk analisis kompleks dan keputusan multi-faktor. ADO berpikir step-by-step. Mode: analyze|decide|debug|plan|critique.",
+      "description": "MANDATORY untuk analisis kompleks, founder-intent translation, dan keputusan multi-faktor. ADO berpikir terstruktur. Mode: analyze|decide|debug|plan|critique.",
       "mcp_compatible": true,
       "schema": {
         "type": "object",
@@ -776,7 +776,7 @@
     {
       "id": "synthesize",
       "name": "Synthesize (Multi-source)",
-      "description": "Sintesis dari beberapa sumber menjadi insight. Auto-search jika topic diberikan tanpa sources.",
+      "description": "Sintesis dari beberapa sumber, ide mentah, atau bahasa founder non-teknis menjadi insight, konsep, roadmap, dan next action. Auto-search jika topic diberikan tanpa sources.",
       "mcp_compatible": true,
       "schema": {
         "type": "object",
@@ -917,7 +917,7 @@
     {
       "id": "extract_insights",
       "name": "Extract Insights",
-      "description": "Ekstrak insight dan fakta kunci dari teks panjang. Gunakan setelah web_read atau onamix_get.",
+      "description": "Ekstrak insight, pola, implikasi, dan sinyal strategis dari teks panjang. Gunakan setelah web_read, onamix_get, atau handoff/brief panjang.",
       "mcp_compatible": true,
       "schema": {
         "type": "object",

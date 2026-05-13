@@ -108,3 +108,33 @@ The service defines:
 3. Add an admin/API endpoint to view pending proposals.
 4. Add a sandbox branch/worktree patcher for approved proposals.
 5. Add low-risk auto-promote only after owner unlocks it explicitly.
+
+## Cognitive Synthesis Teaching Pass
+
+### Trigger
+
+Fahmi clarified that the original ADO vision includes a capability he cannot
+fully express in technical language: MiganCore must synthesize ideas, cognition,
+and founder intent into clear systems and action.
+
+### Added
+
+- `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`
+- `docs/01_SOUL.md` Section X Cognitive Synthesis Doctrine
+- Runtime prompt injection in `api/routers/chat.py`
+- Cognitive tool descriptions updated in `config/skills.json`
+- Core persona values updated in `config/agents.json`
+- Initial SFT examples in `training/cognitive_synthesis_sft_20.jsonl`
+
+### Core Loop
+
+```text
+raw intent -> hidden concept -> synthesis -> options -> roadmap -> executable next step -> memory
+```
+
+### Purpose
+
+This teaches MiganCore to act as the bridge between Fahmi's non-technical
+vision language and engineering reality: infer intent, name the capability,
+structure the system, choose the safe first slice, execute when appropriate,
+and record meaningful direction.
