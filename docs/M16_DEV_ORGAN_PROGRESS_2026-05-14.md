@@ -54,6 +54,27 @@ The service defines:
 - Passed: `python -m pytest api/tests/test_dev_organ.py -q -o addopts=""`
 - Result: `5 passed in 0.04s`
 
+### Commit, Push, Deploy, QA
+
+- Committed local changes as `d612d5b`:
+  `feat(self-improvement): add dev organ north star`.
+- Pushed `d612d5b` to `origin/main`.
+- Pulled `d612d5b` on VPS `/opt/ado`.
+- Rebuilt and restarted API with `BUILD_COMMIT_SHA=d612d5b` and
+  `BUILD_DAY=M1.6`.
+- Production health passed:
+  `status=healthy`, `version=0.5.16`, `model=migancore:0.7c`,
+  `commit_sha=d612d5b`, `day=M1.6`.
+- Production runtime import passed:
+  `docker compose exec -T api python -B -m services.dev_organ`.
+- Startup log scan showed `contracts.boot.ok`, `onamix.mcp.lifespan_started`,
+  and no startup traceback.
+- Note: container pytest for `tests/test_dev_organ.py` is not directly runnable
+  inside the production image because the image copies `api/` contents to
+  `/app`, while repo-local tests import `api.services.*` from the repo root.
+  Local focused pytest remains the canonical verification for this additive
+  service until test packaging is normalized.
+
 ## Current Status
 
 - Dev Organ doctrine: added.
@@ -72,4 +93,3 @@ The service defines:
 3. Add an admin/API endpoint to view pending proposals.
 4. Add a sandbox branch/worktree patcher for approved proposals.
 5. Add low-risk auto-promote only after owner unlocks it explicitly.
-
