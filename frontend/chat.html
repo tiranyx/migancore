@@ -375,6 +375,29 @@
       white-space: nowrap;
     }
 
+    .nav-links {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 0.6rem;
+    }
+    .nav-link-btn {
+      flex: 1;
+      padding: 0.35rem 0.25rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      text-align: center;
+      text-decoration: none;
+      transition: all 0.2s;
+      display: block;
+    }
+    .nav-link-btn:hover { border-color: var(--green); color: var(--green); }
+
     .btn-logout {
       width: 100%;
       padding: 0.45rem;
@@ -3111,6 +3134,16 @@ function ChatScreen({
   }, "\xD7")))), /*#__PURE__*/React.createElement("div", {
     className: "sidebar-footer"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "nav-links"
+  }, /*#__PURE__*/React.createElement("a", {
+    className: "nav-link-btn",
+    href: "/dashboard.html",
+    title: "Admin Dashboard"
+  }, "ADMIN"), /*#__PURE__*/React.createElement("a", {
+    className: "nav-link-btn",
+    href: "/sandbox.html",
+    title: "Dev Organ Playground"
+  }, "SANDBOX")), /*#__PURE__*/React.createElement("div", {
     className: "user-row"
   }, /*#__PURE__*/React.createElement("div", {
     className: "user-avatar"
