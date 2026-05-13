@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = None    # Claude (judge + alt teacher)
     OPENAI_API_KEY: Optional[str] = None       # GPT (alt teacher)
     KIMI_API_KEY: Optional[str] = None         # Moonshot Kimi K2 (primary teacher — bilingual ID)
+    KIMI_ENABLED: bool = False                 # Disabled by default until balance is recharged
     GEMINI_API_KEY: Optional[str] = None       # Google Gemini (cheap teacher)
     # Day 67: Search API keys for cognitive tools
     TAVILY_API_KEY: Optional[str] = None       # Tavily real-time search (tavily_search tool)

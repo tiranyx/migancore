@@ -41,9 +41,9 @@ logger = structlog.get_logger()
 # Path config — must match docker-compose mount
 #   /opt/sidix/tools/hyperx-browser  ->  /app/hyperx (rw)
 # ---------------------------------------------------------------------------
-ONAMIX_DIR = "/app/hyperx"
-ONAMIX_MCP_BIN = f"{ONAMIX_DIR}/bin/hyperx-mcp.js"
-NODE_BIN = "/usr/bin/node"
+ONAMIX_DIR = os.getenv("ONAMIX_DIR", "/app/hyperx")
+ONAMIX_MCP_BIN = os.getenv("ONAMIX_MCP_BIN", f"{ONAMIX_DIR}/bin/hyperx-mcp.js")
+NODE_BIN = os.getenv("NODE_BIN", "/usr/bin/node")
 
 # Respawn policy
 _RESPAWN_BACKOFFS = [1.0, 2.0, 4.0, 8.0, 16.0, 30.0]

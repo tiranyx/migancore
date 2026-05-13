@@ -28,11 +28,12 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Install ONLY runtime system deps (no build tools, no chromium, no nodejs)
+# Install ONLY runtime system deps.
 # Weasyprint needs: libcairo2, libpango, libgdk-pixbuf, libffi
 # PostgreSQL needs: libpq5 (runtime, not dev)
 # Fonts needed for PDF generation
 # gosu needed for entrypoint (drop privileges to non-root)
+# nodejs/npm needed for ONAMIX (mounted hyperx-browser MCP/CLI runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libcairo2 \
@@ -44,6 +45,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu \
     gosu \
     curl \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder

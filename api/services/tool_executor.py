@@ -764,14 +764,15 @@ async def _analyze_image(args: dict, ctx: ToolContext) -> dict:
 #
 # ADO alignment: user-owned tool = first-class citizen, modular brain principle.
 # ---------------------------------------------------------------------------
-ONAMIX_DIR = "/app/hyperx"  # underlying binary path (not user-facing)
-ONAMIX_BIN = f"{ONAMIX_DIR}/bin/hyperx.js"
+ONAMIX_DIR = os.getenv("ONAMIX_DIR", "/app/hyperx")  # underlying binary path (not user-facing)
+ONAMIX_BIN = os.getenv("ONAMIX_BIN", f"{ONAMIX_DIR}/bin/hyperx.js")
+NODE_BIN = os.getenv("NODE_BIN", "/usr/bin/node")
 ONAMIX_TIMEOUT_S = 45  # Day 67: increased 30→45s — Wikipedia pages can be slow to scrape
 
 
 def _onamix_available() -> bool:
     """Check if ONAMIX (HYPERX binary) is mounted + node available."""
-    return os.path.isfile(ONAMIX_BIN) and Path("/usr/bin/node").exists()
+    return os.path.isfile(ONAMIX_BIN) and Path(NODE_BIN).exists()
 
 
 async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S, json_mode: bool = True) -> str | dict:
@@ -790,7 +791,7 @@ async def _onamix_run(args: list[str], timeout: int = ONAMIX_TIMEOUT_S, json_mod
     base_args = ["--no-history"]
     if json_mode:
         base_args.insert(0, "--json")
-    cmd = ["node", ONAMIX_BIN, *base_args, *args]
+    cmd = [NODE_BIN, ONAMIX_BIN, *base_args, *args]
     try:
         proc = await asyncio.to_thread(
             subprocess.run, cmd,
@@ -820,7 +821,7 @@ async def _onamix_run_search(args: list[str], timeout: int = ONAMIX_TIMEOUT_S) -
     import subprocess
     if not _onamix_available():
         raise ToolExecutionError(f"ONAMIX not available — expected mount at {ONAMIX_DIR}")
-    cmd = ["node", ONAMIX_BIN, *args]
+    cmd = [NODE_BIN, ONAMIX_BIN, *args]
     try:
         proc = await asyncio.to_thread(
             subprocess.run, cmd,
@@ -1888,13 +1889,14 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "onamix_get": _onamix_get,
     "onamix_search": _onamix_search,
     "onamix_scrape": _onamix_scrape,
-    # Day 44 — ONAMIX MCP-only tools DISABLED (MCP client not running in container)
-    # "onamix_post": _onamix_post,
-    # "onamix_crawl": _onamix_crawl,
-    # "onamix_history": _onamix_history,
-    # "onamix_links": _onamix_links,
-    # "onamix_config": _onamix_config,
-    # "onamix_multi": _onamix_multi,
+    # Day 44 — ONAMIX MCP-only tools. Runtime image now ships Node.js and
+    # entrypoint bootstraps mounted hyperx-browser dependencies if needed.
+    "onamix_post": _onamix_post,
+    "onamix_crawl": _onamix_crawl,
+    "onamix_history": _onamix_history,
+    "onamix_links": _onamix_links,
+    "onamix_config": _onamix_config,
+    "onamix_multi": _onamix_multi,
     # Day 67 — Cognitive Tools
     **COGNITIVE_TOOLS,
 }

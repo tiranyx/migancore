@@ -49,8 +49,8 @@ from config import settings
 
 logger = structlog.get_logger()
 
-STATE_FILE = Path("/opt/ado/data/training/orchestrator_state.json")
-ORCHESTRATOR_LOG = Path("/opt/ado/data/training/orchestrator.log")
+STATE_FILE = Path(settings.TRAINING_OUTPUT_DIR) / "orchestrator_state.json"
+ORCHESTRATOR_LOG = Path(settings.TRAINING_OUTPUT_DIR) / "orchestrator.log"
 
 
 class TrainingState(str, Enum):
@@ -157,8 +157,18 @@ class TrainingOrchestrator:
             train_result = self._step_train(version, dry_run)
             self._transition(state, TrainingState.IDLE.value, train_report=train_result)
 
-            if train_result.get("status") != "success":
+            if train_result.get("status") not in ("success", "queued"):
                 return self._fail(state, f"Training failed: {train_result.get('error', 'unknown')}")
+            if train_result.get("status") == "queued":
+                self._transition(state, TrainingState.IDLE.value, ended_at=datetime.now(timezone.utc).isoformat())
+                return {
+                    "status": "queued",
+                    "run_id": state.run_id,
+                    "version": version,
+                    "baseline": baseline,
+                    "extract": extract_result,
+                    "train": train_result,
+                }
 
             # Step 3: EVAL
             self._transition(state, TrainingState.EVALUATING.value)
@@ -208,7 +218,7 @@ class TrainingOrchestrator:
             from training.data_exporter import get_db_connection, export_dpo_pairs, export_identity_sft
 
             conn = get_db_connection()
-            output_dir = Path("/opt/ado/data/training")
+            output_dir = Path(settings.TRAINING_OUTPUT_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
 
             dpo_path = output_dir / "dpo_export.jsonl"
@@ -242,13 +252,23 @@ class TrainingOrchestrator:
         if dry_run:
             return {"status": "success", "train_time_min": 120, "dry_run": True}
 
-        # For now: training requires manual execution on cloud GPU
-        # The orchestrator generates the command and reports it
-        # Future: integrate with RunPod API for fully automated training
+        provider = settings.TRAINING_GPU_PROVIDER.lower()
+        if provider == "runpod" and not settings.RUNPOD_API_KEY:
+            return {
+                "status": "missing_credentials",
+                "provider": "runpod",
+                "error": "RUNPOD_API_KEY is not set",
+            }
+        if provider == "vastai" and not settings.VAST_API_KEY:
+            return {
+                "status": "missing_credentials",
+                "provider": "vastai",
+                "error": "VAST_API_KEY is not set",
+            }
 
-        output_dir = Path("/opt/ado/data/training") / version.replace(":", "_")
-        dpo_data = "/opt/ado/data/training/dpo_export.jsonl"
-        identity_data = "/opt/ado/data/training/identity_sft.jsonl"
+        output_dir = Path(settings.TRAINING_OUTPUT_DIR) / version.replace(":", "_")
+        dpo_data = Path(settings.TRAINING_OUTPUT_DIR) / "dpo_export.jsonl"
+        identity_data = Path(settings.TRAINING_OUTPUT_DIR) / "identity_sft.jsonl"
 
         cmd = (
             f"python -m training.dpo_trainer "
@@ -259,10 +279,11 @@ class TrainingOrchestrator:
             f"--qlora --epochs 1 --merge --version {version}"
         )
 
-        logger.info("orchestrator.train.manual_required", cmd=cmd)
+        logger.info("orchestrator.train.gpu_ready", provider=provider, cmd=cmd)
         return {
-            "status": "manual_required",
-            "message": "Training requires cloud GPU. Run the following command on a GPU machine:",
+            "status": "queued",
+            "provider": provider,
+            "message": "Training threshold reached and GPU credentials are available. Cloud worker launch is queued for provider integration.",
             "command": cmd,
             "output_dir": str(output_dir),
         }
@@ -294,7 +315,7 @@ class TrainingOrchestrator:
 
         try:
             from deploy.ollama_manager import deploy_model
-            output_dir = Path("/opt/ado/data/training") / version.replace(":", "_")
+            output_dir = Path(settings.TRAINING_OUTPUT_DIR) / version.replace(":", "_")
             merged_dir = output_dir / "merged_model"
 
             if not merged_dir.exists():

@@ -79,7 +79,7 @@ BUDGET_DB_PATH = DATASET_DIR / "budget.db"
 JUDGE_DIFF_THRESHOLD = settings.DISTILL_MARGIN_THRESHOLD  # default 2.0
 
 # Min pairs to trigger training consideration
-TRIGGER_MIN_PAIRS = 50
+TRIGGER_MIN_PAIRS = settings.TRAINING_MIN_SFT_PAIRS
 
 # Max concurrent teacher calls (avoid rate limits)
 MAX_CONCURRENT_TEACHERS = 4
@@ -688,16 +688,60 @@ async def run_distillation_cycle(
     return report
 
 
-def should_trigger_training() -> bool:
-    """Check if we have enough new pairs to consider training."""
-    count = 0
+def training_pair_counts() -> dict[str, int]:
+    """Count rolling SFT and DPO pairs available for training."""
+    counts = {"sft": 0, "dpo": 0}
     if SFT_DATASET_PATH.exists():
         with open(SFT_DATASET_PATH, "r", encoding="utf-8") as f:
-            for _ in f:
-                count += 1
-    # Simple heuristic: if dataset grew by TRIGGER_MIN_PAIRS since last train
-    # In production: track last_train_at and count records after that
-    return count >= TRIGGER_MIN_PAIRS
+            counts["sft"] = sum(1 for _ in f)
+    if DPO_DATASET_PATH.exists():
+        with open(DPO_DATASET_PATH, "r", encoding="utf-8") as f:
+            counts["dpo"] = sum(1 for _ in f)
+    return counts
+
+
+def should_trigger_training() -> bool:
+    """Check if rolling datasets meet configured training thresholds."""
+    counts = training_pair_counts()
+    return (
+        counts["sft"] >= settings.TRAINING_MIN_SFT_PAIRS
+        and counts["dpo"] >= settings.TRAINING_MIN_DPO_PAIRS
+    )
+
+
+async def maybe_auto_trigger_training() -> dict:
+    """Queue MiganForge when thresholds are met and auto-trigger is enabled."""
+    counts = training_pair_counts()
+    thresholds = {
+        "sft": settings.TRAINING_MIN_SFT_PAIRS,
+        "dpo": settings.TRAINING_MIN_DPO_PAIRS,
+    }
+    if not should_trigger_training():
+        result = {"status": "below_threshold", "counts": counts, "thresholds": thresholds}
+        logger.info("distill.training_trigger_not_ready", **result)
+        return result
+
+    if not settings.TRAINING_AUTO_TRIGGER:
+        result = {"status": "ready_auto_disabled", "counts": counts, "thresholds": thresholds}
+        logger.info("distill.training_trigger_ready", **result)
+        return result
+
+    provider = settings.TRAINING_GPU_PROVIDER.lower()
+    if provider == "runpod" and not settings.RUNPOD_API_KEY:
+        result = {"status": "blocked_missing_runpod_key", "counts": counts}
+        logger.warning("distill.training_trigger_blocked", **result)
+        return result
+    if provider == "vastai" and not settings.VAST_API_KEY:
+        result = {"status": "blocked_missing_vast_key", "counts": counts}
+        logger.warning("distill.training_trigger_blocked", **result)
+        return result
+
+    from services.training_orchestrator import TrainingOrchestrator
+
+    orchestrator = TrainingOrchestrator()
+    result = await asyncio.to_thread(orchestrator.run, False, False)
+    logger.info("distill.training_trigger_result", result=result)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -740,10 +784,8 @@ def main():
         )
         print(json.dumps(report, indent=2, default=str))
 
-        if should_trigger_training():
-            logger.info("distill.training_trigger_ready", pairs=TRIGGER_MIN_PAIRS)
-            # TODO: Queue training job (Vast.ai/RunPod API call)
-            # For now: just log. Human approval required for GPU spend.
+        trigger_report = await maybe_auto_trigger_training()
+        report["training_trigger"] = trigger_report
 
     asyncio.run(_run())
 

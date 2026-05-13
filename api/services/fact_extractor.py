@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 import structlog
 
 from services.letta import KNOWLEDGE_DEFAULT, KNOWLEDGE_LIMIT, update_block
+from services.knowledge_graph import write_memory_facts_to_kg
 from services.ollama import OllamaClient, OllamaError
 
 logger = structlog.get_logger()
@@ -147,12 +148,14 @@ async def maybe_update_knowledge_block(
         updated_knowledge = _trim_knowledge_if_needed(existing_knowledge, new_section)
 
         success = await update_block(letta_agent_id, "knowledge", updated_knowledge)
+        kg_report = await write_memory_facts_to_kg(letta_agent_id, new_facts)
         if success:
             logger.info(
                 "fact_extractor.knowledge_updated",
                 letta_id=letta_agent_id,
                 new_facts_count=new_facts.count("\n- ") + 1,
                 knowledge_len=len(updated_knowledge),
+                kg_status=kg_report.get("status"),
             )
 
     except Exception as exc:

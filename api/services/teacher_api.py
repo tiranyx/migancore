@@ -407,7 +407,7 @@ def is_teacher_available(teacher: str) -> bool:
     """Quick check: is API key configured for this teacher?"""
     keys = {
         "claude": settings.ANTHROPIC_API_KEY,
-        "kimi": settings.KIMI_API_KEY,
+        "kimi": settings.KIMI_API_KEY if settings.KIMI_ENABLED else None,
         "gpt": settings.OPENAI_API_KEY,
         "gemini": settings.GEMINI_API_KEY,
     }

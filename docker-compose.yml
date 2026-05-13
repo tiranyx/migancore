@@ -122,11 +122,21 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       KIMI_API_KEY: ${KIMI_API_KEY}
+      KIMI_ENABLED: ${KIMI_ENABLED:-false}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       TAVILY_API_KEY: ${TAVILY_API_KEY}        # Day 67: Tavily real-time search
       SERPER_API_KEY: ${SERPER_API_KEY}        # Day 67: Serper Google search
 
       # Day 37 — CAI judge backend selector (ollama|quorum)
+      # M1.5 - MiganForge autonomous training trigger
+      TRAINING_OUTPUT_DIR: ${TRAINING_OUTPUT_DIR:-/app/data/training}
+      TRAINING_EVAL_DIR: ${TRAINING_EVAL_DIR:-/app/eval}
+      TRAINING_AUTO_TRIGGER: ${TRAINING_AUTO_TRIGGER:-false}
+      TRAINING_AUTO_DEPLOY: ${TRAINING_AUTO_DEPLOY:-false}
+      TRAINING_GPU_PROVIDER: ${TRAINING_GPU_PROVIDER:-runpod}
+      RUNPOD_API_KEY: ${RUNPOD_API_KEY:-}
+      VAST_API_KEY: ${VAST_API_KEY:-}
+
       JUDGE_BACKEND: ${JUDGE_BACKEND:-ollama}
       JUDGE_QUORUM_REQUIRE_CONSENSUS: ${JUDGE_QUORUM_REQUIRE_CONSENSUS:-true}
       JWT_PRIVATE_KEY_PATH: /etc/ado/keys/private.pem
