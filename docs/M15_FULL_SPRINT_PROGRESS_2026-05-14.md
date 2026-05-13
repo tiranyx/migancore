@@ -64,3 +64,9 @@ Scope: M1.5 Autonomy Hardening, starting from `docs/MIGANCORE_AI_HANDOFF_2026-05
 ### 00:50 WIB - Release preflight
 - Ran `git pull --rebase --autostash origin main`.
 - Result: already up to date; no remote conflicts before commit.
+
+### 00:55 WIB - Production QA finding
+- Deployed commit `5bab088` to VPS and API became healthy.
+- ONAMIX validated: Node/NPM present, `/app/hyperx/bin/hyperx.js` present, `/app/hyperx/bin/hyperx-mcp.js` present, `onamix.mcp.lifespan_started` logged.
+- Found startup contract errors: `core_brain` and `aria_template` referenced `web_search` and `python_repl`, but `skills.json` had no schemas for those IDs.
+- Patched `config/skills.json` to restore lightweight schemas for `web_search` and `python_repl`.

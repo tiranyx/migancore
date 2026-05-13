@@ -66,6 +66,64 @@
       "cost_estimate": "free"
     },
     {
+      "id": "web_search",
+      "name": "Web Search",
+      "description": "Search the web for current or external information. Prefer ONAMIX Search for broad browsing, but keep this lightweight DuckDuckGo fallback available for agents that explicitly reference web_search.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 5,
+            "description": "Maximum result count"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "permissions": [
+        "web.search"
+      ],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    },
+    {
+      "id": "python_repl",
+      "name": "Python REPL",
+      "description": "Execute short Python snippets in the API container subprocess sandbox. Use for calculations, data transforms, and lightweight local automation.",
+      "handler": "builtin",
+      "mcp_compatible": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Python code to execute"
+          },
+          "timeout": {
+            "type": "integer",
+            "default": 30,
+            "description": "Timeout in seconds, capped by executor"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "permissions": [
+        "code.execute"
+      ],
+      "npc_assignable": true,
+      "cost_estimate": "free"
+    },
+    {
       "id": "read_file",
       "name": "Read File",
       "description": "MANDATORY for reading file content: invoke this function whenever the user asks to read, open, view, show, or check the content of a file. Returns the file contents as text (capped at 50KB). For directory listings, pass a directory path.",
