@@ -138,3 +138,23 @@ This teaches MiganCore to act as the bridge between Fahmi's non-technical
 vision language and engineering reality: infer intent, name the capability,
 structure the system, choose the safe first slice, execute when appropriate,
 and record meaningful direction.
+
+### Deploy + QA
+
+- Committed and pushed as `41471ba`:
+  `feat(cognition): teach founder intent synthesis`.
+- Pulled `41471ba` on VPS `/opt/ado`.
+- Rebuilt and restarted API with `BUILD_COMMIT_SHA=41471ba`,
+  `BUILD_DAY=M1.6`.
+- Production health passed:
+  `status=healthy`, `version=0.5.16`, `model=migancore:0.7c`,
+  `commit_sha=41471ba`, `day=M1.6`.
+- Runtime prompt verification passed:
+  `/app/routers/chat.py` contains `[COGNITIVE SYNTHESIS - MANDATORY]`.
+- Container compile passed with `PYTHONPYCACHEPREFIX=/tmp`:
+  `python -m py_compile /app/routers/chat.py`.
+- Container config validation passed:
+  `python -m json.tool /app/config/agents.json` and
+  `python -m json.tool /app/config/skills.json`.
+- Startup log scan showed `Application startup complete` and no
+  `contracts.boot.error` or traceback.
