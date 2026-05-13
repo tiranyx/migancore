@@ -5,6 +5,15 @@
 
 ---
 
+> **CURRENT NORTH STAR PING (2026-05-14 / M1.6):** This original 30-day roadmap
+> is historical. The active autonomy direction is now Dev Organ self-improvement:
+> observe -> diagnose -> propose -> sandbox patch -> test -> iterate ->
+> validate -> promote -> monitor -> learn. Continue from
+> `docs/SELF_IMPROVEMENT_NORTHSTAR.md`,
+> `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`, and `api/services/dev_organ.py`.
+
+---
+
 ## SPRINT OVERVIEW
 
 ```

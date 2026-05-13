@@ -6,6 +6,14 @@
 
 > **Open Core Engine for Self-Evolving AI Agents**
 
+**Current North Star Ping (M1.6 Dev Organ):** MiganCore sedang diarahkan menjadi
+ADO yang bukan hanya auto-training model, tapi juga bisa melakukan
+self-improvement terkontrol atas tubuhnya sendiri: observe -> diagnose ->
+propose -> sandbox patch -> test -> iterate -> validate -> promote -> monitor
+-> learn. Baca `docs/SELF_IMPROVEMENT_NORTHSTAR.md`,
+`docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`, dan `api/services/dev_organ.py`
+sebelum mengubah roadmap atau autonomy behavior.
+
 MiganCore adalah **pusat pengembangan dan produksi** ekosistem Tiranyx — sebuah *Autonomous Digital Organism* yang bisa berorkestrasi, belajar dari setiap interaksi, memperbaiki dirinya sendiri setiap minggu, dan melahirkan child agents dengan kepribadian unik.
 
 **Semua development berlangsung di `migancore.com`.** Domain lain (`sidixlab.com`, `mighan.com`, `tiranyx.com`) adalah **consumer/distribution channel** yang mengakses produk ini via API.

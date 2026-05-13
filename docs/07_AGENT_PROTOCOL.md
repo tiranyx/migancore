@@ -30,8 +30,17 @@ Setiap AI coding agent yang baru mulai bekerja di proyek ini **HARUS** mengikuti
 3. /docs/03_PRD.md           — Product requirements
 4. /docs/04_ARCHITECTURE.md  — Arsitektur teknis
 5. /docs/05_ERD_SCHEMA.md    — Database schema
-6. /docs/07_AGENT_PROTOCOL.md — INI DOKUMEN (kamu sedang baca ini)
+6. /docs/SELF_IMPROVEMENT_NORTHSTAR.md — M1.6 Dev Organ doctrine
+7. /docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md — latest Dev Organ QA/deploy log
+8. /docs/07_AGENT_PROTOCOL.md — INI DOKUMEN (kamu sedang baca ini)
 ```
+
+**Current North Star Ping:** autonomy work must follow the Dev Organ loop:
+observe -> diagnose -> propose -> sandbox patch -> test -> iterate -> validate
+-> promote -> monitor -> learn. High-risk changes require owner approval and
+rollback readiness. Read `docs/SELF_IMPROVEMENT_NORTHSTAR.md`,
+`docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`, and `api/services/dev_organ.py`
+before continuing tool/code/workflow self-improvement.
 
 ### Step 2: Cek Status Proyek
 ```bash

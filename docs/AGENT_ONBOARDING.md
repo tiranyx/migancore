@@ -30,6 +30,20 @@ git -C /c/migancore/migancore log --oneline -10
 
 **JANGAN SKIP LANGKAH 2.** Banyak bug hari kemarin disebabkan tidak baca environment dulu.
 
+### Current North Star Ping - M1.6 Dev Organ
+
+MiganCore sekarang punya arah eksplisit untuk self-improvement code/tool/workflow,
+bukan hanya model training: observe -> diagnose -> propose -> sandbox patch ->
+test -> iterate -> validate -> promote -> monitor -> learn.
+
+Wajib baca sebelum menyentuh autonomy, tools, deployment, training, atau agent
+behavior:
+
+- `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
+- `docs/MIGANCORE_DIRECTION_LOCK.md` Section 8
+- `docs/01_SOUL.md` Section X
+- `api/services/dev_organ.py`
+
 ---
 
 ## 🛡️ MANDATORY PROTOKOL (USER REQUIREMENT — JANGAN DILUPAKAN)

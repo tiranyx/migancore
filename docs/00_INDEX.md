@@ -11,10 +11,22 @@
 ```
 Step 1: Read this file (00_INDEX.md) — 2 menit
 Step 2: Read docs/AGENT_ONBOARDING.md — 10 menit
-Step 3: Read docs/DAY{N}_PLAN.md (latest day) — 5 menit
+Step 3: Read docs/SELF_IMPROVEMENT_NORTHSTAR.md + docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md — 7 menit
+Step 4: Read docs/DAY{N}_PLAN.md (latest day) — 5 menit
 ```
 
 **Baru setelah itu:** baca dokumen spesifik sesuai tugas.
+
+### Current North Star Ping - M1.6 Dev Organ
+
+Direction lock terbaru: MiganCore harus berevolusi dari self-training model
+menjadi Dev Organ yang bisa observe -> diagnose -> propose -> sandbox patch ->
+test -> iterate -> validate -> promote -> monitor -> learn. Canonical files:
+
+- `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
+- `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`
+- `api/services/dev_organ.py`
+- `api/tests/test_dev_organ.py`
 
 ---
 
@@ -27,6 +39,8 @@ Step 3: Read docs/DAY{N}_PLAN.md (latest day) — 5 menit
 | `AGENT_ONBOARDING.md` | Permanent protocol: lessons, checklist, owner profile, anti-patterns. | Every new session |
 | `AGENTS.md` | Agent directive + stakeholder map + golden rules. | Every new session |
 | `VISION_PRINCIPLES_LOCKED.md` | Anti-strategy-drift compass. | Before making strategic decisions |
+| `SELF_IMPROVEMENT_NORTHSTAR.md` | M1.6 Dev Organ doctrine: self-improvement with sandbox, gates, rollback. | Before autonomy/tool/code self-improvement work |
+| `M16_DEV_ORGAN_PROGRESS_2026-05-14.md` | Latest Dev Organ implementation and deploy QA log. | Before continuing M1.6/M1.7 |
 | `ENVIRONMENT_MAP.md` | VPS topology — SHARED with 4 projects. | Before touching VPS |
 
 ### B. LIVE OPERATIONAL STATUS (Check Daily)

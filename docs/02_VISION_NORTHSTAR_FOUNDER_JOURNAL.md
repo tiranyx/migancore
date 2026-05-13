@@ -13,6 +13,17 @@ Dalam 3 tahun, Tiranyx membangun infrastruktur di mana organisme digital ini buk
 
 ---
 
+## CURRENT NORTH STAR EXTENSION - M1.6 DEV ORGAN
+
+Per 2026-05-14, "tumbuh sendiri" berarti lebih luas dari weekly model
+training. MiganCore harus belajar memperbaiki tubuhnya sendiri secara
+terkontrol: observe -> diagnose -> propose -> sandbox patch -> test -> iterate
+-> validate -> promote -> monitor -> learn.
+
+Canonical reference: `docs/SELF_IMPROVEMENT_NORTHSTAR.md`.
+
+---
+
 ## VISI (5-Year Horizon)
 
 Mighan-Core menjadi **inti (ruh + akal) dari ekosistem agent digital** yang:

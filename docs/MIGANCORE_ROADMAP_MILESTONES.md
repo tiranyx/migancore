@@ -4,6 +4,24 @@
 
 ---
 
+## Current North Star Ping - M1.6 Dev Organ
+
+As of 2026-05-14, roadmap execution must include Dev Organ self-improvement:
+observe -> diagnose -> propose -> sandbox patch -> test -> iterate -> validate
+-> promote -> monitor -> learn.
+
+Canonical references:
+
+- `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
+- `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`
+- `api/services/dev_organ.py`
+
+Milestones touching tools, training, deployment, memory, auth, license, tenant
+isolation, or agent behavior must define risk level, validation gates, and
+rollback plan before promotion.
+
+---
+
 ## VISUAL ROADMAP
 
 ```

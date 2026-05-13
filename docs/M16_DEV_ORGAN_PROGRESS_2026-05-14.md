@@ -84,6 +84,21 @@ The service defines:
 - Focused tests: passed.
 - Live runtime integration: not connected yet by design.
 
+### Direction Ping Sweep
+
+- Added M1.6 Dev Organ "Current North Star Ping" references to the major
+  docs entry points so future agents do not miss the direction:
+  `README.md`, `docs/00_INDEX.md`, `docs/AGENT_ONBOARDING.md`,
+  `docs/AGENTS.md`, `docs/07_AGENT_PROTOCOL.md`, `docs/06_SPRINT_ROADMAP.md`,
+  `docs/MASTER_CONTEXT.md`, `docs/MASTER_HANDOFF.md`,
+  `docs/MIGANCORE_ROADMAP_MILESTONES.md`,
+  `docs/ROADMAP_BULAN2_BULAN3.md`,
+  `docs/02_VISION_NORTHSTAR_FOUNDER_JOURNAL.md`, and
+  `docs/VISION_PRINCIPLES_LOCKED.md`.
+- Verification command:
+  `rg -n "Current North Star Ping|CURRENT NORTH STAR|M1\\.6 Dev Organ|SELF_IMPROVEMENT_NORTHSTAR|Dev Organ" ...`
+  confirms the references are discoverable across the important docs.
+
 ## Next Steps
 
 1. Add proposal queue storage, likely `dev_organ_proposals` table or append-only

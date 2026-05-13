@@ -13,6 +13,13 @@
 > File ini tetap berguna untuk: Stakeholder map, Golden Rules, VPS Awareness (Section 9).
 > Untuk status terkini dan lessons, lihat AGENT_ONBOARDING.md.
 
+> **CURRENT NORTH STAR PING (M1.6):** Fahmi's current strategic direction is
+> self-improvement as a Dev Organ. MiganCore should learn to create tools and
+> improve its own code/workflow through sandboxed proposals, tests, validation
+> gates, rollback plans, and only then promotion. Never mutate live production
+> directly. Read `docs/SELF_IMPROVEMENT_NORTHSTAR.md` and
+> `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`.
+
 ---
 
 ## 1. STAKEHOLDER MAP (Understand WHO We Build For)

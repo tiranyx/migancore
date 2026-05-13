@@ -6,6 +6,22 @@
 
 ---
 
+## Current North Star Ping - M1.6 Dev Organ
+
+This roadmap remains useful, but the active execution pattern is now Dev Organ:
+MiganCore should learn to create tools and improve its own code/workflow through
+observe -> diagnose -> propose -> sandbox patch -> test -> iterate -> validate
+-> promote -> monitor -> learn.
+
+Before continuing Dev Mode, tool builder, marketplace, training, or auto-deploy
+work, read:
+
+- `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
+- `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`
+- `api/services/dev_organ.py`
+
+---
+
 ## 🧭 1. RE-ANCHOR ADO VISION (alignment check setiap fitur)
 
 > **MiganCore = Otak Inti AI yang modular**, bisa diadopsi/diturunkan oleh AI lain seperti **prosesor + otak manusia + sistem syaraf MCP**.

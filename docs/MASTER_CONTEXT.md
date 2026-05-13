@@ -8,6 +8,13 @@
 
 > This document is the "project RAM." It is designed to be read by coding agents in a single pass to understand the full state of the project. If you are picking up this project, **read this first**.
 
+> **CURRENT NORTH STAR PING (2026-05-14 / M1.6):** This file is stale as project
+> RAM. Before using any status below, read `docs/00_INDEX.md`,
+> `docs/AGENT_ONBOARDING.md`, `docs/SELF_IMPROVEMENT_NORTHSTAR.md`, and
+> `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`. Active direction: MiganCore is
+> becoming a Dev Organ that can propose, sandbox patch, test, validate, and
+> promote safe self-improvements with rollback gates.
+
 ---
 
 ## 1. PROJECT ESSENCE

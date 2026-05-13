@@ -67,6 +67,12 @@ THE MOAT: closed identity-evolution loop, no vendor can replicate
 
 **Self-cognitive + self-learning** = end-state. Teacher = scaffolding to get there, NOT the destination.
 
+**M1.6 Dev Organ extension:** The closed loop now also covers code, tools, and
+workflow improvement. The correct shape is observe -> diagnose -> propose ->
+sandbox patch -> test -> iterate -> validate -> promote -> monitor -> learn.
+Use `docs/SELF_IMPROVEMENT_NORTHSTAR.md` and `api/services/dev_organ.py` as the
+gate reference. This is still standing-alone learning, not wrapper behavior.
+
 ### Principle 5: Speed problems ≠ permission to wrapper
 **When chat is slow, AVAILABLE solutions (vision-aligned):**
 

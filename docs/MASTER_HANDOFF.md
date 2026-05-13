@@ -18,6 +18,13 @@
 > Dokumen ini tetap dipertahankan sebagai **strategic foundation record** (arsitektur, keputusan awal,
 > repo structure). Jangan hapus.
 
+> **CURRENT NORTH STAR PING (2026-05-14 / M1.6):** Fahmi's current direction is
+> self-improvement as Dev Organ, not just model auto-training. MiganCore must
+> learn to observe, diagnose, propose, patch in sandbox, test, iterate,
+> validate, promote, monitor, and learn. Live production mutation requires gates
+> and rollback readiness. Read `docs/SELF_IMPROVEMENT_NORTHSTAR.md` and
+> `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md` before acting.
+
 ---
 
 ## 1. EXECUTIVE SUMMARY
