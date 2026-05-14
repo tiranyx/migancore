@@ -46,9 +46,17 @@ async def _redis():
     return _redis_client
 
 
-def _hash(system_prompt: str, message: str) -> str:
-    """Stable SHA256 hash of normalized (system + message)."""
-    normalized = (system_prompt.strip() + '\n\n---\n\n' + message.strip()).lower()
+def _hash(scope_key: str, message: str) -> str:
+    """Stable SHA256 hash of normalized (scope + message).
+
+    Day 74 — scope_key was system_prompt originally, but episodic-memory
+    injection makes it churn after every turn (each new memory shifts the
+    prompt → instant cache miss). Scoping by agent_id instead keeps the
+    cache hot: same agent + same FAQ → same answer.
+
+    Caller passes a stable scope identifier (typically agent_id).
+    """
+    normalized = (scope_key.strip() + '\n\n---\n\n' + message.strip()).lower()
     return hashlib.sha256(normalized.encode('utf-8')).hexdigest()[:32]
 
 
@@ -74,13 +82,16 @@ def is_cacheable(message: str, has_history: bool = False) -> bool:
     return True
 
 
-async def get_cached(system_prompt: str, message: str) -> str | None:
-    """Return cached response or None."""
+async def get_cached(scope_key: str, message: str) -> str | None:
+    """Return cached response or None.
+
+    scope_key: stable identifier (typically agent_id). See _hash() docstring.
+    """
     if DISABLED:
         return None
     try:
         client = await _redis()
-        key = CACHE_KEY_PREFIX + _hash(system_prompt, message)
+        key = CACHE_KEY_PREFIX + _hash(scope_key, message)
         raw = await client.get(key)
         if raw is None:
             return None
@@ -93,18 +104,18 @@ async def get_cached(system_prompt: str, message: str) -> str | None:
 
 
 async def set_cached(
-    system_prompt: str,
+    scope_key: str,
     message: str,
     response: str,
 ) -> None:
-    """Store (system_prompt + message) → response in Redis."""
+    """Store (scope_key + message) → response in Redis."""
     if DISABLED:
         return
     if not response or len(response) < 10:
         return  # Don't cache empty/error responses
     try:
         client = await _redis()
-        key = CACHE_KEY_PREFIX + _hash(system_prompt, message)
+        key = CACHE_KEY_PREFIX + _hash(scope_key, message)
         payload = json.dumps({'response': response})
         await client.setex(key, CACHE_TTL_S, payload)
         logger.info("response_cache.set", key=key[-12:], len=len(response))

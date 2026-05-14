@@ -306,7 +306,9 @@ async def chat(
     try:
         from services import response_cache as _resp_cache_mod
         if _resp_cache_mod.is_cacheable(data.message, has_history=bool(history)):
-            cached_response = await _resp_cache_mod.get_cached(system_prompt, data.message)
+            # Scope cache by agent_id — system_prompt churns due to episodic
+            # memory injection on every turn (Day 74 fix).
+            cached_response = await _resp_cache_mod.get_cached(agent_id, data.message)
     except Exception as e:
         logger.warning("response_cache.check_fail", error=str(e)[:120])
 
@@ -368,7 +370,7 @@ async def chat(
             and _resp_cache_mod is not None
             and _resp_cache_mod.is_cacheable(data.message, has_history=bool(history))):
         try:
-            await _resp_cache_mod.set_cached(system_prompt, data.message, assistant_content)
+            await _resp_cache_mod.set_cached(agent_id, data.message, assistant_content)
         except Exception as e:
             logger.warning("response_cache.set_fail", error=str(e)[:120])
 
