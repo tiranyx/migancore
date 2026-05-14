@@ -183,6 +183,18 @@ _CONCEPT_QUERY_PATTERNS = [
     "apa beda ", "apa perbedaan ", "what's the difference",
 ]
 
+# Day 73 Codex audit — casual greeting / chit-chat patterns: brain answers from
+# its own voice, no tool overhead. Default no-tools per Codex feedback:
+# "default no-tools untuk chat biasa, tool routing hanya saat perlu".
+_CASUAL_PATTERNS = [
+    "halo", "hai", "hi ", "hello", "hey", "selamat pagi", "selamat siang",
+    "selamat sore", "selamat malam", "good morning", "good night",
+    "apa kabar", "how are you", "gimana kabar", "lagi apa",
+    "makasih", "terima kasih", "thanks", "thank you", "thx", "ok ", "oke",
+    "mantap", "keren", "wah", "wow", "lol", "haha", "hehe", "kok", "iya",
+    "siap", "ya", "tidak", "ga ", "nggak", "enggak",
+]
+
 
 def _is_concept_query(message: str) -> bool:
     """Adaptive trigger: detect conceptual/definition queries that need no tool.
@@ -195,6 +207,23 @@ def _is_concept_query(message: str) -> bool:
         return False
     for pat in _CONCEPT_QUERY_PATTERNS:
         if pat in msg_lower:
+            return True
+    return False
+
+
+def _is_casual_chat(message: str) -> bool:
+    """Adaptive trigger: detect casual/greeting messages that need no tool.
+
+    Short query (<60 chars) starting with greeting/ack → skip tools.
+    Brain responds with own voice (memory_write still in CORE for recall save).
+    """
+    msg_stripped = message.lower().strip()
+    if len(msg_stripped) > 60:
+        return False
+    if len(msg_stripped) < 2:
+        return True  # empty/tiny → no tool
+    for pat in _CASUAL_PATTERNS:
+        if msg_stripped == pat.strip() or msg_stripped.startswith(pat):
             return True
     return False
 
@@ -220,7 +249,19 @@ async def route_tools(
 
     available_set = set(available_tools)
 
-    # Day 75 — Pass 0: concept query short-circuit
+    # Day 73 Codex audit — Pass 0a: casual chat short-circuit
+    # Greetings/acks ("halo", "makasih", "ok") don't need tools. Brain own voice.
+    if _is_casual_chat(message):
+        core_only = [t for t in available_tools if t in CORE_TOOLS]
+        logger.info(
+            "tool_router.casual_skip",
+            query_len=len(message),
+            available=len(available_tools),
+            kept=len(core_only),
+        )
+        return core_only
+
+    # Day 75 — Pass 0b: concept query short-circuit
     # Definition/explanation queries don't need tools (brain knows from KB + training).
     # Per Adaptive Doctrine: skip tool spec when not earned. Massive speed win on CPU.
     if _is_concept_query(message):

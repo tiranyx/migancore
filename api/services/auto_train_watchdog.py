@@ -43,6 +43,12 @@ MIN_DAYS_SINCE_TRAIN  = 3        # cooldown between auto-training runs
 AUTO_TRAIN_BUDGET_CAP = 3.00     # max USD per auto-triggered run
 CHECK_INTERVAL_S      = 3 * 3600 # check every 3 hours
 
+# Day 73 Codex audit — biomimetic doctrine: GPU training is vitamin, not oxygen.
+# Default mode is "proposal": watchdog only logs proposals to dev_organ_proposals,
+# never auto-triggers Vast.ai. Fahmi reviews + manually approves training.
+# Override via env AUTO_TRAIN_MODE=auto (original behavior) or off (skip loop entirely).
+AUTO_TRAIN_MODE = os.getenv("AUTO_TRAIN_MODE", "proposal").lower()
+
 # Vast.ai config
 VAST_API            = "https://console.vast.ai/api/v0"
 VAST_KEY_PATH       = "/opt/secrets/migancore/vastai_api_key"
@@ -442,8 +448,17 @@ print('TRAINING_COMPLETE')
 
 
 async def watchdog_loop() -> None:
-    """Main watchdog loop. Runs forever as a background asyncio task."""
-    _log("Auto-training watchdog started")
+    """Main watchdog loop. Runs forever as a background asyncio task.
+
+    Honors AUTO_TRAIN_MODE env (default "proposal"):
+      - "off"      → exit immediately, no loop runs
+      - "proposal" → loop runs but only writes proposals (Fahmi reviews)
+      - "auto"     → original behavior: auto-trigger Vast.ai training
+    """
+    if AUTO_TRAIN_MODE == "off":
+        _log("Auto-training watchdog disabled (AUTO_TRAIN_MODE=off)")
+        return
+    _log(f"Auto-training watchdog started (mode={AUTO_TRAIN_MODE})")
     await asyncio.sleep(60)  # brief startup delay
 
     while True:
@@ -454,14 +469,26 @@ async def watchdog_loop() -> None:
             _log(f"Check: real_pairs={real_pairs} (threshold={REAL_PAIRS_THRESHOLD}), days_since_last={days_since:.1f} (threshold={MIN_DAYS_SINCE_TRAIN})")
 
             if real_pairs >= REAL_PAIRS_THRESHOLD and days_since >= MIN_DAYS_SINCE_TRAIN:
-                _log(f"TRIGGER: thresholds met — starting auto-training run")
-                dataset_path = await _export_training_dataset(real_pairs)
-                if dataset_path:
-                    ok = await _trigger_training_run(dataset_path)
-                    if ok:
-                        _log("Training launched successfully")
-                    else:
-                        _log("Training launch failed — will retry next check")
+                if AUTO_TRAIN_MODE == "auto":
+                    _log(f"TRIGGER: thresholds met — starting auto-training run")
+                    dataset_path = await _export_training_dataset(real_pairs)
+                    if dataset_path:
+                        ok = await _trigger_training_run(dataset_path)
+                        if ok:
+                            _log("Training launched successfully")
+                        else:
+                            _log("Training launch failed — will retry next check")
+                else:
+                    # proposal mode: log + queue, do not auto-train
+                    cycle_id = f"prop_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}"
+                    detail = (
+                        f"Thresholds met: real_pairs={real_pairs} "
+                        f"(≥{REAL_PAIRS_THRESHOLD}), days_since_last={days_since:.1f} "
+                        f"(≥{MIN_DAYS_SINCE_TRAIN}). Awaiting Fahmi review. "
+                        f"Set AUTO_TRAIN_MODE=auto to enable autonomous Vast.ai trigger."
+                    )
+                    _log(f"PROPOSAL ({cycle_id}): {detail}")
+                    await _create_proposal(cycle_id, "pending_review", detail)
             else:
                 missing = []
                 if real_pairs < REAL_PAIRS_THRESHOLD:

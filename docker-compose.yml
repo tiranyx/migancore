@@ -133,6 +133,10 @@ services:
       TRAINING_EVAL_DIR: ${TRAINING_EVAL_DIR:-/app/eval}
       TRAINING_AUTO_TRIGGER: ${TRAINING_AUTO_TRIGGER:-false}
       TRAINING_AUTO_DEPLOY: ${TRAINING_AUTO_DEPLOY:-false}
+      # Day 73 Codex audit — biomimetic doctrine: GPU training is vitamin, not oxygen.
+      # proposal (default): watchdog logs proposals only, Fahmi reviews/approves manually.
+      # off: skip watchdog entirely. auto: original autonomous Vast.ai trigger.
+      AUTO_TRAIN_MODE: ${AUTO_TRAIN_MODE:-proposal}
       TRAINING_GPU_PROVIDER: ${TRAINING_GPU_PROVIDER:-runpod}
       RUNPOD_API_KEY: ${RUNPOD_API_KEY:-}
       VAST_API_KEY: ${VAST_API_KEY:-}

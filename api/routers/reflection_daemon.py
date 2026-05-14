@@ -128,7 +128,7 @@ async def generate_reflection(activity: dict, agent_id: str) -> str:
         f"  - {l['summary'][:150]}" for l in activity["hikmah_lessons"][:3]
     )
 
-    prompt = f"""Refleksi diri {hours} jam terakhir.
+    prompt = f"""Growth journal — refleksi diri {hours} jam terakhir.
 
 Aktivitas Code Lab:
 - {hikmah_count} success pattern → bucket hikmah:
@@ -136,14 +136,14 @@ Aktivitas Code Lab:
 - {nafs_count} kegagalan substansial → bucket nafs:
 {nafs_lines or '  (tidak ada)'}
 
-Tugasmu: tulis refleksi 1 paragraf (3-5 kalimat) sebagai Mighan-Core, first-person.
-Fokus pada:
-- Apa pattern yang dipelajari?
-- Apa kelemahan yang muncul?
-- Apa yang akan kucoba berbeda besok?
+Tulis growth journal sebagai Mighan-Core, first-person, 4 bagian singkat:
+1. **Belajar apa** — pattern/insight baru hari ini (1-2 kalimat)
+2. **Gagal apa** — kelemahan/error pattern (1-2 kalimat, atau "tidak ada" kalau memang kosong)
+3. **Perlu alat apa** — tool/skill/data yang missing untuk respond lebih baik (1 kalimat, atau "cukup")
+4. **Usul upgrade apa** — saran konkret untuk Fahmi review (1 kalimat, atau "—")
 
-Voice: direct, kasual sedikit, akrab dengan Fahmi sebagai pencipta.
-Tanpa intro generic ("Hari ini..."). Langsung ke insight.
+Voice: direct, kasual, akrab dengan Fahmi sebagai pencipta. Tanpa intro generic.
+Total max ~8 baris. Jujur, ringkas, actionable.
 """
 
     try:
@@ -257,6 +257,42 @@ async def trigger_reflection(body: ReflectionTriggerRequest):
         "activity_summary": activity["stats"],
         "hours_back": hours_back,
     }
+
+
+# ---------------------------------------------------------------------------
+# Daily growth journal background loop (Codex audit Day 73)
+# ---------------------------------------------------------------------------
+async def daily_growth_journal_loop() -> None:
+    """Fire one growth-journal reflection per day (24h window).
+
+    Honors REFLECTION_DAILY env (default "on"). Sleeps until next UTC midnight
+    after first tick. Failures log + skip — never crash.
+    """
+    import os as _os
+    if _os.getenv("REFLECTION_DAILY", "on").lower() == "off":
+        logger.info("reflection.daily.disabled")
+        return
+
+    logger.info("reflection.daily.started")
+    await asyncio.sleep(120)  # boot grace
+
+    while True:
+        try:
+            activity = await gather_recent_activity(
+                SYSTEM_TENANT, CORE_BRAIN_ID, hours_back=24,
+            )
+            should, reason = should_reflect(activity, 24)
+            if should:
+                text = await generate_reflection(activity, CORE_BRAIN_ID)
+                key = await save_reflection(SYSTEM_TENANT, CORE_BRAIN_ID, text, activity)
+                logger.info("reflection.daily.fired", key=key, reason=reason)
+            else:
+                logger.info("reflection.daily.skipped", reason=reason)
+        except Exception as exc:
+            logger.warning("reflection.daily.error", error=str(exc)[:120])
+
+        # Sleep ~24h (jittered a bit to avoid lock-step with other daemons)
+        await asyncio.sleep(24 * 3600)
 
 
 @router.get("/latest", dependencies=[Depends(_require_admin)])

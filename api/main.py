@@ -287,7 +287,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("tool_relevance.boot_failed", error=str(exc))
 
-    # 9c. Day 73: Auto-training watchdog — triggers GPU training when real data threshold met
+    # 9c. Day 73: Auto-training watchdog — Codex audit converted to proposal-only.
+    # AUTO_TRAIN_MODE=proposal (default) → logs proposals only, no Vast.ai trigger.
+    # AUTO_TRAIN_MODE=auto → original autonomous behavior. off → skip entirely.
     auto_train_task = None
     try:
         from services.auto_train_watchdog import watchdog_loop as auto_train_loop
@@ -295,6 +297,15 @@ async def lifespan(app: FastAPI):
         logger.info("auto_train.watchdog.started")
     except Exception as exc:
         logger.warning("auto_train.watchdog.start_failed", error=str(exc))
+
+    # 9c2. Day 73 Codex audit: Daily growth journal — auto-reflect 24h window.
+    daily_journal_task = None
+    try:
+        from routers.reflection_daemon import daily_growth_journal_loop
+        daily_journal_task = asyncio.create_task(daily_growth_journal_loop())
+        logger.info("reflection.daily.scheduled")
+    except Exception as exc:
+        logger.warning("reflection.daily.start_failed", error=str(exc))
 
     # 9d. Day 73: Apply DB migration 028 (chat KG tables) if not yet applied
     try:
