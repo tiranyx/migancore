@@ -566,17 +566,46 @@ async function renderProposals() {
 
     const card = (p, isDecided) => {
       const created = fmtRelativeID(p.created_at);
+      const meta = p.metadata || {};
+      const isArtifact = meta.component === "artifact_builder";
+
       const decidedLine = p.decided_at
-        ? `<div class="verdict-note"><strong>${p.creator_verdict === 'approved' ? '✅ Approved' : '❌ Rejected'}</strong> · ${escapeHtml(fmtRelativeID(p.decided_at))}${p.creator_notes ? ' · ' + escapeHtml(p.creator_notes) : ''}</div>`
+        ? `<div class="verdict-note"><strong>${p.creator_verdict === 'approved' ? '✅ Approved' : '❌ Rejected'}</strong> · ${escapeHtml(fmtRelativeID(p.decided_at))}${p.creator_notes ? ' · ' + escapeHtml(p.creator_notes) : ''}${meta.saved_path ? '<br>📁 saved: <code>' + escapeHtml(meta.saved_path) + '</code>' : ''}</div>`
         : "";
-      const actions = isDecided ? "" : `
-        <div class="actions">
-          <button class="btn" onclick="runReadiness('${p.id}')">RUN CHECK</button>
-          <button class="btn" onclick="runReadiness('${p.id}', true)">RUN TESTS</button>
-          <button class="btn approve" onclick="setVerdict('${p.id}', 'approved')">✓ APPROVE</button>
-          <button class="btn reject" onclick="setVerdict('${p.id}', 'rejected')">✗ REJECT</button>
+
+      let actions = "";
+      if (!isDecided) {
+        if (isArtifact) {
+          // Artifact-specific finalize endpoint — writes file on approve
+          actions = `
+            <div class="actions">
+              <button class="btn approve" onclick="finalizeArtifact('${p.id}', 'approved')">✓ APPROVE &amp; SAVE</button>
+              <button class="btn approve" onclick="finalizeArtifact('${p.id}', 'approved', true)">⚠ APPROVE (overwrite)</button>
+              <button class="btn reject" onclick="finalizeArtifact('${p.id}', 'rejected')">✗ REJECT</button>
+            </div>
+          `;
+        } else {
+          actions = `
+            <div class="actions">
+              <button class="btn" onclick="runReadiness('${p.id}')">RUN CHECK</button>
+              <button class="btn" onclick="runReadiness('${p.id}', true)">RUN TESTS</button>
+              <button class="btn approve" onclick="setVerdict('${p.id}', 'approved')">✓ APPROVE</button>
+              <button class="btn reject" onclick="setVerdict('${p.id}', 'rejected')">✗ REJECT</button>
+            </div>
+          `;
+        }
+      }
+
+      // Artifact-specific extras: file type pill + path + preview
+      const artifactBlock = isArtifact ? `
+        <div style="margin-top:0.5rem">
+          <span class="pill" style="color:var(--green);border-color:var(--green-border)">📄 ${escapeHtml((meta.artifact_type || '').toUpperCase())}</span>
+          <span class="pill">→ <code>${escapeHtml(meta.recommended_path || '')}</code></span>
+          ${meta.safe_to_save ? '<span class="pill" style="color:var(--green)">✓ SAFE</span>' : '<span class="pill risk-high">⚠ UNSAFE</span>'}
         </div>
-      `;
+        ${meta.content_preview ? `<details style="margin-top:0.6rem"><summary style="font-family:var(--mono);font-size:0.7rem;color:var(--text-dim);cursor:pointer">📖 preview (${(meta.content || '').length} chars)</summary><pre class="body" style="margin-top:0.4rem;max-height:240px;overflow:auto">${escapeHtml(meta.content_preview)}</pre></details>` : ''}
+      ` : '';
+
       const cardClass = isDecided
         ? `feed-card proposal ${p.creator_verdict}`
         : "feed-card proposal";
@@ -590,8 +619,9 @@ async function renderProposals() {
             <span class="pill">SRC ${escapeHtml(p.source || "")}</span>
             <span class="pill">BY ${escapeHtml(p.created_by || "")}</span>
           </div>
+          ${artifactBlock}
           <div class="body" style="margin-top:0.6rem">${escapeHtml(p.problem || "")}${p.hypothesis ? "\n\nHipotesis: " + escapeHtml(p.hypothesis) : ""}</div>
-          ${renderLifecycle(p)}
+          ${isArtifact ? '' : renderLifecycle(p)}
           ${actions}
           ${decidedLine}
         </div>
@@ -668,6 +698,41 @@ async function setVerdict(proposalId, verdict) {
     await renderProposals();
   } catch (err) {
     alert(`Gagal set verdict: ${err.message}`);
+  }
+}
+
+// Artifact-specific finalize: approve writes file to workspace, reject blocks.
+async function finalizeArtifact(proposalId, verdict, overwrite = false) {
+  const promptMsg = verdict === "approved"
+    ? (overwrite
+        ? "OVERWRITE existing file. Catatan (opsional):"
+        : "Approve & save to workspace. Catatan (opsional):")
+    : "Catatan rejection (opsional):";
+  const notes = prompt(promptMsg) || "";
+  try {
+    const r = await fetch(`${API}/v1/artifacts/finalize/${proposalId}`, {
+      method: "POST",
+      headers: {
+        "X-Admin-Key": adminKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ verdict, notes, overwrite }),
+    });
+    if (!r.ok) {
+      const errBody = await r.text();
+      throw new Error(`HTTP ${r.status}: ${errBody}`);
+    }
+    const data = await r.json();
+    if (data.status === "approved_and_saved") {
+      alert(`✓ Saved to ${data.path}\n${data.bytes_written} bytes`);
+    } else if (data.status === "idempotent") {
+      alert(`Already ${data.stage}; no change.`);
+    } else if (data.status === "rejected") {
+      alert("Rejected. Stage=blocked.");
+    }
+    await renderProposals();
+  } catch (err) {
+    alert(`Gagal finalize artifact: ${err.message}`);
   }
 }
 
