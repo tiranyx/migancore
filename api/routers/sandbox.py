@@ -86,7 +86,10 @@ class ProposalCreate(BaseModel):
     touched_paths: list[str] = Field(default_factory=list)
     tests: list[str] = Field(default_factory=list)
     rollback_plan: str = Field(default="")
-    source: str = Field(default="auto")
+    source: str = Field(
+        default="auto",
+        pattern="^(auto|owner_command|tool_failure|eval_failure|manual)$",
+    )
     metadata: dict = Field(default_factory=dict)
     created_by: str = Field(default="core_brain")
 
