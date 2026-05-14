@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiganCore — SSOT Backlog</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #07100e;
+    --bg-1: #0d1f1a;
+    --bg-2: #142920;
+    --bg-3: #1a3429;
+    --orange: #ff8a24;
+    --orange-dim: rgba(255, 138, 36, 0.12);
+    --orange-border: rgba(255, 138, 36, 0.4);
+    --green: #2fe39a;
+    --green-dim: rgba(47, 227, 154, 0.10);
+    --green-border: rgba(47, 227, 154, 0.25);
+    --red: #ff5470;
+    --red-dim: rgba(255, 84, 112, 0.12);
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #e7eee9;
+    --text-dim: #98a8a2;
+    --text-faint: #5a6d65;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Orbitron', sans-serif;
+    --body: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-0); color: var(--text);
+    font-family: var(--body); height: 100vh;
+    display: grid; grid-template-rows: auto auto auto 1fr;
+    overflow: hidden;
+  }
+  header.top {
+    background: var(--bg-1); padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  }
+  .brand {
+    font-family: var(--display); font-weight: 700; font-size: 1.1rem;
+    color: var(--green); letter-spacing: 0.1em;
+  }
+  .brand::before { content: ""; display: inline-block; width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--orange), var(--green));
+    border-radius: 6px; vertical-align: middle; margin-right: 0.5rem; }
+  .top-nav { display: flex; gap: 0.5rem; margin-left: auto; align-items: center; }
+  .top-nav a, .top-nav button {
+    font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim);
+    text-decoration: none; border: 1px solid var(--border);
+    border-radius: 5px; padding: 0.4rem 0.8rem; letter-spacing: 0.05em;
+    background: transparent; cursor: pointer;
+  }
+  .top-nav a:hover, .top-nav button:hover { color: var(--green); border-color: var(--green); }
+  .top-nav a.active { color: var(--orange); border-color: var(--orange); }
+  .top-nav input {
+    background: var(--bg-0); border: 1px solid var(--border);
+    color: var(--text); padding: 0.4rem 0.6rem; border-radius: 5px;
+    font-family: var(--mono); font-size: 0.7rem; width: 180px;
+  }
+  section.hero {
+    padding: 1.5rem 2rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-0);
+  }
+  section.hero h1 {
+    font-family: var(--display); font-weight: 900; font-size: 1.6rem;
+    color: var(--green); letter-spacing: 0.04em;
+  }
+  section.hero p {
+    color: var(--text-dim); font-size: 0.85rem; margin-top: 0.3rem;
+  }
+  .tabs {
+    display: flex; gap: 0.3rem; padding: 1rem 2rem 0;
+    background: var(--bg-0); border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.05em;
+    padding: 0.6rem 1.1rem; cursor: pointer; user-select: none;
+    color: var(--text-dim); border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+  .tab .count {
+    background: var(--bg-2); color: var(--text-dim);
+    padding: 0.1rem 0.5rem; border-radius: 10px;
+    font-size: 0.65rem; margin-left: 0.4rem;
+  }
+  main { display: grid; grid-template-columns: 340px 1fr; overflow: hidden; }
+  aside {
+    background: var(--bg-0); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 1rem;
+  }
+  .search-box {
+    width: 100%; padding: 0.5rem 0.7rem; background: var(--bg-1);
+    border: 1px solid var(--border); color: var(--text);
+    border-radius: 5px; font-family: var(--mono); font-size: 0.75rem;
+    margin-bottom: 0.7rem;
+  }
+  .search-box:focus { outline: none; border-color: var(--green); }
+  .doc-item {
+    padding: 0.6rem 0.8rem; border-radius: 5px; cursor: pointer;
+    border: 1px solid transparent; margin-bottom: 0.3rem;
+    transition: all 0.15s;
+  }
+  .doc-item:hover { background: var(--bg-1); }
+  .doc-item.active {
+    background: var(--green-dim); border-color: var(--green-border);
+  }
+  .doc-item .name {
+    color: var(--text); font-size: 0.78rem; font-weight: 500;
+    word-break: break-all; font-family: var(--mono);
+  }
+  .doc-item.active .name { color: var(--green); }
+  .doc-item .meta {
+    color: var(--text-faint); font-size: 0.65rem; margin-top: 0.2rem;
+    font-family: var(--mono);
+  }
+  section.viewer {
+    background: var(--bg-0); overflow-y: auto; padding: 1.5rem 2rem;
+  }
+  /* ===== Gantt / Progress styles ===== */
+  .progress-wrap { padding: 1.5rem 2rem; overflow-y: auto; }
+  .progress-header {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: var(--bg-1); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.9rem 1rem;
+  }
+  .stat-card .label {
+    font-family: var(--mono); font-size: 0.65rem;
+    color: var(--text-faint); letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .stat-card .value {
+    font-family: var(--display); font-size: 1.8rem; font-weight: 700;
+    color: var(--green); margin-top: 0.2rem;
+  }
+  .stat-card.orange .value { color: var(--orange); }
+  .stat-card.red .value { color: var(--red); }
+  .stat-card.dim .value { color: var(--text-dim); font-size: 1.3rem; }
+
+  .gantt-legend {
+    display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
+    font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim);
+  }
+  .gantt-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .gantt-row {
+    display: grid; grid-template-columns: 240px 1fr; gap: 1rem;
+    align-items: center; margin-bottom: 0.7rem;
+  }
+  .gantt-label {
+    font-family: var(--mono); font-size: 0.75rem;
+  }
+  .gantt-label .sprint-id { color: var(--orange); font-weight: 600; }
+  .gantt-label .sprint-name { color: var(--text); display: block; margin-top: 0.15rem; word-break: break-word; }
+  .gantt-label .day-range { color: var(--text-faint); font-size: 0.65rem; display: block; }
+
+  .gantt-track {
+    position: relative; height: 28px; background: var(--bg-1);
+    border-radius: 4px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .gantt-bar {
+    position: absolute; top: 0; bottom: 0; border-radius: 3px;
+    display: flex; align-items: center; padding: 0 0.6rem;
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 600;
+    color: rgba(0,0,0,0.85); letter-spacing: 0.04em; white-space: nowrap;
+    cursor: pointer; transition: transform 0.1s;
+  }
+  .gantt-bar:hover { transform: scaleY(1.1); }
+  .gantt-bar.done { background: var(--green); }
+  .gantt-bar.running { background: var(--orange); animation: pulse 2s ease-in-out infinite; }
+  .gantt-bar.planned { background: var(--text-faint); color: var(--text); }
+  .gantt-bar.blocked { background: var(--red); }
+  .gantt-progress-fill {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: rgba(255, 255, 255, 0.25); border-radius: 3px;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .gantt-today-line {
+    position: absolute; top: -4px; bottom: -4px; width: 2px;
+    background: var(--red); z-index: 10; pointer-events: none;
+  }
+  .gantt-today-line::after {
+    content: "TODAY"; position: absolute; top: -16px; left: 50%;
+    transform: translateX(-50%); font-family: var(--mono);
+    font-size: 0.6rem; color: var(--red); font-weight: 700;
+    letter-spacing: 0.1em; white-space: nowrap;
+  }
+  .gantt-axis {
+    display: grid; grid-template-columns: 240px 1fr; gap: 1rem;
+    margin-top: 1rem; padding-top: 0.6rem; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.65rem; color: var(--text-faint);
+  }
+  .gantt-axis-track {
+    display: flex; justify-content: space-between;
+  }
+
+  .sprint-detail {
+    background: var(--bg-1); border: 1px solid var(--green-border);
+    border-radius: 6px; padding: 1rem 1.2rem; margin-top: 1rem;
+    display: none;
+  }
+  .sprint-detail.active { display: block; }
+  .sprint-detail h3 {
+    font-family: var(--display); color: var(--green);
+    font-size: 1rem; letter-spacing: 0.05em;
+  }
+  .sprint-detail .deliverable {
+    font-family: var(--mono); font-size: 0.75rem; color: var(--text);
+    padding-left: 1.2rem; position: relative; margin-bottom: 0.3rem;
+  }
+  .sprint-detail .deliverable::before {
+    content: "▸"; position: absolute; left: 0; color: var(--orange);
+  }
+  .sprint-detail .meta-line {
+    font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim);
+    margin-top: 0.4rem;
+  }
+  .sprint-detail .tag {
+    display: inline-block; padding: 0.1rem 0.5rem; border-radius: 3px;
+    margin-right: 0.3rem; font-size: 0.65rem;
+    background: var(--bg-0); border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .viewer-empty {
+    color: var(--text-faint); text-align: center; margin-top: 3rem;
+    font-family: var(--mono); font-size: 0.85rem;
+  }
+  .viewer-meta {
+    color: var(--text-dim); font-size: 0.75rem;
+    padding-bottom: 0.8rem; border-bottom: 1px solid var(--border);
+    margin-bottom: 1.2rem; font-family: var(--mono);
+  }
+  .viewer-meta strong { color: var(--green); }
+  .viewer-meta code {
+    background: var(--bg-1); padding: 0.1rem 0.4rem;
+    border-radius: 3px; color: var(--orange);
+  }
+  .viewer-content {
+    font-family: var(--mono); font-size: 0.78rem; line-height: 1.7;
+    white-space: pre-wrap; color: var(--text); max-width: 980px;
+  }
+  .error {
+    color: var(--red); padding: 0.6rem 1rem; background: var(--red-dim);
+    border-radius: 5px; font-family: var(--mono); font-size: 0.8rem;
+    border: 1px solid rgba(255, 84, 112, 0.3);
+  }
+  .loading {
+    color: var(--green); padding: 0.6rem 1rem; font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  .stat-bar {
+    color: var(--text-dim); font-family: var(--mono); font-size: 0.7rem;
+  }
+  .stat-bar strong { color: var(--green); }
+
+  /* ===== Refleksi & Proposal panels (Day 73 Codex audit item 1+2) ===== */
+  .feed-wrap { padding: 1.5rem 2rem; overflow-y: auto; max-width: 920px; }
+  .feed-wrap h2 {
+    font-family: var(--display); color: var(--green);
+    font-size: 1rem; letter-spacing: 0.08em; margin-bottom: 0.4rem;
+  }
+  .feed-wrap .feed-sub {
+    color: var(--text-dim); font-family: var(--mono);
+    font-size: 0.7rem; margin-bottom: 1.2rem;
+  }
+  .feed-card {
+    background: var(--bg-1); border: 1px solid var(--border);
+    border-left: 3px solid var(--green); border-radius: 6px;
+    padding: 1rem 1.2rem; margin-bottom: 0.8rem;
+  }
+  .feed-card.proposal { border-left-color: var(--orange); }
+  .feed-card.proposal.approved { border-left-color: var(--green); opacity: 0.7; }
+  .feed-card.proposal.rejected { border-left-color: var(--red); opacity: 0.55; }
+  .feed-card .when {
+    font-family: var(--mono); font-size: 0.65rem;
+    color: var(--text-faint); letter-spacing: 0.05em;
+  }
+  .feed-card .when strong { color: var(--green); }
+  .feed-card .title {
+    font-family: var(--display); font-size: 0.9rem;
+    color: var(--text); margin: 0.35rem 0 0.6rem; letter-spacing: 0.03em;
+  }
+  .feed-card .body {
+    font-family: var(--mono); font-size: 0.78rem; line-height: 1.7;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .feed-card .pill {
+    display: inline-block; padding: 0.15rem 0.55rem;
+    border-radius: 3px; font-family: var(--mono); font-size: 0.6rem;
+    border: 1px solid var(--border); color: var(--text-dim);
+    margin-right: 0.3rem; letter-spacing: 0.05em;
+  }
+  .feed-card .pill.risk-low { color: var(--green); border-color: var(--green-border); }
+  .feed-card .pill.risk-medium { color: var(--orange); border-color: var(--orange-border); }
+  .feed-card .pill.risk-high, .feed-card .pill.risk-critical { color: var(--red); border-color: rgba(255,84,112,0.3); }
+  .feed-card .pill.stage { color: var(--orange); }
+  .feed-card .actions {
+    display: flex; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap;
+  }
+  .feed-card .btn {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em;
+    padding: 0.4rem 0.9rem; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-dim); transition: all 0.15s;
+  }
+  .feed-card .btn.approve { color: var(--green); border-color: var(--green-border); }
+  .feed-card .btn.approve:hover { background: var(--green-dim); }
+  .feed-card .btn.reject { color: var(--red); border-color: rgba(255,84,112,0.3); }
+  .feed-card .btn.reject:hover { background: var(--red-dim); }
+  .feed-card .verdict-note {
+    font-family: var(--mono); font-size: 0.7rem;
+    color: var(--text-dim); margin-top: 0.6rem;
+    border-top: 1px dashed var(--border); padding-top: 0.5rem;
+  }
+  .feed-card .verdict-note strong { color: var(--orange); }
+  .feed-empty {
+    color: var(--text-faint); padding: 2rem;
+    text-align: center; font-family: var(--mono); font-size: 0.8rem;
+    background: var(--bg-1); border-radius: 6px;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">MIGANCORE :: SSOT</div>
+  <div class="top-nav">
+    <a href="/dashboard.html">DASHBOARD</a>
+    <a href="/sandbox.html">SANDBOX</a>
+    <a href="/chat.html">CHAT</a>
+    <a href="/backlog.html" class="active">BACKLOG</a>
+    <input id="admin-key" type="password" placeholder="X-Admin-Key">
+    <button onclick="reload()">LOAD</button>
+  </div>
+</header>
+
+<section class="hero">
+  <h1>Single Source of Truth</h1>
+  <p>Vision · Backlog · Journal · Lessons — semua dari <code>/opt/ado/docs/</code> markdown canonical · <span class="stat-bar" id="stat-summary">…</span></p>
+</section>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="progress">📊 PROGRESS <span class="count" id="ct-progress">…</span></div>
+  <div class="tab" data-tab="refleksi">🌱 REFLEKSI <span class="count" id="ct-refleksi">…</span></div>
+  <div class="tab" data-tab="proposal">📥 PROPOSAL <span class="count" id="ct-proposal">…</span></div>
+  <div class="tab" data-tab="vision">🌟 VISION <span class="count" id="ct-vision">…</span></div>
+  <div class="tab" data-tab="backlog">📋 BACKLOG <span class="count" id="ct-backlog">…</span></div>
+  <div class="tab" data-tab="journal">📖 JOURNAL <span class="count" id="ct-journal">…</span></div>
+  <div class="tab" data-tab="lessons">🧠 LESSONS <span class="count" id="ct-lessons">…</span></div>
+  <div class="tab" data-tab="other">📂 OTHER <span class="count" id="ct-other">…</span></div>
+</div>
+
+<main>
+  <aside>
+    <input class="search-box" id="search" placeholder="🔍 filter by filename...">
+    <div id="doc-list"></div>
+  </aside>
+  <section class="viewer" id="viewer">
+    <div class="viewer-empty">
+      Select a doc from the left to view.<br><br>
+      <small>219 docs di /opt/ado/docs — diorganisir auto-classify dari filename pattern.</small>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = (window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.'))
+  ? `http://${window.location.hostname}:8000`
+  : 'https://api.migancore.com';
+let currentTab = "progress";
+let activeDocPath = null;
+let adminKey = localStorage.getItem("migan_admin_key") || "";
+document.getElementById("admin-key").value = adminKey;
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    currentTab = tab.dataset.tab;
+    if (currentTab === "progress") {
+      renderProgress();
+    } else if (currentTab === "refleksi") {
+      renderRefleksi();
+    } else if (currentTab === "proposal") {
+      renderProposals();
+    } else {
+      showDocMode();
+      loadList();
+    }
+  });
+});
+
+function showProgressMode() {
+  document.querySelector("aside").style.display = "none";
+  document.querySelector("section.viewer").style.display = "none";
+  let wrap = document.getElementById("progress-wrap");
+  if (!wrap) {
+    wrap = document.createElement("div");
+    wrap.id = "progress-wrap";
+    wrap.className = "progress-wrap";
+    wrap.style.cssText = "grid-column: 1 / -1; overflow-y: auto;";
+    document.querySelector("main").appendChild(wrap);
+  }
+  wrap.style.display = "block";
+}
+
+function showDocMode() {
+  document.querySelector("aside").style.display = "";
+  document.querySelector("section.viewer").style.display = "";
+  const wrap = document.getElementById("progress-wrap");
+  if (wrap) wrap.style.display = "none";
+  const feed = document.getElementById("feed-wrap");
+  if (feed) feed.style.display = "none";
+}
+
+function showFeedMode() {
+  document.querySelector("aside").style.display = "none";
+  document.querySelector("section.viewer").style.display = "none";
+  const wrap = document.getElementById("progress-wrap");
+  if (wrap) wrap.style.display = "none";
+  let feed = document.getElementById("feed-wrap");
+  if (!feed) {
+    feed = document.createElement("div");
+    feed.id = "feed-wrap";
+    feed.className = "feed-wrap";
+    feed.style.cssText = "grid-column: 1 / -1; overflow-y: auto;";
+    document.querySelector("main").appendChild(feed);
+  }
+  feed.style.display = "block";
+  return feed;
+}
+
+function fmtRelativeID(ts) {
+  if (!ts) return "—";
+  const dt = new Date(typeof ts === "number" ? ts * 1000 : ts);
+  const now = new Date();
+  const diffMs = now - dt;
+  const diffH = diffMs / 3600000;
+  const iso = dt.toISOString().replace("T", " ").substring(0, 16);
+  if (diffH < 1) return `${Math.round(diffH * 60)} menit lalu · ${iso}`;
+  if (diffH < 24) return `${Math.round(diffH)} jam lalu · ${iso}`;
+  const days = Math.round(diffH / 24);
+  return `${days} hari lalu · ${iso}`;
+}
+
+async function renderRefleksi() {
+  const feed = showFeedMode();
+  feed.innerHTML = '<div class="loading">Loading refleksi harian…</div>';
+  try {
+    const r = await fetch(`${API}/v1/admin/reflection/latest?limit=20`,
+      { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const items = data.reflections || [];
+    if (items.length === 0) {
+      feed.innerHTML = `
+        <h2>🌱 Refleksi Harian</h2>
+        <div class="feed-sub">Growth journal — apa yang Migan pelajari, gagal, butuh, usulkan</div>
+        <div class="feed-empty">Belum ada refleksi. Daemon harian akan fire ±24h sekali, atau trigger manual via <code>POST /v1/admin/reflection/trigger</code>.</div>
+      `;
+      const ct = document.getElementById("ct-refleksi");
+      if (ct) ct.textContent = "0";
+      return;
+    }
+    const cards = items.map(r => `
+      <div class="feed-card">
+        <div class="when">🕐 ${escapeHtml(fmtRelativeID(r.timestamp))}</div>
+        <div class="title">Refleksi · <span style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">${escapeHtml(r.key)}</span></div>
+        <div class="body">${escapeHtml(r.content)}</div>
+      </div>
+    `).join("");
+    feed.innerHTML = `
+      <h2>🌱 Refleksi Harian</h2>
+      <div class="feed-sub">Growth journal — ${items.length} entry · prompt: belajar / gagal / perlu alat / usul upgrade</div>
+      ${cards}
+    `;
+    const ct = document.getElementById("ct-refleksi");
+    if (ct) ct.textContent = items.length;
+  } catch (err) {
+    feed.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function renderProposals() {
+  const feed = showFeedMode();
+  feed.innerHTML = '<div class="loading">Loading proposal antrian…</div>';
+  try {
+    const [pendingR, allR] = await Promise.all([
+      fetch(`${API}/v1/sandbox/proposals?verdict=pending&limit=50`,
+        { headers: { "X-Admin-Key": adminKey } }),
+      fetch(`${API}/v1/sandbox/proposals?limit=30`,
+        { headers: { "X-Admin-Key": adminKey } }),
+    ]);
+    if (!pendingR.ok) throw new Error(`HTTP ${pendingR.status}: ${await pendingR.text()}`);
+    const pending = await pendingR.json();
+    const all = allR.ok ? await allR.json() : { items: [] };
+    const items = pending.items || [];
+    const decided = (all.items || []).filter(p => p.creator_verdict);
+
+    const card = (p, isDecided) => {
+      const created = fmtRelativeID(p.created_at);
+      const decidedLine = p.decided_at
+        ? `<div class="verdict-note"><strong>${p.creator_verdict === 'approved' ? '✅ Approved' : '❌ Rejected'}</strong> · ${escapeHtml(fmtRelativeID(p.decided_at))}${p.creator_notes ? ' · ' + escapeHtml(p.creator_notes) : ''}</div>`
+        : "";
+      const actions = isDecided ? "" : `
+        <div class="actions">
+          <button class="btn approve" onclick="setVerdict('${p.id}', 'approved')">✓ APPROVE</button>
+          <button class="btn reject" onclick="setVerdict('${p.id}', 'rejected')">✗ REJECT</button>
+        </div>
+      `;
+      const cardClass = isDecided
+        ? `feed-card proposal ${p.creator_verdict}`
+        : "feed-card proposal";
+      return `
+        <div class="${cardClass}">
+          <div class="when">🕐 ${escapeHtml(created)}</div>
+          <div class="title">${escapeHtml(p.title || "(no title)")}</div>
+          <div>
+            <span class="pill risk-${escapeAttr(p.risk_level)}">RISK ${escapeHtml((p.risk_level || "").toUpperCase())}</span>
+            <span class="pill stage">STAGE ${escapeHtml((p.stage || "").toUpperCase())}</span>
+            <span class="pill">SRC ${escapeHtml(p.source || "")}</span>
+            <span class="pill">BY ${escapeHtml(p.created_by || "")}</span>
+          </div>
+          <div class="body" style="margin-top:0.6rem">${escapeHtml(p.problem || "")}${p.hypothesis ? "\n\nHipotesis: " + escapeHtml(p.hypothesis) : ""}</div>
+          ${actions}
+          ${decidedLine}
+        </div>
+      `;
+    };
+
+    const pendingCards = items.map(p => card(p, false)).join("") ||
+      `<div class="feed-empty">Belum ada proposal pending. Saat watchdog auto-train atau dev_organ mendapati threshold, proposal masuk ke sini untuk Fahmi review.</div>`;
+    const decidedCards = decided.length
+      ? `<h2 style="margin-top:2rem">📑 Yang sudah diputuskan</h2>
+         <div class="feed-sub">${decided.length} proposal terakhir</div>
+         ${decided.map(p => card(p, true)).join("")}`
+      : "";
+
+    feed.innerHTML = `
+      <h2>📥 Proposal Migan</h2>
+      <div class="feed-sub">${items.length} antri review · auto_train_watchdog dalam mode <code>proposal</code> — Fahmi yang putuskan, bukan GPU otomatis</div>
+      ${pendingCards}
+      ${decidedCards}
+    `;
+    const ct = document.getElementById("ct-proposal");
+    if (ct) ct.textContent = items.length;
+  } catch (err) {
+    feed.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function setVerdict(proposalId, verdict) {
+  const notes = verdict === "rejected"
+    ? (prompt("Catatan rejection (opsional):") || "")
+    : (prompt("Catatan approval (opsional):") || "");
+  try {
+    const r = await fetch(`${API}/v1/sandbox/proposals/${proposalId}/verdict`, {
+      method: "PATCH",
+      headers: {
+        "X-Admin-Key": adminKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ verdict, notes }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    await renderProposals();
+  } catch (err) {
+    alert(`Gagal set verdict: ${err.message}`);
+  }
+}
+
+async function renderProgress() {
+  showProgressMode();
+  const wrap = document.getElementById("progress-wrap");
+  wrap.innerHTML = '<div class="loading">Loading sprint timeline…</div>';
+  try {
+    const r = await fetch(`${API}/v1/admin/progress/sprints`, { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    drawGantt(wrap, data);
+  } catch (err) {
+    wrap.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function drawGantt(wrap, data) {
+  const sprints = data.sprints;
+  const today = data.current_day;
+  const minDay = Math.min(...sprints.map(s => s.day_start));
+  const maxDay = Math.max(...sprints.map(s => s.day_end));
+  const totalSpan = maxDay - minDay;
+  const fm = data.facility_meta;
+  const sm = data.status_meta;
+
+  // Header stats
+  const byStatus = data.by_status;
+  const done = byStatus.done || 0;
+  const running = byStatus.running || 0;
+  const planned = byStatus.planned || 0;
+  const blocked = byStatus.blocked || 0;
+  const totalProg = sprints.reduce((sum, s) => sum + s.progress, 0);
+  const avgProg = Math.round(totalProg / sprints.length);
+
+  // Build legend
+  const legend = Object.entries(sm).map(([k, v]) =>
+    `<span><span class="legend-swatch" style="background:${v.color}"></span>${v.label}</span>`
+  ).join("") + " &nbsp;|&nbsp; " +
+  Object.entries(fm).map(([k, v]) =>
+    `<span>${v.emoji} ${v.name}</span>`
+  ).join("");
+
+  // Build sprint rows
+  const todayPct = ((today - minDay) / totalSpan) * 100;
+  const showTodayLine = today >= minDay && today <= maxDay;
+
+  const rows = sprints.map(s => {
+    const startPct = ((s.day_start - minDay) / totalSpan) * 100;
+    const widthPct = Math.max(((s.day_end - s.day_start + 1) / totalSpan) * 100, 1.5);
+    const progFill = s.status === "running" ? s.progress : (s.status === "done" ? 100 : 0);
+    const areaTags = s.facility_areas.map(a => `<span class="tag" style="border-color:${fm[a].color};color:${fm[a].color}">${fm[a].emoji} ${fm[a].name}</span>`).join(" ");
+    const detailId = `detail-${s.id}`;
+    return `
+      <div class="gantt-row">
+        <div class="gantt-label">
+          <span class="sprint-id">${s.id.toUpperCase()}</span> · ${s.progress}%
+          <span class="sprint-name">${escapeHtml(s.name)}</span>
+          <span class="day-range">Day ${s.day_start}–${s.day_end} · ${s.duration_days}d</span>
+        </div>
+        <div class="gantt-track" style="position:relative">
+          <div class="gantt-bar ${s.status}"
+               style="left:${startPct}%; width:${widthPct}%;"
+               onclick="toggleDetail('${detailId}')">
+            ${progFill > 0 ? `<div class="gantt-progress-fill" style="width:${progFill}%"></div>` : ''}
+            <span style="position:relative;z-index:2">${sm[s.status].label}</span>
+          </div>
+          ${showTodayLine ? `<div class="gantt-today-line" style="left:${todayPct}%"></div>` : ''}
+        </div>
+      </div>
+      <div class="sprint-detail" id="${detailId}">
+        <h3>${escapeHtml(s.name)} <small style="color:var(--text-dim);font-family:var(--mono);font-size:0.75rem">(${s.id})</small></h3>
+        <div class="meta-line">
+          Status: <strong style="color:${sm[s.status].color}">${sm[s.status].label}</strong> ·
+          Progress: <strong>${s.progress}%</strong> ·
+          Days: <strong>${s.day_start} → ${s.day_end}</strong> (${s.day_start_iso} → ${s.day_end_iso})
+        </div>
+        <div class="meta-line" style="margin-top:0.6rem">Areas: ${areaTags}</div>
+        <div class="meta-line">Principles: ${s.principle_tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join(" ")}</div>
+        <div style="margin-top:0.8rem"><strong style="color:var(--green);font-family:var(--mono);font-size:0.75rem">DELIVERABLES:</strong></div>
+        ${s.deliverables.map(d => `<div class="deliverable">${escapeHtml(d)}</div>`).join("")}
+      </div>
+    `;
+  }).join("");
+
+  wrap.innerHTML = `
+    <div class="progress-header">
+      <div class="stat-card"><div class="label">CURRENT DAY</div><div class="value">${today}</div></div>
+      <div class="stat-card orange"><div class="label">RUNNING</div><div class="value">${running}</div></div>
+      <div class="stat-card"><div class="label">DONE / TOTAL</div><div class="value">${done}/${sprints.length}</div></div>
+      <div class="stat-card dim"><div class="label">AVG PROGRESS</div><div class="value">${avgProg}%</div></div>
+    </div>
+    <div class="gantt-legend">${legend}</div>
+    ${rows}
+    <div class="gantt-axis">
+      <div></div>
+      <div class="gantt-axis-track">
+        <span>Day ${minDay}</span>
+        <span>${data.anchor_date}</span>
+        <span>Day ${maxDay}</span>
+      </div>
+    </div>
+  `;
+}
+
+function toggleDetail(id) {
+  document.querySelectorAll(".sprint-detail").forEach(el => {
+    if (el.id === id) el.classList.toggle("active");
+    else el.classList.remove("active");
+  });
+}
+
+document.getElementById("search").addEventListener("input", debounce(loadList, 200));
+
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+async function reload() {
+  adminKey = document.getElementById("admin-key").value.trim();
+  if (adminKey) localStorage.setItem("migan_admin_key", adminKey);
+  await loadStats();
+  if (currentTab === "progress") {
+    await renderProgress();
+  } else if (currentTab === "refleksi") {
+    await renderRefleksi();
+  } else if (currentTab === "proposal") {
+    await renderProposals();
+  } else {
+    await loadList();
+  }
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch(`${API}/v1/admin/docs/stats`, { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    document.getElementById("stat-summary").innerHTML =
+      `<strong>${data.total}</strong> docs · ${Object.keys(data.by_tab).length} tabs`;
+    for (const [tab, count] of Object.entries(data.by_tab)) {
+      const el = document.getElementById(`ct-${tab}`);
+      if (el) el.textContent = count;
+    }
+  } catch (err) {
+    document.getElementById("stat-summary").innerHTML = `<span class="error">${err.message}</span>`;
+  }
+  // Also load progress count
+  try {
+    const r2 = await fetch(`${API}/v1/admin/progress/summary`, { headers: { "X-Admin-Key": adminKey } });
+    if (r2.ok) {
+      const ps = await r2.json();
+      const ct = document.getElementById("ct-progress");
+      if (ct) ct.textContent = ps.total_sprints;
+    }
+  } catch {}
+}
+
+async function loadList() {
+  const listEl = document.getElementById("doc-list");
+  listEl.innerHTML = '<div class="loading">Loading…</div>';
+  const search = document.getElementById("search").value.trim();
+  const qs = new URLSearchParams({ tab: currentTab });
+  if (search) qs.set("search", search);
+  try {
+    const r = await fetch(`${API}/v1/admin/docs?${qs}`, { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const docs = data.docs;
+    if (docs.length === 0) {
+      listEl.innerHTML = '<div class="loading">No docs match.</div>';
+      return;
+    }
+    listEl.innerHTML = docs.map(d => {
+      const dt = new Date(d.modified_at * 1000).toISOString().split("T")[0];
+      const kb = (d.size_bytes / 1024).toFixed(1);
+      const active = (d.path === activeDocPath) ? " active" : "";
+      return `<div class="doc-item${active}" data-path="${escapeAttr(d.path)}">
+        <div class="name">${escapeHtml(d.name)}</div>
+        <div class="meta">${dt} · ${kb}KB · ${escapeHtml(d.path)}</div>
+      </div>`;
+    }).join("");
+    listEl.querySelectorAll(".doc-item").forEach(el => {
+      el.addEventListener("click", () => loadDoc(el.dataset.path));
+    });
+  } catch (err) {
+    listEl.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadDoc(path) {
+  activeDocPath = path;
+  document.querySelectorAll(".doc-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.path === path);
+  });
+  const viewer = document.getElementById("viewer");
+  viewer.innerHTML = '<div class="loading">Loading doc…</div>';
+  try {
+    const r = await fetch(`${API}/v1/admin/docs/file?path=${encodeURIComponent(path)}`,
+      { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const dt = new Date(data.modified_at * 1000).toISOString().replace("T", " ").substring(0, 16);
+    viewer.innerHTML = `
+      <div class="viewer-meta">
+        <strong>${escapeHtml(data.name)}</strong> · tab: <code>${data.tab}</code>
+        · ${(data.size_bytes/1024).toFixed(1)}KB · modified ${dt}<br>
+        <code>${escapeHtml(data.path)}</code>
+      </div>
+      <pre class="viewer-content">${escapeHtml(data.content)}</pre>
+    `;
+  } catch (err) {
+    viewer.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+if (adminKey) reload();
+</script>
+</body>
+</html>
