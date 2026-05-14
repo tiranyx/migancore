@@ -169,20 +169,21 @@ async def select_relevant_tools(
     scored.sort(key=lambda x: -x[0])
 
     # Day 74 — only offer tools whose score exceeds RELEVANCE_THRESHOLD.
-    # If best score < threshold, return ONLY the always-include set so brain
-    # answers from its own knowledge instead of getting stuck reasoning over
-    # uncertain tool choices on CPU 7B (root cause of 180s tool-call timeouts).
+    # If best score < threshold, return EMPTY so chat skips the tool loop
+    # entirely and goes straight to plain streaming. Even handing brain just
+    # memory_* tools forces Ollama's tool-call mode (extra reasoning + slower
+    # generation on CPU 7B), which was hitting the 90s timeout on substantive
+    # prompts. Background CAI still extracts facts post-response.
     top_score = scored[0][0] if scored else 0.0
     if top_score < RELEVANCE_THRESHOLD:
-        always_present = [t for t in ALWAYS_INCLUDE if t in available_tools]
         logger.info(
             "tool_relevance.low_confidence_skip",
             query_len=len(user_query),
             top_score=f"{top_score:.3f}",
             threshold=RELEVANCE_THRESHOLD,
-            kept=len(always_present),
+            kept=0,
         )
-        return always_present
+        return []
 
     top_tools = [tool for _score, tool in scored[:top_k] if _score >= RELEVANCE_THRESHOLD]
 
