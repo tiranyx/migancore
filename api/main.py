@@ -64,6 +64,7 @@ from routers import sandbox as sandbox_router               # M1.7: Dev Organ Sa
 from routers import admin_docs as admin_docs_router   # Day 73 Sprint 1.5: SSOT Backlog browser
 from routers import admin_progress as admin_progress_router   # Day 73 Sprint 1.5: Gantt progress tracker
 from routers import reflection_daemon as reflection_router   # Day 75 Sprint 2: nafs reflection daemon
+from routers import voice_tone as voice_tone_router   # Day 75 Sprint 2: voice tone analysis (qalb)
 
 # Day 26: MCP Streamable HTTP server (lazy import â€” degrades gracefully if SDK missing)
 try:
@@ -511,6 +512,7 @@ app.include_router(sandbox_router.router)          # M1.7: Dev Organ Sandbox
 app.include_router(admin_docs_router.router)  # Day 73 Sprint 1.5: SSOT Backlog
 app.include_router(admin_progress_router.router)  # Day 73 Sprint 1.5: Gantt progress
 app.include_router(reflection_router.router)  # Day 75 Sprint 2: reflection
+app.include_router(voice_tone_router.router)  # Day 75 Sprint 2: voice tone (qalb)
 
 # Day 72e: MiganForge — Training orchestrator (closed-loop self-improvement)
 try:
