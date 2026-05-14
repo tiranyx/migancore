@@ -328,7 +328,9 @@ def dry_run():
     else:
         log(f"  [OK] SSH key: {SSH_KEY}")
 
-    # 5. Vast.ai API reachable (read-only)
+    # 5. Vast.ai API reachable (read-only) + credit check + orphan instance check
+    # Orphan check from Day 49 redux: "exited" instances still incur disk costs
+    # until DELETE. Without this, can leak $0.30+/day silently.
     try:
         VAST_KEY_LOCAL = Path(VAST_KEY_PATH).read_text().strip()
         if VAST_KEY_LOCAL:
@@ -342,9 +344,34 @@ def dry_run():
                 credit = user.get("credit", 0)
                 log(f"  [OK] Vast.ai API: credit=${credit:.2f}")
                 if credit < COST_CAP_USD:
-                    issues.append(f"Vast.ai credit ${credit:.2f} < cost cap ${COST_CAP_USD}")
+                    issues.append(
+                        f"Vast.ai credit ${credit:.2f} < cost cap ${COST_CAP_USD} — top up needed"
+                    )
             else:
                 issues.append(f"Vast.ai API: HTTP {r.status_code}")
+
+            # Orphan instance scan (Lesson #59 + Day 49 redux)
+            r2 = requests.get(
+                f"{VAST_API}/instances/",
+                params={"api_key": VAST_KEY_LOCAL},
+                timeout=15
+            )
+            if r2.status_code == 200:
+                insts = r2.json().get("instances", [])
+                if not insts:
+                    log(f"  [OK] No orphan instances")
+                else:
+                    log(f"  [WARN] {len(insts)} existing instance(s):")
+                    for i in insts:
+                        status = i.get("actual_status", "?")
+                        log(f"    #{i.get('id')} status={status} "
+                            f"gpu={i.get('gpu_name','?')} "
+                            f"dph={i.get('dph_total',0):.3f}")
+                        if status == "exited":
+                            issues.append(
+                                f"Orphan exited instance #{i.get('id')} — "
+                                f"disk cost leaking. DELETE via API before launch."
+                            )
     except Exception as e:
         issues.append(f"Vast.ai API unreachable: {e}")
 
