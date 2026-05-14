@@ -700,9 +700,11 @@ async def chat_stream(
                         # assistant messages (with tool_calls field) or tool roles
                         # confuse Ollama into thinking "I already answered", causing
                         # Phase B to stream 0 chunks. Restore clean state.
+                        # (Phase B uses chat_stream which doesn't take tools, so
+                        # we don't need to null tools_spec_stream — and reassigning
+                        # it here would make Python treat the outer-scope variable
+                        # as local, raising UnboundLocalError on the `if` above.)
                         run_messages = list(messages)
-                        # Also clear tool spec so Phase B is true plain generation
-                        tools_spec_stream = None  # type: ignore[assignment]
                         break
                     msg = tool_resp.get("message", {}) or {}
                     tcs = msg.get("tool_calls") or []
