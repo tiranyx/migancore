@@ -175,6 +175,30 @@ def _keyword_route(
     return result if result else None
 
 
+# Day 75 — concept/definition query patterns that need NO tool (adaptive doctrine)
+# These match short conceptual questions where brain should answer from knowledge.
+_CONCEPT_QUERY_PATTERNS = [
+    "apa itu ", "apa arti ", "apa maksud ", "jelaskan ", "definisi ",
+    "what is ", "what does ", "explain ", "define ", "meaning of ",
+    "apa beda ", "apa perbedaan ", "what's the difference",
+]
+
+
+def _is_concept_query(message: str) -> bool:
+    """Adaptive trigger: detect conceptual/definition queries that need no tool.
+
+    Short query (<120 chars) starting/containing concept patterns → skip tools.
+    Brain answers from knowledge (memory_search still available if it needs to recall).
+    """
+    msg_lower = message.lower().strip()
+    if len(msg_lower) > 120:  # long query = likely needs tools
+        return False
+    for pat in _CONCEPT_QUERY_PATTERNS:
+        if pat in msg_lower:
+            return True
+    return False
+
+
 async def route_tools(
     message: str,
     available_tools: list[str],
@@ -195,6 +219,19 @@ async def route_tools(
         return []
 
     available_set = set(available_tools)
+
+    # Day 75 — Pass 0: concept query short-circuit
+    # Definition/explanation queries don't need tools (brain knows from KB + training).
+    # Per Adaptive Doctrine: skip tool spec when not earned. Massive speed win on CPU.
+    if _is_concept_query(message):
+        core_only = [t for t in available_tools if t in CORE_TOOLS]
+        logger.info(
+            "tool_router.concept_skip",
+            query_len=len(message),
+            available=len(available_tools),
+            kept=len(core_only),
+        )
+        return core_only  # only memory_write + memory_search
 
     # Pass 1: keyword fast path
     keyword_result = _keyword_route(message, available_set)
