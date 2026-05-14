@@ -268,6 +268,72 @@
     color: var(--text-dim); font-family: var(--mono); font-size: 0.7rem;
   }
   .stat-bar strong { color: var(--green); }
+
+  /* ===== Refleksi & Proposal panels (Day 73 Codex audit item 1+2) ===== */
+  .feed-wrap { padding: 1.5rem 2rem; overflow-y: auto; max-width: 920px; }
+  .feed-wrap h2 {
+    font-family: var(--display); color: var(--green);
+    font-size: 1rem; letter-spacing: 0.08em; margin-bottom: 0.4rem;
+  }
+  .feed-wrap .feed-sub {
+    color: var(--text-dim); font-family: var(--mono);
+    font-size: 0.7rem; margin-bottom: 1.2rem;
+  }
+  .feed-card {
+    background: var(--bg-1); border: 1px solid var(--border);
+    border-left: 3px solid var(--green); border-radius: 6px;
+    padding: 1rem 1.2rem; margin-bottom: 0.8rem;
+  }
+  .feed-card.proposal { border-left-color: var(--orange); }
+  .feed-card.proposal.approved { border-left-color: var(--green); opacity: 0.7; }
+  .feed-card.proposal.rejected { border-left-color: var(--red); opacity: 0.55; }
+  .feed-card .when {
+    font-family: var(--mono); font-size: 0.65rem;
+    color: var(--text-faint); letter-spacing: 0.05em;
+  }
+  .feed-card .when strong { color: var(--green); }
+  .feed-card .title {
+    font-family: var(--display); font-size: 0.9rem;
+    color: var(--text); margin: 0.35rem 0 0.6rem; letter-spacing: 0.03em;
+  }
+  .feed-card .body {
+    font-family: var(--mono); font-size: 0.78rem; line-height: 1.7;
+    color: var(--text); white-space: pre-wrap;
+  }
+  .feed-card .pill {
+    display: inline-block; padding: 0.15rem 0.55rem;
+    border-radius: 3px; font-family: var(--mono); font-size: 0.6rem;
+    border: 1px solid var(--border); color: var(--text-dim);
+    margin-right: 0.3rem; letter-spacing: 0.05em;
+  }
+  .feed-card .pill.risk-low { color: var(--green); border-color: var(--green-border); }
+  .feed-card .pill.risk-medium { color: var(--orange); border-color: var(--orange-border); }
+  .feed-card .pill.risk-high, .feed-card .pill.risk-critical { color: var(--red); border-color: rgba(255,84,112,0.3); }
+  .feed-card .pill.stage { color: var(--orange); }
+  .feed-card .actions {
+    display: flex; gap: 0.5rem; margin-top: 0.8rem; flex-wrap: wrap;
+  }
+  .feed-card .btn {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em;
+    padding: 0.4rem 0.9rem; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-dim); transition: all 0.15s;
+  }
+  .feed-card .btn.approve { color: var(--green); border-color: var(--green-border); }
+  .feed-card .btn.approve:hover { background: var(--green-dim); }
+  .feed-card .btn.reject { color: var(--red); border-color: rgba(255,84,112,0.3); }
+  .feed-card .btn.reject:hover { background: var(--red-dim); }
+  .feed-card .verdict-note {
+    font-family: var(--mono); font-size: 0.7rem;
+    color: var(--text-dim); margin-top: 0.6rem;
+    border-top: 1px dashed var(--border); padding-top: 0.5rem;
+  }
+  .feed-card .verdict-note strong { color: var(--orange); }
+  .feed-empty {
+    color: var(--text-faint); padding: 2rem;
+    text-align: center; font-family: var(--mono); font-size: 0.8rem;
+    background: var(--bg-1); border-radius: 6px;
+  }
 </style>
 </head>
 <body>
@@ -291,6 +357,8 @@
 
 <div class="tabs" id="tabs">
   <div class="tab active" data-tab="progress">📊 PROGRESS <span class="count" id="ct-progress">…</span></div>
+  <div class="tab" data-tab="refleksi">🌱 REFLEKSI <span class="count" id="ct-refleksi">…</span></div>
+  <div class="tab" data-tab="proposal">📥 PROPOSAL <span class="count" id="ct-proposal">…</span></div>
   <div class="tab" data-tab="vision">🌟 VISION <span class="count" id="ct-vision">…</span></div>
   <div class="tab" data-tab="backlog">📋 BACKLOG <span class="count" id="ct-backlog">…</span></div>
   <div class="tab" data-tab="journal">📖 JOURNAL <span class="count" id="ct-journal">…</span></div>
@@ -327,6 +395,10 @@ document.querySelectorAll(".tab").forEach(tab => {
     currentTab = tab.dataset.tab;
     if (currentTab === "progress") {
       renderProgress();
+    } else if (currentTab === "refleksi") {
+      renderRefleksi();
+    } else if (currentTab === "proposal") {
+      renderProposals();
     } else {
       showDocMode();
       loadList();
@@ -353,6 +425,164 @@ function showDocMode() {
   document.querySelector("section.viewer").style.display = "";
   const wrap = document.getElementById("progress-wrap");
   if (wrap) wrap.style.display = "none";
+  const feed = document.getElementById("feed-wrap");
+  if (feed) feed.style.display = "none";
+}
+
+function showFeedMode() {
+  document.querySelector("aside").style.display = "none";
+  document.querySelector("section.viewer").style.display = "none";
+  const wrap = document.getElementById("progress-wrap");
+  if (wrap) wrap.style.display = "none";
+  let feed = document.getElementById("feed-wrap");
+  if (!feed) {
+    feed = document.createElement("div");
+    feed.id = "feed-wrap";
+    feed.className = "feed-wrap";
+    feed.style.cssText = "grid-column: 1 / -1; overflow-y: auto;";
+    document.querySelector("main").appendChild(feed);
+  }
+  feed.style.display = "block";
+  return feed;
+}
+
+function fmtRelativeID(ts) {
+  if (!ts) return "—";
+  const dt = new Date(typeof ts === "number" ? ts * 1000 : ts);
+  const now = new Date();
+  const diffMs = now - dt;
+  const diffH = diffMs / 3600000;
+  const iso = dt.toISOString().replace("T", " ").substring(0, 16);
+  if (diffH < 1) return `${Math.round(diffH * 60)} menit lalu · ${iso}`;
+  if (diffH < 24) return `${Math.round(diffH)} jam lalu · ${iso}`;
+  const days = Math.round(diffH / 24);
+  return `${days} hari lalu · ${iso}`;
+}
+
+async function renderRefleksi() {
+  const feed = showFeedMode();
+  feed.innerHTML = '<div class="loading">Loading refleksi harian…</div>';
+  try {
+    const r = await fetch(`${API}/v1/admin/reflection/latest?limit=20`,
+      { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const items = data.reflections || [];
+    if (items.length === 0) {
+      feed.innerHTML = `
+        <h2>🌱 Refleksi Harian</h2>
+        <div class="feed-sub">Growth journal — apa yang Migan pelajari, gagal, butuh, usulkan</div>
+        <div class="feed-empty">Belum ada refleksi. Daemon harian akan fire ±24h sekali, atau trigger manual via <code>POST /v1/admin/reflection/trigger</code>.</div>
+      `;
+      const ct = document.getElementById("ct-refleksi");
+      if (ct) ct.textContent = "0";
+      return;
+    }
+    const cards = items.map(r => `
+      <div class="feed-card">
+        <div class="when">🕐 ${escapeHtml(fmtRelativeID(r.timestamp))}</div>
+        <div class="title">Refleksi · <span style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim)">${escapeHtml(r.key)}</span></div>
+        <div class="body">${escapeHtml(r.content)}</div>
+      </div>
+    `).join("");
+    feed.innerHTML = `
+      <h2>🌱 Refleksi Harian</h2>
+      <div class="feed-sub">Growth journal — ${items.length} entry · prompt: belajar / gagal / perlu alat / usul upgrade</div>
+      ${cards}
+    `;
+    const ct = document.getElementById("ct-refleksi");
+    if (ct) ct.textContent = items.length;
+  } catch (err) {
+    feed.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function renderProposals() {
+  const feed = showFeedMode();
+  feed.innerHTML = '<div class="loading">Loading proposal antrian…</div>';
+  try {
+    const [pendingR, allR] = await Promise.all([
+      fetch(`${API}/v1/sandbox/proposals?verdict=pending&limit=50`,
+        { headers: { "X-Admin-Key": adminKey } }),
+      fetch(`${API}/v1/sandbox/proposals?limit=30`,
+        { headers: { "X-Admin-Key": adminKey } }),
+    ]);
+    if (!pendingR.ok) throw new Error(`HTTP ${pendingR.status}: ${await pendingR.text()}`);
+    const pending = await pendingR.json();
+    const all = allR.ok ? await allR.json() : { items: [] };
+    const items = pending.items || [];
+    const decided = (all.items || []).filter(p => p.creator_verdict);
+
+    const card = (p, isDecided) => {
+      const created = fmtRelativeID(p.created_at);
+      const decidedLine = p.decided_at
+        ? `<div class="verdict-note"><strong>${p.creator_verdict === 'approved' ? '✅ Approved' : '❌ Rejected'}</strong> · ${escapeHtml(fmtRelativeID(p.decided_at))}${p.creator_notes ? ' · ' + escapeHtml(p.creator_notes) : ''}</div>`
+        : "";
+      const actions = isDecided ? "" : `
+        <div class="actions">
+          <button class="btn approve" onclick="setVerdict('${p.id}', 'approved')">✓ APPROVE</button>
+          <button class="btn reject" onclick="setVerdict('${p.id}', 'rejected')">✗ REJECT</button>
+        </div>
+      `;
+      const cardClass = isDecided
+        ? `feed-card proposal ${p.creator_verdict}`
+        : "feed-card proposal";
+      return `
+        <div class="${cardClass}">
+          <div class="when">🕐 ${escapeHtml(created)}</div>
+          <div class="title">${escapeHtml(p.title || "(no title)")}</div>
+          <div>
+            <span class="pill risk-${escapeAttr(p.risk_level)}">RISK ${escapeHtml((p.risk_level || "").toUpperCase())}</span>
+            <span class="pill stage">STAGE ${escapeHtml((p.stage || "").toUpperCase())}</span>
+            <span class="pill">SRC ${escapeHtml(p.source || "")}</span>
+            <span class="pill">BY ${escapeHtml(p.created_by || "")}</span>
+          </div>
+          <div class="body" style="margin-top:0.6rem">${escapeHtml(p.problem || "")}${p.hypothesis ? "\n\nHipotesis: " + escapeHtml(p.hypothesis) : ""}</div>
+          ${actions}
+          ${decidedLine}
+        </div>
+      `;
+    };
+
+    const pendingCards = items.map(p => card(p, false)).join("") ||
+      `<div class="feed-empty">Belum ada proposal pending. Saat watchdog auto-train atau dev_organ mendapati threshold, proposal masuk ke sini untuk Fahmi review.</div>`;
+    const decidedCards = decided.length
+      ? `<h2 style="margin-top:2rem">📑 Yang sudah diputuskan</h2>
+         <div class="feed-sub">${decided.length} proposal terakhir</div>
+         ${decided.map(p => card(p, true)).join("")}`
+      : "";
+
+    feed.innerHTML = `
+      <h2>📥 Proposal Migan</h2>
+      <div class="feed-sub">${items.length} antri review · auto_train_watchdog dalam mode <code>proposal</code> — Fahmi yang putuskan, bukan GPU otomatis</div>
+      ${pendingCards}
+      ${decidedCards}
+    `;
+    const ct = document.getElementById("ct-proposal");
+    if (ct) ct.textContent = items.length;
+  } catch (err) {
+    feed.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function setVerdict(proposalId, verdict) {
+  const notes = verdict === "rejected"
+    ? (prompt("Catatan rejection (opsional):") || "")
+    : (prompt("Catatan approval (opsional):") || "");
+  try {
+    const r = await fetch(`${API}/v1/sandbox/proposals/${proposalId}/verdict`, {
+      method: "PATCH",
+      headers: {
+        "X-Admin-Key": adminKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ verdict, notes }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    await renderProposals();
+  } catch (err) {
+    alert(`Gagal set verdict: ${err.message}`);
+  }
 }
 
 async function renderProgress() {
@@ -476,6 +706,10 @@ async function reload() {
   await loadStats();
   if (currentTab === "progress") {
     await renderProgress();
+  } else if (currentTab === "refleksi") {
+    await renderRefleksi();
+  } else if (currentTab === "proposal") {
+    await renderProposals();
   } else {
     await loadList();
   }

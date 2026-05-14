@@ -11,7 +11,7 @@
  *   - Old caches deleted automatically on activate
  */
 
-const CACHE_VERSION = 'v1.0.71c';
+const CACHE_VERSION = 'v1.0.73e';
 const CACHE_HTML = `migancore-html-${CACHE_VERSION}`;
 const CACHE_ASSETS = `migancore-assets-${CACHE_VERSION}`;
 

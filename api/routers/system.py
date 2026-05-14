@@ -33,13 +33,25 @@ def _percentile(values: list[float], pct: float) -> float:
 
 @router.get("/status")
 async def system_status() -> dict:
-    """Lightweight status: brain alive, tool count, basic versions."""
+    """Lightweight status: brain alive, tool count, basic versions.
+
+    Day 73 — build metadata (commit_sha/build_day) now derived from the same
+    source as /health so the two endpoints never drift again.
+    """
     from config import settings
     try:
         from services.tool_relevance import is_ready as tr_ready, stats as tr_stats
     except ImportError:
         tr_ready = lambda: False
         tr_stats = lambda: {}
+
+    # Pull build metadata from main module (single source of truth, set at import time)
+    try:
+        from main import _BUILD_COMMIT_SHA, _BUILD_DAY, _BUILD_TIME
+    except Exception:
+        _BUILD_COMMIT_SHA = "unknown"
+        _BUILD_DAY = "unknown"
+        _BUILD_TIME = ""
 
     return {
         "status": "operational",
@@ -52,7 +64,9 @@ async def system_status() -> dict:
             **(tr_stats() if callable(tr_stats) else {}),
         },
         "version": "0.5.16",
-        "build_day": "Day 71d",
+        "commit_sha": _BUILD_COMMIT_SHA,
+        "build_day": _BUILD_DAY,
+        "build_time": _BUILD_TIME,
     }
 
 
