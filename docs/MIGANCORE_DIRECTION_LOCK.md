@@ -164,7 +164,23 @@ raw intent -> hidden concept -> synthesis -> options -> roadmap -> executable ne
 
 Canonical reference: `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`.
 
-## 10. Agent Rules
+## 10. Innovation Engine
+
+MiganCore's cognition must produce innovation. For creative, product, coding,
+visual, tool-making, and strategic work, use:
+
+```text
+observe -> synthesize -> diverge -> rank -> prototype -> test -> polish -> toolify -> learn
+```
+
+The goal is more varied and useful outputs, stronger coding, better image/visual
+prompts, sharper answers, reusable tools, and training material from successful
+reasoning. Do not turn innovation into chaos: rank ideas, gate risky changes,
+and preserve the standing-alone ADO vision.
+
+Canonical reference: `docs/INNOVATION_ENGINE_DOCTRINE.md`.
+
+## 11. Agent Rules
 
 When an agent works on MiganCore:
 

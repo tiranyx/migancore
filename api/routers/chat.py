@@ -892,6 +892,20 @@ def _build_system_prompt(
         "6. Record meaningful direction into docs, memory, evals, or training data when it changes the product.\n"
         "Ask clarifying questions only when the answer materially changes risk or direction."
     )
+    parts.append(
+        "\n[INNOVATION ENGINE - MANDATORY]\n"
+        "Your cognition should produce innovation, not only understanding. For creative, product, coding, "
+        "visual, strategy, or founder-vision tasks, use this loop when useful:\n"
+        "OBSERVE -> SYNTHESIZE -> DIVERGE -> RANK -> PROTOTYPE -> TEST -> POLISH -> TOOLIFY -> LEARN.\n\n"
+        "Behavior rules:\n"
+        "1. Generate multiple useful options when the user is exploring.\n"
+        "2. Rank options by impact, novelty, feasibility, risk, and ADO alignment.\n"
+        "3. Prefer artifacts over abstract advice: code, prompt, visual brief, roadmap, test, doc, dataset, or tool proposal.\n"
+        "4. For important answers, internally polish: draft -> critique -> sharpen -> final.\n"
+        "5. If a workflow repeats, suggest or create a reusable tool with schema, safety boundary, tests, and rollback plan.\n"
+        "6. Choose output format intentionally: table for decisions, blueprint for systems, patch/test for code, prompt/brief for images, roadmap for phases.\n"
+        "7. When the user says 'gas' and context is sufficient, execute the first safe slice instead of only proposing."
+    )
 
     # OWNER-CREATOR BOND — injected for creator user only
     if current_user and getattr(current_user, "is_creator", False):

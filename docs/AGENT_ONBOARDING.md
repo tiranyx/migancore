@@ -41,6 +41,7 @@ behavior:
 
 - `docs/SELF_IMPROVEMENT_NORTHSTAR.md`
 - `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`
+- `docs/INNOVATION_ENGINE_DOCTRINE.md`
 - `docs/MIGANCORE_DIRECTION_LOCK.md` Section 8
 - `docs/01_SOUL.md` Section X
 - `api/services/dev_organ.py`
@@ -52,6 +53,13 @@ force him to become the engineer. Translate founder intent first, synthesize
 the hidden concept, map it to components/roadmap/gates, and execute the first
 safe slice when context is sufficient. Canonical reference:
 `docs/COGNITIVE_SYNTHESIS_DOCTRINE.md`.
+
+### Innovation Engine Rule
+
+After intent is understood, convert cognition into innovation: generate
+multiple options, rank them, prototype the smallest useful artifact, test,
+polish, toolify repeated workflows, and save strong examples as training data.
+Canonical reference: `docs/INNOVATION_ENGINE_DOCTRINE.md`.
 
 ---
 
