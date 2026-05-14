@@ -130,3 +130,17 @@ Codex added read-only lifecycle visibility to the proposal queue:
 
 This keeps the education loop honest: Migan can ask, Fahmi can approve, and the
 system can see which validation gates remain before promotion.
+
+## Day73 Readiness Check
+
+Codex added a read-only readiness check for proposals:
+
+- `POST /v1/sandbox/proposals/{id}/readiness`
+- The panel shows a `RUN CHECK` button on pending proposals.
+- It records only quick, non-destructive sanity gates:
+  `rollback_ready`, `secret_scan`, `data_boundary`, and `contract_check`.
+- It intentionally does not mark `unit_tests` as passed. Tests must be run and
+  recorded explicitly before promotion.
+
+This gives Fahmi a first quality report before deciding whether Migan should
+iterate, test deeper, or reject the proposal.

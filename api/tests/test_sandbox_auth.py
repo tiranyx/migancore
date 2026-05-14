@@ -135,3 +135,29 @@ def test_proposal_response_marks_gate_failures_and_next_action():
     assert lifecycle["failed_gates"] == ["secret_scan"]
     assert "unit_tests" in lifecycle["missing_gates"]
     assert lifecycle["next_action"] == "fix_failed_gates"
+
+
+def test_readiness_quick_gates_pass_for_low_risk_docs_proposal():
+    proposal = DummyProposal()
+    gates = sandbox._readiness_gate_results(proposal)
+    by_name = {gate.name: gate for gate in gates}
+
+    assert by_name["rollback_ready"].passed is True
+    assert by_name["secret_scan"].passed is True
+    assert by_name["data_boundary"].passed is True
+    assert by_name["contract_check"].passed is True
+    assert "unit_tests" not in by_name
+
+
+def test_readiness_quick_gates_fail_for_secret_and_missing_rollback():
+    proposal = DummyProposal()
+    proposal.rollback_plan = ""
+    proposal.touched_paths = ["config/.env.production"]
+    proposal.risk_level = "critical"
+
+    gates = sandbox._readiness_gate_results(proposal)
+    by_name = {gate.name: gate for gate in gates}
+
+    assert by_name["rollback_ready"].passed is False
+    assert by_name["secret_scan"].passed is False
+    assert by_name["data_boundary"].passed is False

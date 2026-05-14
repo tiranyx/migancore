@@ -553,6 +553,7 @@ async function renderProposals() {
         : "";
       const actions = isDecided ? "" : `
         <div class="actions">
+          <button class="btn" onclick="runReadiness('${p.id}')">RUN CHECK</button>
           <button class="btn approve" onclick="setVerdict('${p.id}', 'approved')">✓ APPROVE</button>
           <button class="btn reject" onclick="setVerdict('${p.id}', 'rejected')">✗ REJECT</button>
         </div>
@@ -616,6 +617,19 @@ async function setVerdict(proposalId, verdict) {
     await renderProposals();
   } catch (err) {
     alert(`Gagal set verdict: ${err.message}`);
+  }
+}
+
+async function runReadiness(proposalId) {
+  try {
+    const r = await fetch(`${API}/v1/sandbox/proposals/${proposalId}/readiness`, {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    await renderProposals();
+  } catch (err) {
+    alert(`Gagal run readiness check: ${err.message}`);
   }
 }
 

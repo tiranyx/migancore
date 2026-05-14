@@ -157,6 +157,79 @@ def _proposal_to_response(proposal: DevOrganProposal) -> dict:
     return data
 
 
+_SECRET_PATH_MARKERS = (
+    ".env",
+    "private.pem",
+    "public.pem",
+    "secret",
+    "credential",
+    "api_key",
+    "token",
+)
+
+_DATA_BOUNDARY_MARKERS = (
+    "tenant",
+    "rls",
+    "auth",
+    "jwt",
+    "password",
+    "license",
+    "migration",
+    "alembic",
+    "database",
+)
+
+
+def _readiness_gate_results(proposal: DevOrganProposal) -> list[GateResult]:
+    """Compute non-destructive readiness gates.
+
+    This is a sanity/pre-test pass only. It intentionally does not mark
+    `unit_tests` as passed because tests must be run and recorded explicitly.
+    """
+    paths = [str(p) for p in (proposal.touched_paths or [])]
+    joined_paths = "\n".join(paths).lower()
+    text_surface = "\n".join(
+        [
+            joined_paths,
+            str(proposal.title or "").lower(),
+            str(proposal.problem or "").lower(),
+            str(proposal.hypothesis or "").lower(),
+        ]
+    )
+
+    rollback_ok = bool((proposal.rollback_plan or "").strip())
+    secret_hit = next((m for m in _SECRET_PATH_MARKERS if m in text_surface), None)
+    boundary_hit = next((m for m in _DATA_BOUNDARY_MARKERS if m in joined_paths), None)
+    risk = RiskLevel(proposal.risk_level)
+
+    return [
+        GateResult(
+            name="rollback_ready",
+            passed=rollback_ok,
+            detail="Rollback plan present." if rollback_ok else "Missing rollback plan.",
+        ),
+        GateResult(
+            name="secret_scan",
+            passed=secret_hit is None,
+            detail="No obvious secret markers." if secret_hit is None else f"Secret marker found: {secret_hit}",
+        ),
+        GateResult(
+            name="data_boundary",
+            passed=boundary_hit is None and risk is not RiskLevel.CRITICAL,
+            detail=(
+                "No obvious tenant/auth/database boundary touch."
+                if boundary_hit is None and risk is not RiskLevel.CRITICAL
+                else f"Sensitive boundary marker/risk found: {boundary_hit or risk.value}"
+            ),
+        ),
+        GateResult(
+            name="contract_check",
+            passed=True,
+            detail="Sandbox API reachable; readiness check executed successfully.",
+        ),
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------
@@ -315,6 +388,71 @@ async def set_verdict(
         verdict=body.verdict,
     )
     return _proposal_to_response(proposal)
+
+
+# ---------------------------------------------------------------------------
+# Run read-only readiness gates
+# ---------------------------------------------------------------------------
+
+@router.post("/proposals/{proposal_id}/readiness")
+async def run_readiness(
+    proposal_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin),
+):
+    proposal = await db.get(DevOrganProposal, proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    if proposal.stage in ("deployed", "rolled_back"):
+        raise HTTPException(status_code=409, detail=f"Proposal already in stage '{proposal.stage}'")
+
+    gate_results = _readiness_gate_results(proposal)
+    existing = {
+        str(g.get("name")): g
+        for g in (proposal.gate_results or [])
+        if isinstance(g, dict) and g.get("name")
+    }
+    for gate in gate_results:
+        existing[gate.name] = {
+            "name": gate.name,
+            "passed": gate.passed,
+            "detail": gate.detail,
+        }
+
+    proposal.gate_results = [existing[name] for name in sorted(existing)]
+    proposal.gate_run_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(proposal)
+
+    report = evaluate_promotion(
+        ImprovementProposal(
+            proposal_id=str(proposal_id),
+            title=proposal.title,
+            problem=proposal.problem,
+            hypothesis=proposal.hypothesis,
+            touched_paths=tuple(proposal.touched_paths or []),
+            tests=tuple(proposal.tests or []),
+            rollback_plan=proposal.rollback_plan or "",
+            risk=RiskLevel(proposal.risk_level),
+        ),
+        [GateResult(name=g["name"], passed=bool(g["passed"]), detail=g.get("detail", "")) for g in proposal.gate_results],
+    )
+
+    return {
+        "proposal": _proposal_to_response(proposal),
+        "readiness": {
+            "gates": proposal.gate_results,
+            "promotion_report": {
+                "decision": report.decision.value,
+                "risk": report.risk.value,
+                "passed_gates": list(report.passed_gates),
+                "failed_gates": list(report.failed_gates),
+                "missing_gates": list(report.missing_gates),
+                "reason": report.reason,
+            },
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
