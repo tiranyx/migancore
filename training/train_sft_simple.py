@@ -119,7 +119,7 @@ def main():
         seed=3407,
         report_to=[],
         remove_unused_columns=False,
-        max_length=args.max_seq_length,
+        max_seq_length=args.max_seq_length,
     )
 
     trainer = SFTTrainer(
