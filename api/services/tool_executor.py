@@ -38,6 +38,7 @@ import asyncio
 import json
 import os
 import subprocess
+import time
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
@@ -249,6 +250,8 @@ async def _python_repl(args: dict, ctx: ToolContext) -> dict:
     escaped via __subclasses__() or __import__. Output capped at 2000 chars.
 
     Day 11: Added import blacklist validation (defense-in-depth).
+    Day 74 (Sprint 2): Code Lab scoring + adaptive lesson capture (rasa sakit/senang
+        → nafs/hikmah buckets). Adaptive per Sprint 2 design — TIDAK blanket save.
     """
     code = args.get("code", "").strip()
     timeout = min(int(args.get("timeout", 30)), 30)
@@ -263,6 +266,7 @@ async def _python_repl(args: dict, ctx: ToolContext) -> dict:
         logger.warning("tool.python_repl.policy_violation", reason=exc.reason, agent=ctx.agent_id)
         raise ToolExecutionError(f"Security policy violation: {exc.reason}") from exc
 
+    started_at = time.time()
     try:
         result = await asyncio.wait_for(
             asyncio.to_thread(
@@ -274,24 +278,72 @@ async def _python_repl(args: dict, ctx: ToolContext) -> dict:
             ),
             timeout=float(timeout) + 2,
         )
-
+        elapsed_ms = int((time.time() - started_at) * 1000)
         stdout = (result.stdout or "")[:2000]
         stderr = (result.stderr or "")[:500]
-
-        logger.info("tool.python_repl", rc=result.returncode, agent=ctx.agent_id)
-        return {
-            "output": stdout,
-            "error": stderr if stderr else None,
-            "return_code": result.returncode,
-            "success": result.returncode == 0,
-        }
+        success = result.returncode == 0
+        exit_code = result.returncode
 
     except asyncio.TimeoutError:
-        return {"output": "", "error": f"Timed out after {timeout}s", "success": False, "return_code": -1}
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        stdout, stderr, success, exit_code = "", f"Timed out after {timeout}s", False, -1
     except FileNotFoundError:
-        return {"output": "", "error": "Python interpreter not found", "success": False, "return_code": -1}
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        stdout, stderr, success, exit_code = "", "Python interpreter not found", False, -1
     except Exception as exc:
-        return {"output": "", "error": str(exc), "success": False, "return_code": -1}
+        elapsed_ms = int((time.time() - started_at) * 1000)
+        stdout, stderr, success, exit_code = "", str(exc), False, -1
+
+    # Day 74: enrich with scoring + adaptive lesson capture
+    try:
+        from services.code_lab import enrich_execution
+        enrichment = enrich_execution(
+            code=code,
+            success=success,
+            elapsed_ms=elapsed_ms,
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=exit_code,
+            context={"agent_id": ctx.agent_id, "tenant_id": ctx.tenant_id},
+        )
+    except Exception as exc:
+        logger.warning("tool.python_repl.scoring_failed", error=str(exc))
+        enrichment = {"score": None, "lesson": None}
+
+    # Adaptive lesson save — only when enrichment decides save=True
+    lesson_meta = enrichment.get("lesson")
+    if lesson_meta and lesson_meta.get("save"):
+        try:
+            from services.memory import memory_write as kv_write
+            bucket = lesson_meta["bucket"]  # 'nafs' or 'hikmah'
+            key = f"codelab_{int(time.time())}_{hash(code) & 0xFFFFFFFF:08x}"
+            await kv_write(
+                tenant_id=ctx.tenant_id,
+                agent_id=ctx.agent_id,
+                key=key,
+                value=lesson_meta["summary"],
+                namespace=bucket,
+                ttl_days=90,
+            )
+            logger.info("tool.python_repl.lesson_saved", bucket=bucket, key=key,
+                        agent=ctx.agent_id)
+        except Exception as exc:
+            logger.warning("tool.python_repl.lesson_save_failed", error=str(exc))
+
+    logger.info("tool.python_repl", rc=exit_code, agent=ctx.agent_id,
+                elapsed_ms=elapsed_ms,
+                score=(enrichment.get("score") or {}).get("score"),
+                feeling=(enrichment.get("score") or {}).get("feeling"))
+
+    return {
+        "output": stdout,
+        "error": stderr if stderr else None,
+        "return_code": exit_code,
+        "success": success,
+        "elapsed_ms": elapsed_ms,
+        "score": enrichment.get("score"),
+        "lesson_saved": bool(lesson_meta and lesson_meta.get("save")),
+    }
 
 
 async def _text_to_speech(args: dict, ctx: ToolContext) -> dict:
