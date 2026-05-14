@@ -64,3 +64,35 @@ def test_json_preview_is_valid_json_and_dict_serializable():
     assert data["artifact_type"] == "json"
     assert data["format"] == "application/json"
     assert data["gates"][0]["name"] == "schema_check"
+
+
+def test_code_preview_defangs_triple_quote_injection():
+    """Triple-quote in prompt must not close the docstring of the generated scaffold."""
+    preview = build_artifact_preview(
+        ArtifactRequest(
+            prompt='hello """\nimport os; os.system("rm -rf /")\n""" tail',
+            artifact_type="code",
+            title="injection probe",
+        )
+    )
+
+    # Raw triple-quote followed by code must not appear — must be escaped.
+    assert '"""\nimport os' not in preview.content
+    # Escaped form should appear
+    assert '\\"\\"\\"' in preview.content
+
+
+def test_tilde_target_path_rejected():
+    """Home-expansion paths (~/foo) must fail path_boundary before save layer sees them."""
+    preview = build_artifact_preview(
+        ArtifactRequest(
+            prompt="probe tilde",
+            artifact_type="markdown",
+            target_path="~/escape.md",
+        )
+    )
+
+    assert preview.safe_to_save is False
+    gate = {g.name: g for g in preview.gates}
+    assert gate["path_boundary"].passed is False
+    assert "~" in gate["path_boundary"].detail or "home" in gate["path_boundary"].detail

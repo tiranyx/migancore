@@ -99,6 +99,11 @@ def _safe_target_path(path: str, artifact_type: ArtifactType, title: str) -> tup
     if not raw:
         raw = f"artifacts/{default_name}"
 
+    # Reject home expansion before the save layer ever sees this. PurePosixPath
+    # does not treat "~" as absolute, so it bypasses is_absolute() — block here.
+    if raw.startswith("~"):
+        return False, f"artifacts/{default_name}", "target_path must not start with '~' (no home expansion)"
+
     p = PurePosixPath(raw)
     if p.is_absolute() or ".." in p.parts:
         return False, f"artifacts/{default_name}", "target_path must stay inside workspace and cannot contain '..'"
@@ -223,14 +228,19 @@ def _render_report(title: str, prompt: str, constraints: list[str]) -> str:
 
 def _render_code(title: str, prompt: str, constraints: list[str]) -> str:
     constraint_text = "\n".join(f"# - {c}" for c in constraints) or "# - None"
+    # Defang any triple-quote in user input so it cannot break out of the docstring
+    # and become executable when the scaffold is later saved as .py.
+    safe_title = title.replace('"""', '\\"\\"\\"')
+    safe_prompt = (prompt.strip() or "No prompt provided.").replace('"""', '\\"\\"\\"')
+    safe_constraints = constraint_text.replace('"""', '\\"\\"\\"')
     return f'''"""
-{title}
+{safe_title}
 
 Intent:
-{prompt.strip() or "No prompt provided."}
+{safe_prompt}
 
 Constraints:
-{constraint_text}
+{safe_constraints}
 
 Preview-only code scaffold. Add implementation and tests before execution.
 """
@@ -314,6 +324,6 @@ def build_artifact_preview(request: ArtifactRequest) -> ArtifactPreview:
 
 
 def preview_to_dict(preview: ArtifactPreview) -> dict:
-    data = asdict(preview)
-    data["gates"] = [asdict(g) for g in preview.gates]
-    return data
+    # asdict() already recurses through nested dataclasses (gates), so no
+    # second pass needed.
+    return asdict(preview)
