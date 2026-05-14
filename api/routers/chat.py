@@ -696,9 +696,13 @@ async def chat_stream(
                             error=str(_tc_exc)[:160],
                             tool_iter=tool_iter,
                         )
-                        # Strip tool spec from subsequent messages — drop to plain gen
-                        # Also strip tool roles from history since brain never saw resolution
-                        run_messages = [m for m in run_messages if m.get("role") != "tool"]
+                        # Reset run_messages to the ORIGINAL prompt — any prior
+                        # assistant messages (with tool_calls field) or tool roles
+                        # confuse Ollama into thinking "I already answered", causing
+                        # Phase B to stream 0 chunks. Restore clean state.
+                        run_messages = list(messages)
+                        # Also clear tool spec so Phase B is true plain generation
+                        tools_spec_stream = None  # type: ignore[assignment]
                         break
                     msg = tool_resp.get("message", {}) or {}
                     tcs = msg.get("tool_calls") or []
