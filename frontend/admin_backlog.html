@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiganCore — SSOT Backlog</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-0: #07100e;
+    --bg-1: #0d1f1a;
+    --bg-2: #142920;
+    --bg-3: #1a3429;
+    --orange: #ff8a24;
+    --orange-dim: rgba(255, 138, 36, 0.12);
+    --orange-border: rgba(255, 138, 36, 0.4);
+    --green: #2fe39a;
+    --green-dim: rgba(47, 227, 154, 0.10);
+    --green-border: rgba(47, 227, 154, 0.25);
+    --red: #ff5470;
+    --red-dim: rgba(255, 84, 112, 0.12);
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #e7eee9;
+    --text-dim: #98a8a2;
+    --text-faint: #5a6d65;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Orbitron', sans-serif;
+    --body: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-0); color: var(--text);
+    font-family: var(--body); height: 100vh;
+    display: grid; grid-template-rows: auto auto 1fr;
+    overflow: hidden;
+  }
+  header.top {
+    background: var(--bg-1); padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  }
+  .brand {
+    font-family: var(--display); font-weight: 700; font-size: 1.1rem;
+    color: var(--green); letter-spacing: 0.1em;
+  }
+  .brand::before { content: ""; display: inline-block; width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--orange), var(--green));
+    border-radius: 6px; vertical-align: middle; margin-right: 0.5rem; }
+  .top-nav { display: flex; gap: 0.5rem; margin-left: auto; align-items: center; }
+  .top-nav a, .top-nav button {
+    font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim);
+    text-decoration: none; border: 1px solid var(--border);
+    border-radius: 5px; padding: 0.4rem 0.8rem; letter-spacing: 0.05em;
+    background: transparent; cursor: pointer;
+  }
+  .top-nav a:hover, .top-nav button:hover { color: var(--green); border-color: var(--green); }
+  .top-nav a.active { color: var(--orange); border-color: var(--orange); }
+  .top-nav input {
+    background: var(--bg-0); border: 1px solid var(--border);
+    color: var(--text); padding: 0.4rem 0.6rem; border-radius: 5px;
+    font-family: var(--mono); font-size: 0.7rem; width: 180px;
+  }
+  section.hero {
+    padding: 1.5rem 2rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-0);
+  }
+  section.hero h1 {
+    font-family: var(--display); font-weight: 900; font-size: 1.6rem;
+    color: var(--green); letter-spacing: 0.04em;
+  }
+  section.hero p {
+    color: var(--text-dim); font-size: 0.85rem; margin-top: 0.3rem;
+  }
+  .tabs {
+    display: flex; gap: 0.3rem; padding: 1rem 2rem 0;
+    background: var(--bg-0); border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.05em;
+    padding: 0.6rem 1.1rem; cursor: pointer; user-select: none;
+    color: var(--text-dim); border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+  .tab .count {
+    background: var(--bg-2); color: var(--text-dim);
+    padding: 0.1rem 0.5rem; border-radius: 10px;
+    font-size: 0.65rem; margin-left: 0.4rem;
+  }
+  main { display: grid; grid-template-columns: 340px 1fr; overflow: hidden; }
+  aside {
+    background: var(--bg-0); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 1rem;
+  }
+  .search-box {
+    width: 100%; padding: 0.5rem 0.7rem; background: var(--bg-1);
+    border: 1px solid var(--border); color: var(--text);
+    border-radius: 5px; font-family: var(--mono); font-size: 0.75rem;
+    margin-bottom: 0.7rem;
+  }
+  .search-box:focus { outline: none; border-color: var(--green); }
+  .doc-item {
+    padding: 0.6rem 0.8rem; border-radius: 5px; cursor: pointer;
+    border: 1px solid transparent; margin-bottom: 0.3rem;
+    transition: all 0.15s;
+  }
+  .doc-item:hover { background: var(--bg-1); }
+  .doc-item.active {
+    background: var(--green-dim); border-color: var(--green-border);
+  }
+  .doc-item .name {
+    color: var(--text); font-size: 0.78rem; font-weight: 500;
+    word-break: break-all; font-family: var(--mono);
+  }
+  .doc-item.active .name { color: var(--green); }
+  .doc-item .meta {
+    color: var(--text-faint); font-size: 0.65rem; margin-top: 0.2rem;
+    font-family: var(--mono);
+  }
+  section.viewer {
+    background: var(--bg-0); overflow-y: auto; padding: 1.5rem 2rem;
+  }
+  .viewer-empty {
+    color: var(--text-faint); text-align: center; margin-top: 3rem;
+    font-family: var(--mono); font-size: 0.85rem;
+  }
+  .viewer-meta {
+    color: var(--text-dim); font-size: 0.75rem;
+    padding-bottom: 0.8rem; border-bottom: 1px solid var(--border);
+    margin-bottom: 1.2rem; font-family: var(--mono);
+  }
+  .viewer-meta strong { color: var(--green); }
+  .viewer-meta code {
+    background: var(--bg-1); padding: 0.1rem 0.4rem;
+    border-radius: 3px; color: var(--orange);
+  }
+  .viewer-content {
+    font-family: var(--mono); font-size: 0.78rem; line-height: 1.7;
+    white-space: pre-wrap; color: var(--text); max-width: 980px;
+  }
+  .error {
+    color: var(--red); padding: 0.6rem 1rem; background: var(--red-dim);
+    border-radius: 5px; font-family: var(--mono); font-size: 0.8rem;
+    border: 1px solid rgba(255, 84, 112, 0.3);
+  }
+  .loading {
+    color: var(--green); padding: 0.6rem 1rem; font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+  .stat-bar {
+    color: var(--text-dim); font-family: var(--mono); font-size: 0.7rem;
+  }
+  .stat-bar strong { color: var(--green); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">MIGANCORE :: SSOT</div>
+  <div class="top-nav">
+    <a href="/dashboard.html">DASHBOARD</a>
+    <a href="/sandbox.html">SANDBOX</a>
+    <a href="/chat.html">CHAT</a>
+    <a href="/backlog.html" class="active">BACKLOG</a>
+    <input id="admin-key" type="password" placeholder="X-Admin-Key">
+    <button onclick="reload()">LOAD</button>
+  </div>
+</header>
+
+<section class="hero">
+  <h1>Single Source of Truth</h1>
+  <p>Vision · Backlog · Journal · Lessons — semua dari <code>/opt/ado/docs/</code> markdown canonical · <span class="stat-bar" id="stat-summary">…</span></p>
+</section>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="vision">🌟 VISION <span class="count" id="ct-vision">…</span></div>
+  <div class="tab" data-tab="backlog">📋 BACKLOG <span class="count" id="ct-backlog">…</span></div>
+  <div class="tab" data-tab="journal">📖 JOURNAL <span class="count" id="ct-journal">…</span></div>
+  <div class="tab" data-tab="lessons">🧠 LESSONS <span class="count" id="ct-lessons">…</span></div>
+  <div class="tab" data-tab="other">📂 OTHER <span class="count" id="ct-other">…</span></div>
+</div>
+
+<main>
+  <aside>
+    <input class="search-box" id="search" placeholder="🔍 filter by filename...">
+    <div id="doc-list"></div>
+  </aside>
+  <section class="viewer" id="viewer">
+    <div class="viewer-empty">
+      Select a doc from the left to view.<br><br>
+      <small>219 docs di /opt/ado/docs — diorganisir auto-classify dari filename pattern.</small>
+    </div>
+  </section>
+</main>
+
+<script>
+const API = (window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.'))
+  ? `http://${window.location.hostname}:8000`
+  : 'https://api.migancore.com';
+let currentTab = "vision";
+let activeDocPath = null;
+let adminKey = localStorage.getItem("migan_admin_key") || "";
+document.getElementById("admin-key").value = adminKey;
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    currentTab = tab.dataset.tab;
+    loadList();
+  });
+});
+
+document.getElementById("search").addEventListener("input", debounce(loadList, 200));
+
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+async function reload() {
+  adminKey = document.getElementById("admin-key").value.trim();
+  if (adminKey) localStorage.setItem("migan_admin_key", adminKey);
+  await loadStats();
+  await loadList();
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch(`${API}/v1/admin/docs/stats`, { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    document.getElementById("stat-summary").innerHTML =
+      `<strong>${data.total}</strong> docs · ${Object.keys(data.by_tab).length} tabs`;
+    for (const [tab, count] of Object.entries(data.by_tab)) {
+      const el = document.getElementById(`ct-${tab}`);
+      if (el) el.textContent = count;
+    }
+  } catch (err) {
+    document.getElementById("stat-summary").innerHTML = `<span class="error">${err.message}</span>`;
+  }
+}
+
+async function loadList() {
+  const listEl = document.getElementById("doc-list");
+  listEl.innerHTML = '<div class="loading">Loading…</div>';
+  const search = document.getElementById("search").value.trim();
+  const qs = new URLSearchParams({ tab: currentTab });
+  if (search) qs.set("search", search);
+  try {
+    const r = await fetch(`${API}/v1/admin/docs?${qs}`, { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const docs = data.docs;
+    if (docs.length === 0) {
+      listEl.innerHTML = '<div class="loading">No docs match.</div>';
+      return;
+    }
+    listEl.innerHTML = docs.map(d => {
+      const dt = new Date(d.modified_at * 1000).toISOString().split("T")[0];
+      const kb = (d.size_bytes / 1024).toFixed(1);
+      const active = (d.path === activeDocPath) ? " active" : "";
+      return `<div class="doc-item${active}" data-path="${escapeAttr(d.path)}">
+        <div class="name">${escapeHtml(d.name)}</div>
+        <div class="meta">${dt} · ${kb}KB · ${escapeHtml(d.path)}</div>
+      </div>`;
+    }).join("");
+    listEl.querySelectorAll(".doc-item").forEach(el => {
+      el.addEventListener("click", () => loadDoc(el.dataset.path));
+    });
+  } catch (err) {
+    listEl.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadDoc(path) {
+  activeDocPath = path;
+  document.querySelectorAll(".doc-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.path === path);
+  });
+  const viewer = document.getElementById("viewer");
+  viewer.innerHTML = '<div class="loading">Loading doc…</div>';
+  try {
+    const r = await fetch(`${API}/v1/admin/docs/file?path=${encodeURIComponent(path)}`,
+      { headers: { "X-Admin-Key": adminKey } });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const dt = new Date(data.modified_at * 1000).toISOString().replace("T", " ").substring(0, 16);
+    viewer.innerHTML = `
+      <div class="viewer-meta">
+        <strong>${escapeHtml(data.name)}</strong> · tab: <code>${data.tab}</code>
+        · ${(data.size_bytes/1024).toFixed(1)}KB · modified ${dt}<br>
+        <code>${escapeHtml(data.path)}</code>
+      </div>
+      <pre class="viewer-content">${escapeHtml(data.content)}</pre>
+    `;
+  } catch (err) {
+    viewer.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+if (adminKey) reload();
+</script>
+</body>
+</html>
