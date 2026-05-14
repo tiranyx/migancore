@@ -80,19 +80,26 @@ def main():
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    print("\n[4/5] Loading dataset...")
+    print("\n[4/5] Loading + formatting dataset...")
     data = []
     with open(args.dataset) as f:
         for line in f:
             data.append(json.loads(line))
     dataset = Dataset.from_list(data)
 
-    def formatting_func(example):
-        return tokenizer.apply_chat_template(example["messages"], tokenize=False, add_generation_prompt=False)
+    # Pre-format messages → text column using chat template (drops messages/family/source).
+    # This is the most reliable pattern for TRL 0.9.6 SFTTrainer — no formatting_func,
+    # no surprises with remove_unused_columns. The CPU smoke test confirmed this works.
+    src_cols = [c for c in dataset.column_names if c != "text"]
+    dataset = dataset.map(
+        lambda ex: {"text": tokenizer.apply_chat_template(
+            ex["messages"], tokenize=False, add_generation_prompt=False)},
+        remove_columns=src_cols,
+    )
 
     split = dataset.train_test_split(test_size=0.1, seed=3407)
     train_ds, eval_ds = split["train"], split["test"]
-    print(f"Train: {len(train_ds)} | Eval: {len(eval_ds)}")
+    print(f"Train: {len(train_ds)} | Eval: {len(eval_ds)} | columns={train_ds.column_names}")
 
     print("\n[5/5] Starting training...")
     output_dir = Path(args.output_dir)
@@ -118,8 +125,8 @@ def main():
         lr_scheduler_type="cosine",
         seed=3407,
         report_to=[],
-        remove_unused_columns=False,
         max_seq_length=args.max_seq_length,
+        dataset_text_field="text",
     )
 
     trainer = SFTTrainer(
@@ -127,7 +134,6 @@ def main():
         tokenizer=tokenizer,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
-        formatting_func=formatting_func,
         args=sft_config,
     )
 
