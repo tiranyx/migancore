@@ -1,4 +1,4 @@
-from api.services.inspiration_intake import synthesize_inspiration
+from services.inspiration_intake import synthesize_inspiration
 
 
 def test_synthesize_ltx_video_inspiration():
