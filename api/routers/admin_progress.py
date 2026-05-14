@@ -58,7 +58,7 @@ _SPRINTS: list[dict] = [
         "id": "sprint-1",
         "name": "SIDIX Knowledge Inherit",
         "day_start": 73, "day_end": 76,
-        "status": "running", "progress": 75,
+        "status": "done", "progress": 100,
         "deliverables": [
             "Ingest /opt/sidix/brain/public (979 markdown)",
             "Hybrid embed + bucket payload (ilm:coding, glossary, maqashid, etc)",
@@ -86,7 +86,7 @@ _SPRINTS: list[dict] = [
         "id": "sprint-2",
         "name": "Code Lab + Reflection + Pencernaan v2",
         "day_start": 74, "day_end": 80,
-        "status": "planned", "progress": 0,
+        "status": "running", "progress": 5,
         "deliverables": [
             "Code Lab Pyodide sandbox (write→exec→observe→learn)",
             "Scoring layer: rasa sakit/senang → nafs bucket",
