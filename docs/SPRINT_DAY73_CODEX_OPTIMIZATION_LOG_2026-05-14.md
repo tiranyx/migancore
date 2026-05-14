@@ -116,3 +116,17 @@ went live:
 
 Reason: proposal mode should mean "Migan asks Fahmi", not "the internet can
 write into Fahmi's review queue".
+
+## Day73 Proposal Lifecycle Visibility
+
+Codex added read-only lifecycle visibility to the proposal queue:
+
+- Every proposal response now includes `lifecycle.required_gates`,
+  `passed_gates`, `failed_gates`, `missing_gates`, and `next_action`.
+- `backlog.html` shows gate chips directly under each proposal so Fahmi can see
+  why a proposal is still waiting.
+- No gate is auto-marked as passed. The UI exposes the checklist; actual gates
+  still require evidence and explicit recording.
+
+This keeps the education loop honest: Migan can ask, Fahmi can approve, and the
+system can see which validation gates remain before promotion.

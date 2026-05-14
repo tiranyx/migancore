@@ -41,9 +41,9 @@ from services.dev_organ import (
     ImprovementProposal,
     GateResult,
     RiskLevel,
-    ImprovementStage,
     classify_risk,
     evaluate_promotion,
+    required_gates,
 )
 
 logger = structlog.get_logger()
@@ -108,6 +108,53 @@ class GateInput(BaseModel):
 
 class GatesRunRequest(BaseModel):
     gates: list[GateInput]
+
+
+def _proposal_lifecycle(proposal: DevOrganProposal) -> dict:
+    """Return read-only lifecycle/gate visibility for UI and agents."""
+    risk = RiskLevel(proposal.risk_level)
+    required = sorted(required_gates(risk))
+    gate_results = proposal.gate_results or []
+    by_name = {
+        str(g.get("name")): bool(g.get("passed"))
+        for g in gate_results
+        if isinstance(g, dict) and g.get("name")
+    }
+    passed = sorted(name for name in required if by_name.get(name) is True)
+    failed = sorted(name for name in required if by_name.get(name) is False)
+    missing = sorted(name for name in required if name not in by_name)
+
+    if proposal.creator_verdict == "rejected":
+        next_action = "rejected"
+    elif failed:
+        next_action = "fix_failed_gates"
+    elif missing and proposal.creator_verdict == "approved":
+        next_action = "run_missing_gates"
+    elif missing:
+        next_action = "creator_review"
+    elif proposal.stage in ("validated", "deployable"):
+        next_action = "ready_for_owner_promotion"
+    elif proposal.stage in ("deployed", "monitored"):
+        next_action = "monitor"
+    elif proposal.stage == "blocked":
+        next_action = "revise_or_reject"
+    else:
+        next_action = "sandbox_iteration"
+
+    return {
+        "risk": risk.value,
+        "required_gates": required,
+        "passed_gates": passed,
+        "failed_gates": failed,
+        "missing_gates": missing,
+        "next_action": next_action,
+    }
+
+
+def _proposal_to_response(proposal: DevOrganProposal) -> dict:
+    data = proposal.to_dict()
+    data["lifecycle"] = _proposal_lifecycle(proposal)
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +227,7 @@ async def list_proposals(
 
     return {
         "total": total,
-        "items": [p.to_dict() for p in rows],
+        "items": [_proposal_to_response(p) for p in rows],
     }
 
 
@@ -197,7 +244,7 @@ async def get_proposal(
     proposal = await db.get(DevOrganProposal, proposal_id)
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
-    return proposal.to_dict()
+    return _proposal_to_response(proposal)
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +278,7 @@ async def submit_proposal(
     await db.refresh(row)
 
     logger.info("sandbox.proposal.created", proposal_id=str(row.id), title=row.title, risk=risk)
-    return row.to_dict()
+    return _proposal_to_response(row)
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +314,7 @@ async def set_verdict(
         proposal_id=str(proposal_id),
         verdict=body.verdict,
     )
-    return proposal.to_dict()
+    return _proposal_to_response(proposal)
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +365,7 @@ async def run_gates(
     await db.refresh(proposal)
 
     return {
-        "proposal": proposal.to_dict(),
+        "proposal": _proposal_to_response(proposal),
         "promotion_report": {
             "decision": report.decision.value,
             "risk": report.risk.value,

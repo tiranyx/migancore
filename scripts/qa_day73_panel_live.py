@@ -72,7 +72,13 @@ def main() -> int:
     )
 
     status, html = fetch_text(args.frontend)
-    markers = ["REFLEKSI", "PROPOSAL", "/v1/admin/reflection/latest", "/v1/sandbox/proposals"]
+    markers = [
+        "REFLEKSI",
+        "PROPOSAL",
+        "/v1/admin/reflection/latest",
+        "/v1/sandbox/proposals",
+        "renderLifecycle",
+    ]
     failures += check("backlog page served", status == 200, args.frontend)
     failures += check("backlog panel markers", all(m in html for m in markers), ", ".join(markers))
 
@@ -85,6 +91,13 @@ def main() -> int:
         )
         items = proposals.get("items") or []
         failures += check("proposal endpoint", status == 200 and isinstance(items, list), f"items={len(items)}")
+        if items:
+            lifecycle = items[0].get("lifecycle") or {}
+            failures += check(
+                "proposal lifecycle visible",
+                bool(lifecycle.get("required_gates")) and "next_action" in lifecycle,
+                str(lifecycle),
+            )
 
         status, reflections = fetch_json(
             f"{args.base}/v1/admin/reflection/latest?limit=3",

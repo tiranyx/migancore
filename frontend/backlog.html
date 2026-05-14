@@ -329,6 +329,19 @@
     border-top: 1px dashed var(--border); padding-top: 0.5rem;
   }
   .feed-card .verdict-note strong { color: var(--orange); }
+  .feed-card .gate-box {
+    margin-top: 0.8rem; padding-top: 0.7rem;
+    border-top: 1px dashed var(--border);
+    font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim);
+  }
+  .feed-card .gate-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+  .feed-card .gate-chip {
+    border: 1px solid var(--border); border-radius: 3px;
+    padding: 0.15rem 0.45rem; color: var(--text-dim);
+  }
+  .feed-card .gate-chip.pass { color: var(--green); border-color: var(--green-border); }
+  .feed-card .gate-chip.fail { color: var(--red); border-color: rgba(255,84,112,0.3); }
+  .feed-card .gate-chip.missing { color: var(--orange); border-color: var(--orange-border); }
   .feed-empty {
     color: var(--text-faint); padding: 2rem;
     text-align: center; font-family: var(--mono); font-size: 0.8rem;
@@ -497,6 +510,26 @@ async function renderRefleksi() {
   }
 }
 
+function renderLifecycle(p) {
+  const lc = p.lifecycle || {};
+  const required = lc.required_gates || [];
+  const passed = new Set(lc.passed_gates || []);
+  const failed = new Set(lc.failed_gates || []);
+  const missing = new Set(lc.missing_gates || []);
+  if (!required.length) return "";
+  const chips = required.map(g => {
+    const cls = passed.has(g) ? "pass" : failed.has(g) ? "fail" : missing.has(g) ? "missing" : "";
+    const label = passed.has(g) ? `OK ${g}` : failed.has(g) ? `FAIL ${g}` : `TODO ${g}`;
+    return `<span class="gate-chip ${cls}">${escapeHtml(label)}</span>`;
+  }).join("");
+  return `
+    <div class="gate-box">
+      <div>Next: <strong style="color:var(--orange)">${escapeHtml(lc.next_action || "review")}</strong></div>
+      <div class="gate-row">${chips}</div>
+    </div>
+  `;
+}
+
 async function renderProposals() {
   const feed = showFeedMode();
   feed.innerHTML = '<div class="loading">Loading proposal antrian…</div>';
@@ -538,6 +571,7 @@ async function renderProposals() {
             <span class="pill">BY ${escapeHtml(p.created_by || "")}</span>
           </div>
           <div class="body" style="margin-top:0.6rem">${escapeHtml(p.problem || "")}${p.hypothesis ? "\n\nHipotesis: " + escapeHtml(p.hypothesis) : ""}</div>
+          ${renderLifecycle(p)}
           ${actions}
           ${decidedLine}
         </div>
