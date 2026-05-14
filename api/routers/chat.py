@@ -864,6 +864,24 @@ async def chat_stream(
 
             full_text = "".join(full_response)
 
+            # Day 74 — empty-stream guard. If Phase B yielded 0 chunks (Ollama
+            # busy from prior cancelled tool-call, model offload race, or a
+            # corner case), inject a fallback Indonesian-voice message so the
+            # user NEVER sees an empty bubble.
+            if not full_text.strip():
+                full_text = (
+                    "Maaf, sebentar lagi aku kembali — otakku sedang sibuk "
+                    "menjawab pertanyaan sebelumnya. Coba kirim ulang dalam "
+                    "beberapa detik."
+                )
+                yield _sse({"type": "chunk", "content": full_text})
+                chunk_count = 1
+                logger.warning(
+                    "chat.stream.empty_response_fallback",
+                    model=model,
+                    tool_iters=tool_iter,
+                )
+
             # Day 69 — Lesson #156: persist BEFORE done event (Kimi review Bug 1).
             # Race condition: done fires → frontend enables thumbs → user clicks →
             # feedback endpoint 404 because message not yet in DB (create_task = async).
