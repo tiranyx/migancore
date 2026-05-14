@@ -30,5 +30,21 @@ if [ -f "$ONAMIX_DIR/package.json" ] && [ ! -d "$ONAMIX_DIR/node_modules" ]; the
         || echo "WARNING: ONAMIX dependency bootstrap failed; API will start and ONAMIX will report unavailable"
 fi
 
+# ONAMIX config dir must be writable by the ado user (uid=999) so Node.js can
+# persist history.json. The bind-mount is owned by root on fresh checkouts —
+# fix it here while we still run as root, before gosu drops privileges.
+# (Lesson: EACCES in Node.js was ado user unable to write root-owned 644 files)
+if [ -d "$ONAMIX_DIR/config" ]; then
+    chown -R ado:ado "$ONAMIX_DIR/config" 2>/dev/null || true
+    # Ensure history.json is valid JSON if missing/empty
+    if [ ! -s "$ONAMIX_DIR/config/history.json" ]; then
+        echo '[]' > "$ONAMIX_DIR/config/history.json"
+        chown ado:ado "$ONAMIX_DIR/config/history.json" 2>/dev/null || true
+    fi
+fi
+if [ -d "$ONAMIX_DIR/downloads" ]; then
+    chown -R ado:ado "$ONAMIX_DIR/downloads" 2>/dev/null || true
+fi
+
 # Run as non-root user
 exec gosu ado uvicorn main:app --host 0.0.0.0 --port 8000

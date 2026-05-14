@@ -1155,6 +1155,30 @@ async def _onamix_search(args: dict, ctx: ToolContext) -> dict:
         stdout = await _onamix_run_search(cli_args)
         results, elapsed = _parse_onamix_search_text(stdout)
 
+    # Fallback: DDG/Bing/Brave HTML scrapers get rate-limited → 0 results.
+    # Retry with 'multi' (HN Algolia + GitHub + Wiby — direct JSON APIs, not blockable).
+    _FALLBACK_EXEMPT = {"multi", "all", "hn", "github", "wiby", "books", "wikipedia", "wiki", "wp"}
+    if not results and engine not in _FALLBACK_EXEMPT:
+        try:
+            from .onamix_mcp import get_global_client as _get_mcp
+            _client = _get_mcp()
+            if _client is not None and _client.is_alive():
+                _fb = await _client.call_tool(
+                    "hyperx_search",
+                    {"query": query, "engine": "multi", "limit": limit},
+                )
+                _fb_results = (_fb or {}).get("results") or []
+                if _fb_results:
+                    results = _fb_results
+                    transport = "mcp_fallback_multi"
+                    logger.info(
+                        "tool.onamix_search.fallback_multi",
+                        q=query[:80],
+                        results=len(results),
+                    )
+        except Exception:
+            pass
+
     if limit and len(results) > limit:
         results = results[:limit]
     logger.info(
