@@ -29,6 +29,7 @@ test -> iterate -> validate -> promote -> monitor -> learn. Canonical files:
 - `docs/ORGANISM_ARCHITECTURE_BLUEPRINT.md`
 - `docs/ORGANISM_IMPLEMENTATION_MAPPING.md`
 - `docs/SIDIX_TO_MIGANCORE_METHOD_MAPPING.md`
+- `docs/ARTIFACT_BUILDER_MVP.md`
 - `docs/M16_DEV_ORGAN_PROGRESS_2026-05-14.md`
 - `api/services/dev_organ.py`
 - `api/tests/test_dev_organ.py`
@@ -50,6 +51,7 @@ test -> iterate -> validate -> promote -> monitor -> learn. Canonical files:
 | `ORGANISM_ARCHITECTURE_BLUEPRINT.md` | Canonical anatomy: Jiwa, Otak, Pikiran, Akal, Syaraf, Indera, Organ, Metabolisme, Imun. | Before architecture, module, autonomy, memory, or tool-routing work |
 | `ORGANISM_IMPLEMENTATION_MAPPING.md` | Maps all organism body parts to live code, backlog modules, gaps, and implementation order. | Before deciding what to implement from backlog |
 | `SIDIX_TO_MIGANCORE_METHOD_MAPPING.md` | Maps SIDIX metaphors and methods to MiganCore organism contracts, adoption rules, and overlap risks. | Before porting SIDIX-inspired methods or naming new organism facilities |
+| `ARTIFACT_BUILDER_MVP.md` | Preview-only Artifact Builder contract: supported types, gates, lineage, and next steps. | Before extending artifacts, inline rendering, save/export, or code/document generation |
 | `M16_DEV_ORGAN_PROGRESS_2026-05-14.md` | Latest Dev Organ implementation and deploy QA log. | Before continuing M1.6/M1.7 |
 | `ENVIRONMENT_MAP.md` | VPS topology — SHARED with 4 projects. | Before touching VPS |
 

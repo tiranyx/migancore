@@ -68,6 +68,11 @@ Goal:
 Build reusable HTML, markdown, JSON, slide, spreadsheet, or code artifacts from
 chat.
 
+Status:
+- MVP live as preview-only endpoint: `POST /v1/artifacts/preview`
+- Contract documented in `docs/ARTIFACT_BUILDER_MVP.md`
+- No file write, export, or deployment yet.
+
 MVP:
 - Artifact type router.
 - Draft artifact preview.

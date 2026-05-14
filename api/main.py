@@ -65,6 +65,7 @@ from routers import admin_docs as admin_docs_router   # Day 73 Sprint 1.5: SSOT 
 from routers import admin_progress as admin_progress_router   # Day 73 Sprint 1.5: Gantt progress tracker
 from routers import reflection_daemon as reflection_router   # Day 75 Sprint 2: nafs reflection daemon
 from routers import voice_tone as voice_tone_router   # Day 75 Sprint 2: voice tone analysis (qalb)
+from routers import artifacts as artifacts_router  # Day 74: Artifact Builder MVP organ
 
 # Day 26: MCP Streamable HTTP server (lazy import â€” degrades gracefully if SDK missing)
 try:
@@ -524,6 +525,7 @@ app.include_router(admin_docs_router.router)  # Day 73 Sprint 1.5: SSOT Backlog
 app.include_router(admin_progress_router.router)  # Day 73 Sprint 1.5: Gantt progress
 app.include_router(reflection_router.router)  # Day 75 Sprint 2: reflection
 app.include_router(voice_tone_router.router)  # Day 75 Sprint 2: voice tone (qalb)
+app.include_router(artifacts_router.router)  # Day 74: Artifact Builder MVP
 
 # Day 72e: MiganForge — Training orchestrator (closed-loop self-improvement)
 try:
