@@ -384,7 +384,7 @@ async def _calculate(args: dict, ctx) -> str:
             if isinstance(node, ast.Attribute):
                 return "ERROR: Akses attribute tidak diizinkan"
 
-        result = eval(compile(tree, "<calc>", "eval"), safe_globals, {})
+        result = eval(compile(tree, "<calc>", "eval"), {"__builtins__": {}}, safe_globals)
         logger.info("calculate.ok", expression=expression, result=result)
         return f"**Hasil:** `{expression}` = **{result}**"
     except ZeroDivisionError:

@@ -7,7 +7,8 @@ from datetime import datetime, timezone, timedelta
 
 import asyncpg
 
-PG_PASSWORD = "gY2UkMePh,Zvt6)6"
+import os
+PG_PASSWORD = os.getenv("PG_PASSWORD", "")
 DSN_SUPER = f"postgresql://ado:{PG_PASSWORD}@postgres:5432/ado"
 
 SAMPLE_PROMPTS = [

@@ -43,7 +43,13 @@ PYTHON_REPL_IMPORT_BLACKLIST: set[str] = {
     "urllib", "http", "ftplib", "smtplib", "telnetlib",
     "ctypes", "multiprocessing", "concurrent.futures",
     "pickle", "marshal", "shelve",
-    "builtins", "importlib",
+    "builtins", "importlib", "io", "builtins",
+}
+
+PYTHON_REPL_BUILTIN_BLACKLIST: set[str] = {
+    "open", "input", "compile", "exec", "eval",
+    "__import__", "globals", "locals", "vars",
+    "getattr", "setattr", "delattr",
 }
 
 # Patterns: import os, from os import, __import__('os'), importlib.import_module('os')
@@ -197,14 +203,21 @@ def validate_python_code(code: str) -> None:
                     details={"module": module, "line": match.group(0).strip()},
                 )
 
-    # Additional heuristic: block eval/exec of arbitrary strings
-    # __import__ is already caught by the regex patterns above; eval/exec/compile are not.
-    for d in ["eval(", "exec(", "compile("]:
-        if d in code:
+    # Block dangerous builtins and file/network access patterns
+    for builtin in PYTHON_REPL_BUILTIN_BLACKLIST:
+        if builtin + "(" in code:
             raise PolicyViolation(
-                reason=f"Use of '{d}' is blocked in python_repl for security.",
+                reason=f"Use of '{builtin}()' is blocked in python_repl for security.",
                 violation_type="python_repl_dangerous_builtin",
-                details={"builtin": d},
+                details={"builtin": builtin},
+            )
+    # Block file path patterns that suggest reading/writing files
+    for path_pattern in ["'/etc/", "'/var/", "'/root/", "'/home/", "'C:\\\\", "'.read()", ".write("]:
+        if path_pattern in code:
+            raise PolicyViolation(
+                reason=f"File system access pattern '{path_pattern}' is blocked in python_repl.",
+                violation_type="python_repl_file_access",
+                details={"pattern": path_pattern},
             )
 
     logger.debug("tool.python_repl.validated", code_len=len(code))

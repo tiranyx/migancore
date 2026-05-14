@@ -44,13 +44,4 @@ def init_engine():
     )
 
 
-async def get_db() -> AsyncSession:
-    """Dependency: yield an async DB session.
 
-    NOTE: This is a convenience fallback. For tenant-scoped endpoints,
-    use deps.db.get_db or deps.db.tenant_session instead.
-    """
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Database engine not initialized. Call init_engine() first.")
-    async with AsyncSessionLocal() as session:
-        yield session

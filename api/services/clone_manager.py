@@ -510,7 +510,7 @@ class CloneManager:
                 result = subprocess.run(
                     ["scp",
                      "-i", req.vps_ssh_key_path,
-                     "-o", "StrictHostKeyChecking=no",
+                     "-o", "StrictHostKeyChecking=accept-new",
                      "-P", str(req.vps_ssh_port),
                      local_file,
                      f"root@{req.vps_ip}:{remote_name}"],
@@ -562,7 +562,7 @@ class CloneManager:
         result = subprocess.run(
             ["ssh",
              "-i", key_path,
-             "-o", "StrictHostKeyChecking=no",
+             "-o", "StrictHostKeyChecking=accept-new",
              "-o", "BatchMode=yes",
              "-o", "ConnectTimeout=10",
              "-p", str(port),

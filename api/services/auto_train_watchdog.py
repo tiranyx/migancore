@@ -347,7 +347,7 @@ async def _monitor_and_finalize(
 
     ssh_base = [
         "ssh", "-i", SSH_KEY,
-        "-o", "StrictHostKeyChecking=no",
+        "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ConnectTimeout=30",
         f"-p", str(ssh_port),
         f"root@{ssh_host}",

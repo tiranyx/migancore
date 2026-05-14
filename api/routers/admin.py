@@ -278,37 +278,40 @@ async def list_preference_pairs(
     Use score_max=3 to see only the pairs CAI generates (score <= CRITIQUE_THRESHOLD).
     Use unused_only=True to see the dataset that will be fed to the next training run.
     """
-    # Build filter conditions
-    conditions = []
-    params: dict = {}
+    # Build query using SQLAlchemy Core (safe from SQL injection)
+    from sqlalchemy import select, and_
 
+    stmt_count = select(func.count()).select_from(PreferencePair)
+    stmt_rows = select(
+        PreferencePair.id,
+        PreferencePair.prompt,
+        PreferencePair.chosen,
+        PreferencePair.rejected,
+        PreferencePair.judge_score,
+        PreferencePair.judge_model,
+        PreferencePair.source_method,
+        PreferencePair.source_message_id,
+        PreferencePair.created_at,
+        PreferencePair.used_in_training_run_id,
+    ).order_by(PreferencePair.created_at.desc())
+
+    filters = []
     if score_max is not None:
-        conditions.append("judge_score <= :score_max")
-        params["score_max"] = score_max
-
+        filters.append(PreferencePair.judge_score <= score_max)
     if unused_only:
-        conditions.append("used_in_training_run_id IS NULL")
+        filters.append(PreferencePair.used_in_training_run_id.is_(None))
 
-    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    if filters:
+        stmt_count = stmt_count.where(and_(*filters))
+        stmt_rows = stmt_rows.where(and_(*filters))
+
+    stmt_rows = stmt_rows.limit(limit).offset(offset)
 
     # Count total matching
-    count_result = await db.execute(
-        text(f"SELECT COUNT(*) FROM preference_pairs {where_clause}"),
-        params,
-    )
-    total_matching: int = count_result.scalar_one()
+    total_matching: int = (await db.execute(stmt_count)).scalar_one()
 
     # Fetch page
-    rows_result = await db.execute(
-        text(
-            f"SELECT id, prompt, chosen, rejected, judge_score, judge_model, "
-            f"source_method, source_message_id, created_at, used_in_training_run_id "
-            f"FROM preference_pairs {where_clause} "
-            f"ORDER BY created_at DESC "
-            f"LIMIT :limit OFFSET :offset"
-        ),
-        {**params, "limit": limit, "offset": offset},
-    )
+    rows_result = await db.execute(stmt_rows)
 
     items = []
     for row in rows_result:
@@ -375,23 +378,22 @@ async def export_dataset(
     For SimPO (recommended over DPO for first run, arxiv 2405.14734):
         The same JSONL format works with SimPO via TRL SimPOTrainer.
     """
-    conditions = ["judge_score <= :score_max"]
-    params: dict = {"score_max": score_max, "limit": limit}
+    from sqlalchemy import select, and_
 
+    stmt = select(
+        PreferencePair.prompt,
+        PreferencePair.chosen,
+        PreferencePair.rejected,
+        PreferencePair.judge_score,
+    ).order_by(PreferencePair.judge_score.asc(), PreferencePair.created_at.desc())
+
+    filters = [PreferencePair.judge_score <= score_max]
     if unused_only:
-        conditions.append("used_in_training_run_id IS NULL")
+        filters.append(PreferencePair.used_in_training_run_id.is_(None))
 
-    where_clause = f"WHERE {' AND '.join(conditions)}"
+    stmt = stmt.where(and_(*filters)).limit(limit)
 
-    result = await db.execute(
-        text(
-            f"SELECT prompt, chosen, rejected, judge_score "
-            f"FROM preference_pairs {where_clause} "
-            f"ORDER BY judge_score ASC, created_at DESC "  # lowest scores first = clearest signal
-            f"LIMIT :limit"
-        ),
-        params,
-    )
+    result = await db.execute(stmt)
     rows = result.fetchall()
 
     logger.info(
