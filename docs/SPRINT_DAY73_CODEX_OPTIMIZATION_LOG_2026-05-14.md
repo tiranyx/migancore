@@ -84,3 +84,22 @@ Do not promote `migancore:0.7e` again until identity, latency, and behavioral
 evals prove it is better than `0.7c`. Do not switch `AUTO_TRAIN_MODE=auto`
 unless Fahmi explicitly approves a GPU training run. Current direction is
 biomimetic education first, model churn later.
+
+## Day73 Safe Deploy Follow-up
+
+After the Jurnal & Proposal panel went live, Codex added two guardrails so the
+same deployment mistake does not repeat:
+
+1. `scripts/vps_deploy_api_safe.sh`
+   - Runs `git pull --ff-only origin main`.
+   - Exports `BUILD_COMMIT_SHA`, `BUILD_DAY`, and `BUILD_TIME` before recreating
+     the API container.
+   - Keeps `/health` and `/v1/system/status` aligned with the deployed commit.
+
+2. `scripts/qa_day73_panel_live.py`
+   - Verifies health, model lock, build metadata alignment, backlog panel HTML,
+     pending proposal endpoint, and reflection endpoint.
+   - Read-only: does not approve/reject proposals and does not trigger training.
+
+Also updated `scripts/qa_day73_live.py`: casual chat QA now expects zero tools,
+matching the reflex doctrine.

@@ -36,11 +36,11 @@ async def main():
     failures += 0 if ok else 1
 
     print()
-    print("=== TEST 3: tool_router semantic fallback (no keywords) ===")
+    print("=== TEST 3: tool_router casual reflex path ===")
     selected = await route_tools("hello apa kabar", available)
     print(f"  selected={selected}")
-    ok = "memory_write" in selected and "memory_search" in selected
-    print(f"  [{'PASS' if ok else 'FAIL'}] CORE_TOOLS always present")
+    ok = selected == []
+    print(f"  [{'PASS' if ok else 'FAIL'}] casual chat returns zero tools")
     failures += 0 if ok else 1
 
     print()
