@@ -86,10 +86,11 @@ _SPRINTS: list[dict] = [
         "id": "sprint-2",
         "name": "Code Lab + Reflection + Pencernaan v2",
         "day_start": 74, "day_end": 80,
-        "status": "running", "progress": 50,
+        "status": "running", "progress": 55,
         "deliverables": [
             "Code Lab Pyodide sandbox (write→exec→observe→learn)",
             "Scoring layer: rasa sakit/senang → nafs bucket",
+            "SIDIX -> MiganCore method mapping (metaphor overlap control)",
             "Daily reflection journal (nightly nafs daemon)",
             "Voice tone analysis (Scribe + Gemini sentiment)",
             "Reranker integration (BAAI/bge-reranker-v2-m3 cached)",

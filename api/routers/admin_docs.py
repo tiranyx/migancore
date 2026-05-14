@@ -24,7 +24,17 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import structlog
+try:
+    import structlog
+except ModuleNotFoundError:  # Local docs tests may run without full API deps.
+    import logging
+
+    class _StructlogFallback:
+        @staticmethod
+        def get_logger(name: str):
+            return logging.getLogger(name)
+
+    structlog = _StructlogFallback()
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -60,6 +70,7 @@ _TAB_RULES = [
         "PENCIPTA_BOND", "ADO_LEARNING_FACILITIES",
         "INGEST_PENCERNAAN", "VISION_PRINCIPLES_LOCKED",
         "ORGANISM_ARCHITECTURE", "ORGANISM_IMPLEMENTATION",
+        "SIDIX_TO_MIGANCORE_METHOD_MAPPING",
     ]),
     ("backlog", [
         "SPRINT_", "SPRINT2", "SPRINT3", "SPRINT4", "SPRINT5", "SPRINT6", "SPRINT7", "SPRINT8", "SPRINT9", "06_SPRINT_ROADMAP", "DAY",

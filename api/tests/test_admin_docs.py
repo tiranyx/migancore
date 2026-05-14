@@ -24,3 +24,4 @@ def test_module_docs_classify_as_backlog():
 def test_organism_architecture_classifies_as_vision():
     assert admin_docs._classify("ORGANISM_ARCHITECTURE_BLUEPRINT.md") == "vision"
     assert admin_docs._classify("ORGANISM_IMPLEMENTATION_MAPPING.md") == "vision"
+    assert admin_docs._classify("SIDIX_TO_MIGANCORE_METHOD_MAPPING.md") == "vision"
