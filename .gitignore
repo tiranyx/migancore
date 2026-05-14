@@ -104,3 +104,4 @@ archive/
 *.gguf
 *.safetensors
 backup/
+.archived_stashes_*/
