@@ -868,34 +868,48 @@ async def chat_stream(
             # busy from prior cancelled tool-call, model offload race, or a
             # corner case), inject a fallback Indonesian-voice message so the
             # user NEVER sees an empty bubble.
+            #
+            # IMPORTANT: this fallback is shown to the user but NOT persisted
+            # to conversation history (was_fallback=True). Persisting it
+            # poisons future turns — the model pattern-matches "wait, retry"
+            # responses and starts producing empty content, triggering more
+            # fallbacks in a self-reinforcing loop (observed on prod Day 74).
+            was_fallback = False
             if not full_text.strip():
-                full_text = (
+                was_fallback = True
+                fallback_msg = (
                     "Maaf, sebentar lagi aku kembali — otakku sedang sibuk "
                     "menjawab pertanyaan sebelumnya. Coba kirim ulang dalam "
                     "beberapa detik."
                 )
-                yield _sse({"type": "chunk", "content": full_text})
+                yield _sse({"type": "chunk", "content": fallback_msg})
                 chunk_count = 1
                 logger.warning(
                     "chat.stream.empty_response_fallback",
                     model=model,
                     tool_iters=tool_iter,
                 )
+                # Keep full_text empty so we do NOT persist the fallback.
 
             # Day 69 — Lesson #156: persist BEFORE done event (Kimi review Bug 1).
             # Race condition: done fires → frontend enables thumbs → user clicks →
             # feedback endpoint 404 because message not yet in DB (create_task = async).
             # Fix: await persist first (~10-50ms latency), then yield done.
             # Reference: AGENT_SYNC/KIMI_REVIEW_69_CYCLE6_AND_FEEDBACK.md
-            await _persist_assistant_message(
-                conversation_id=conversation_id,
-                tenant_id=tenant_id,
-                content=full_text,
-                message_count=len(history) + 2,
-                message_id=assistant_msg_id,
-            )
+            #
+            # Day 74: skip persist if was_fallback — empty turns don't belong in history.
+            if was_fallback:
+                pass  # frontend showed user the fallback; DB stays clean
+            else:
+                await _persist_assistant_message(
+                    conversation_id=conversation_id,
+                    tenant_id=tenant_id,
+                    content=full_text,
+                    message_count=len(history) + 2,
+                    message_id=assistant_msg_id,
+                )
 
-            yield _sse(_done_payload(full_text))
+            yield _sse(_done_payload(full_text if not was_fallback else fallback_msg))
 
             # M1.3: CAI auto-loop for streaming endpoint (was missing)
             if not is_casual_chat:
@@ -1385,6 +1399,26 @@ def _trim_history_to_budget(history_dicts: list[dict]) -> list[dict]:
     return capped
 
 
+_FALLBACK_SIGNATURE = "Maaf, sebentar lagi aku kembali"
+
+
+def _is_poisoned_assistant_msg(msg) -> bool:
+    """Detect prior assistant turns that were stream-fallback or empty.
+
+    These pollute conversation context — the model pattern-matches on
+    them and starts producing empty content itself. Strip them before
+    building the prompt. (Day 74 self-poisoning observation.)
+    """
+    if msg.role != "assistant":
+        return False
+    content = (msg.content or "").strip()
+    if not content:
+        return True
+    if _FALLBACK_SIGNATURE in content:
+        return True
+    return False
+
+
 def _build_messages(
     system_prompt: str,
     history: list[Message],
@@ -1398,8 +1432,30 @@ def _build_messages(
     representing summarized older turns (Innovation #1 conv_summarizer).
     The caller is responsible for stripping the summarized head messages
     from `history` before passing in.
+    Day 74: filters out poisoned assistant turns (empty + fallback signature)
+    so the model doesn't pattern-match "wait, retry" into its own output.
     """
-    history_dicts = [{"role": msg.role, "content": msg.content} for msg in history]
+    # Strip poisoned assistant turns + their immediately-prior user turn
+    # (otherwise model sees orphan user messages with no response — also
+    # confusing).
+    clean_history: list = []
+    i = 0
+    while i < len(history):
+        msg = history[i]
+        # If this user msg is followed by a poisoned assistant, skip both
+        if (msg.role == "user"
+                and i + 1 < len(history)
+                and _is_poisoned_assistant_msg(history[i + 1])):
+            i += 2
+            continue
+        # If poisoned assistant has no prior user (degenerate), just skip it
+        if _is_poisoned_assistant_msg(msg):
+            i += 1
+            continue
+        clean_history.append(msg)
+        i += 1
+
+    history_dicts = [{"role": msg.role, "content": msg.content} for msg in clean_history]
     trimmed = _trim_history_to_budget(history_dicts)
 
     messages = [{"role": "system", "content": system_prompt}]
