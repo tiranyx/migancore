@@ -70,6 +70,14 @@ async def system_status() -> dict:
     }
 
 
+@router.get("/organism")
+async def system_organism() -> dict:
+    """Canonical anatomy map: jiwa, otak, pikiran, akal, syaraf, indera, organ."""
+    from services.organism_architecture import organism_status
+
+    return organism_status()
+
+
 @router.get("/metrics")
 async def system_metrics() -> dict:
     """Performance metrics: latency p50/p95 by route, cache stats."""

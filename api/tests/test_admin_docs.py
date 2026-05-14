@@ -16,3 +16,7 @@ def test_docs_root_uses_first_existing_candidate(tmp_path, monkeypatch):
 def test_module_docs_classify_as_backlog():
     assert admin_docs._classify("MODULE_GENERATORS_BACKLOG.md") == "backlog"
     assert admin_docs._classify("TOOL_MODULE_IMAGE_GENERATOR.md") == "backlog"
+
+
+def test_organism_architecture_classifies_as_vision():
+    assert admin_docs._classify("ORGANISM_ARCHITECTURE_BLUEPRINT.md") == "vision"
