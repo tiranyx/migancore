@@ -425,20 +425,20 @@ def list_available_teachers() -> list[str]:
 # =============================================================================
 # Free models via OpenRouter (no payment needed):
 #   meta-llama/llama-3.3-70b-instruct:free   — strong open-source
-#   meta-llama/llama-3.1-70b-instruct:free   — older variant
-#   google/gemma-2-9b-it:free                — fast Google model
-#   mistralai/mistral-7b-instruct:free       — efficient EU model
-#   qwen/qwen-2.5-7b-instruct:free           — Chinese/Indonesian friendly
+#   meta-llama/llama-3.2-3b-instruct:free   — older variant
+#   google/gemma-4-31b-it:free                — fast Google model
+#   deepseek/deepseek-v4-flash:free       — efficient EU model
+#   qwen/qwen3-next-80b-a3b-instruct:free           — Chinese/Indonesian friendly
 #
 # Tabayyun principle (multi-source verify): rotate teachers per distillation
 # round → broader consensus, less bias from any single perspective.
 
 OPENROUTER_FREE_MODELS = [
     "meta-llama/llama-3.3-70b-instruct:free",
-    "meta-llama/llama-3.1-70b-instruct:free",
-    "google/gemma-2-9b-it:free",
-    "qwen/qwen-2.5-7b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "google/gemma-4-31b-it:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
 ]
 
 
@@ -497,8 +497,9 @@ async def call_openrouter(
                     text=text,
                     input_tokens=in_tok,
                     output_tokens=out_tok,
-                    est_cost_usd=0.0,
-                    teacher=f"openrouter:{model_label}",
+                    cost_usd=0.0,
+                    provider="openrouter",
+                    model=model_label,
                 )
             except httpx.HTTPError as exc:
                 if attempt == 2:
@@ -507,32 +508,53 @@ async def call_openrouter(
     raise TeacherError("OpenRouter: exhausted retries")
 
 
-# Convenience shortcuts per free model
+# Convenience shortcuts per free model (Day 73: verified working 2026-05-14)
+# Primary working set:
+async def call_deepseek_v4(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
+    """DeepSeek V4 Flash — fast, reliable, multilingual."""
+    return await call_openrouter(prompt, system, max_tokens,
+                                 model="deepseek/deepseek-v4-flash:free")
+
+
+async def call_gpt_oss_120(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
+    """OpenAI GPT-OSS 120B — premium open-weight (free tier)."""
+    return await call_openrouter(prompt, system, max_tokens,
+                                 model="openai/gpt-oss-120b:free")
+
+
+async def call_gpt_oss_20(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
+    """OpenAI GPT-OSS 20B — fast variant."""
+    return await call_openrouter(prompt, system, max_tokens,
+                                 model="openai/gpt-oss-20b:free")
+
+
 async def call_llama33(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
-    return await call_openrouter(prompt, system, max_tokens,
-                                 model="meta-llama/llama-3.3-70b-instruct:free")
+    """Meta Llama 3.3 70B — may hit upstream rate limit, fallback to deepseek."""
+    try:
+        return await call_openrouter(prompt, system, max_tokens,
+                                     model="meta-llama/llama-3.3-70b-instruct:free")
+    except TeacherError as e:
+        if "429" in str(e) or "rate-limit" in str(e).lower():
+            logger.info("openrouter.llama33.fallback_to_deepseek")
+            return await call_deepseek_v4(prompt, system, max_tokens)
+        raise
 
 
-async def call_gemma2(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
-    return await call_openrouter(prompt, system, max_tokens,
-                                 model="google/gemma-2-9b-it:free")
-
-
-async def call_qwen25(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
-    return await call_openrouter(prompt, system, max_tokens,
-                                 model="qwen/qwen-2.5-7b-instruct:free")
-
-
-async def call_mistral7b(prompt: str, system: str = "", max_tokens: int = 600) -> TeacherResponse:
-    return await call_openrouter(prompt, system, max_tokens,
-                                 model="mistralai/mistral-7b-instruct:free")
+# Backwards-compat aliases (so distillation_worker.py keeps working)
+call_gemma2 = call_gpt_oss_20   # gemma2 currently rate-limited → use gpt-oss-20b
+call_qwen25 = call_gpt_oss_120  # qwen25 currently rate-limited → use gpt-oss-120b
+call_mistral7b = call_deepseek_v4  # mistral7b deprecated → deepseek
 
 
 TEACHER_REGISTRY.update({
-    "llama33":   call_llama33,
-    "gemma2":    call_gemma2,
-    "qwen25":    call_qwen25,
-    "mistral7b": call_mistral7b,
+    "llama33":     call_llama33,
+    "deepseek_v4": call_deepseek_v4,
+    "gpt_oss_120": call_gpt_oss_120,
+    "gpt_oss_20":  call_gpt_oss_20,
+    # Backwards-compat aliases
+    "gemma2":      call_gpt_oss_20,
+    "qwen25":      call_gpt_oss_120,
+    "mistral7b":   call_deepseek_v4,
 })
 
 
@@ -541,7 +563,7 @@ _original_is_teacher_available = is_teacher_available
 
 def is_teacher_available(teacher: str) -> bool:  # noqa: F811
     """Extended availability check — OpenRouter teachers share one API key."""
-    if teacher in ("llama33", "gemma2", "qwen25", "mistral7b"):
+    if teacher in ("llama33", "deepseek_v4", "gpt_oss_120", "gpt_oss_20", "gemma2", "qwen25", "mistral7b"):
         api_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY", "")
         return bool(api_key)
     return _original_is_teacher_available(teacher)
