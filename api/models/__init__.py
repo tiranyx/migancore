@@ -1,6 +1,6 @@
 """MiganCore ORM models."""
 
-from models.base import Base, engine, AsyncSessionLocal, get_db, init_engine
+from models.base import Base, engine, AsyncSessionLocal, init_engine
 from models.user import User
 from models.tenant import Tenant
 from models.agent import Agent
@@ -21,7 +21,6 @@ __all__ = [
     "Base",
     "engine",
     "AsyncSessionLocal",
-    "get_db",
     "init_engine",
     "User",
     "Tenant",
