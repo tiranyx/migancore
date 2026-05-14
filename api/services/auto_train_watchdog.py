@@ -220,12 +220,13 @@ async def _create_proposal(cycle_id: str, status: str, detail: str) -> None:
                     "problem": detail,
                     "hypothesis": "GPU fine-tune may improve the brain after owner review; do not auto-trigger.",
                     "risk": "medium",
-                    "stage": status,
-                    "src": "auto_train_watchdog",
+                    "stage": "proposed" if status == "pending_review" else status,
+                    "src": "auto",
                     "metadata": json.dumps({
                         "cycle_id": cycle_id,
                         "proposal_type": "training",
                         "component": "auto_train_watchdog",
+                        "watchdog_stage": status,
                         "mode": AUTO_TRAIN_MODE,
                     }),
                 },
@@ -245,8 +246,10 @@ async def _has_pending_training_proposal() -> bool:
                 text("""
                     SELECT COUNT(*)
                     FROM dev_organ_proposals
-                    WHERE source = 'auto_train_watchdog'
-                      AND stage IN ('pending_review', 'pending', 'proposed')
+                    WHERE source = 'auto'
+                      AND metadata->>'component' = 'auto_train_watchdog'
+                      AND metadata->>'proposal_type' = 'training'
+                      AND stage = 'proposed'
                       AND creator_verdict IS NULL
                 """)
             )
