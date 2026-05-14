@@ -44,7 +44,7 @@ Production health:
 status=healthy
 version=0.5.16
 model=migancore:0.7c
-commit_sha=f79732b
+commit_sha=c309771
 ```
 
 Watchdog:
@@ -62,7 +62,8 @@ Latency progression for casual chat:
 Before audit:              ~139s
 Tool schema skipped:        44.5s
 Lightweight casual path:     7.5s first, 2.5s warm
-Reflex path target:          sub-second to low single-digit
+Reflex sync path:            0.03s - 0.05s
+Reflex stream path:          0.08s
 ```
 
 ## Current Doctrine
@@ -77,3 +78,9 @@ Reflex handles tiny social turns. Lightweight cognition handles simple answers.
 Full cognition handles tasks, memory, tools, research, coding, and decisions.
 Training only happens after proposal review and clear evidence.
 
+## Handoff Warning
+
+Do not promote `migancore:0.7e` again until identity, latency, and behavioral
+evals prove it is better than `0.7c`. Do not switch `AUTO_TRAIN_MODE=auto`
+unless Fahmi explicitly approves a GPU training run. Current direction is
+biomimetic education first, model churn later.
