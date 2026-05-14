@@ -2112,3 +2112,20 @@ def build_ollama_tools_spec(skill_ids: list[str]) -> list[dict]:
             },
         })
     return tools
+
+# ---------------------------------------------------------------------------
+# DAY 74 REFACTOR — Re-export new organ package for backward compat
+# ---------------------------------------------------------------------------
+# The monolithic tool_executor is being split into services/tools/* organs.
+# These re-exports let old imports keep working while new code uses:
+#   from services.tools import ToolContext, ToolExecutor, build_ollama_tools_spec
+# ---------------------------------------------------------------------------
+
+try:
+    from tools import ToolContext as _ToolContext
+    from tools import ToolExecutionError as _ToolExecutionError
+    from tools import ToolExecutor as _ToolExecutor
+    from tools import build_ollama_tools_spec as _build_ollama_tools_spec
+except Exception:
+    # If tools package fails to import (circular, missing deps), keep legacy
+    pass
