@@ -27,8 +27,6 @@
         "onamix_get",
         "onamix_search",
         "onamix_scrape",
-        "tavily_search",
-        "serper_search",
         "think",
         "synthesize",
         "teacher_ask",
