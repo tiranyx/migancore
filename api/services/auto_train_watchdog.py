@@ -211,17 +211,23 @@ async def _create_proposal(cycle_id: str, status: str, detail: str) -> None:
             await db.execute(
                 text("""
                     INSERT INTO dev_organ_proposals
-                        (id, title, description, proposal_type, risk_level, stage, source_component, created_at)
-                    VALUES (:id, :title, :desc, :type, :risk, :stage, :src, NOW())
+                        (id, title, problem, hypothesis, risk_level, stage, source, metadata, created_at, updated_at)
+                    VALUES (:id, :title, :problem, :hypothesis, :risk, :stage, :src, :metadata, NOW(), NOW())
                 """),
                 {
                     "id": str(uuid.uuid4()),
                     "title": f"Auto-Training {cycle_id}",
-                    "desc": detail,
-                    "type": "training",
+                    "problem": detail,
+                    "hypothesis": "GPU fine-tune may improve the brain after owner review; do not auto-trigger.",
                     "risk": "medium",
                     "stage": status,
                     "src": "auto_train_watchdog",
+                    "metadata": json.dumps({
+                        "cycle_id": cycle_id,
+                        "proposal_type": "training",
+                        "component": "auto_train_watchdog",
+                        "mode": AUTO_TRAIN_MODE,
+                    }),
                 },
             )
             await db.commit()
@@ -239,9 +245,9 @@ async def _has_pending_training_proposal() -> bool:
                 text("""
                     SELECT COUNT(*)
                     FROM dev_organ_proposals
-                    WHERE proposal_type = 'training'
-                      AND source_component = 'auto_train_watchdog'
+                    WHERE source = 'auto_train_watchdog'
                       AND stage IN ('pending_review', 'pending', 'proposed')
+                      AND creator_verdict IS NULL
                 """)
             )
             return (result.scalar() or 0) > 0
