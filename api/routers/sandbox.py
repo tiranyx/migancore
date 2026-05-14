@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+import secrets
 from typing import Optional
 
 import structlog
@@ -56,7 +57,7 @@ router = APIRouter(prefix="/v1/sandbox", tags=["sandbox"])
 def _require_admin(x_admin_key: str = Header(default="", alias="X-Admin-Key")) -> None:
     if not settings.ADMIN_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Admin not configured")
-    if x_admin_key != settings.ADMIN_SECRET_KEY:
+    if not secrets.compare_digest(x_admin_key or "", settings.ADMIN_SECRET_KEY):
         raise HTTPException(status_code=401, detail="Invalid admin key")
 
 
@@ -70,7 +71,7 @@ def _allow_propose(x_admin_key: str = Header(default="", alias="X-Admin-Key")) -
     """
     if not settings.ADMIN_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Admin not configured")
-    if x_admin_key != settings.ADMIN_SECRET_KEY:
+    if not secrets.compare_digest(x_admin_key or "", settings.ADMIN_SECRET_KEY):
         raise HTTPException(status_code=401, detail="Invalid admin key")
     return True
 
@@ -91,7 +92,7 @@ class ProposalCreate(BaseModel):
         pattern="^(auto|owner_command|tool_failure|eval_failure|manual)$",
     )
     metadata: dict = Field(default_factory=dict)
-    created_by: str = Field(default="core_brain")
+    created_by: str = Field(default="core_brain", max_length=128)
 
 
 class VerdictUpdate(BaseModel):

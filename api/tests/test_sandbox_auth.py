@@ -46,3 +46,12 @@ def test_proposal_source_accepts_manual_for_admin_smoke():
     )
 
     assert body.source == "manual"
+
+
+def test_proposal_created_by_matches_db_length_limit():
+    with pytest.raises(ValidationError):
+        sandbox.ProposalCreate(
+            title="QA auth proposal smoke",
+            problem="Verify created_by is rejected before varchar overflow.",
+            created_by="x" * 129,
+        )
