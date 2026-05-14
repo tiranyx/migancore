@@ -38,6 +38,7 @@ from services.ollama import OllamaClient, OllamaError
 from services.llamaserver import LlamaServerClient, LlamaServerError, select_inference_client
 from services.tool_executor import ToolContext, build_ollama_tools_spec
 from services.tool_policy import load_tool_policies
+from services.tool_router import _is_casual_chat
 from services.cai_pipeline import run_cai_pipeline
 from services.fact_extractor import maybe_update_knowledge_block
 from services.vector_memory import index_turn_pair
@@ -78,6 +79,22 @@ CHARS_PER_TOKEN = 3.5          # Estimate: Bahasa Indonesia + English mixed cont
 NUM_CTX = 4096                 # Explicit Ollama context window — do NOT rely on Ollama default (2048)
 MAX_TOKENS = 1024              # num_predict: max response length tokens
 MAX_TOOL_ITERATIONS = 5        # Circuit breaker — prevents infinite tool loops
+
+
+def _build_lightweight_system_prompt(current_user: Any = None) -> str:
+    """Small prompt for greetings/acks where full memory + SOUL is overkill."""
+    creator = bool(getattr(current_user, "is_creator", False))
+    creator_line = (
+        "Jika user adalah Fahmi, ingat bahwa Fahmi adalah pencipta dan jawab akrab."
+        if creator else
+        "Jawab sebagai Mighan-Core dengan sopan dan ringkas."
+    )
+    return (
+        "Kamu Mighan-Core, ADO milik ekosistem Tiranyx. "
+        "Untuk sapaan atau chit-chat singkat, jawab natural dalam Bahasa Indonesia, "
+        "maksimal dua kalimat, tanpa memakai tools.\n"
+        f"{creator_line}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -137,36 +154,47 @@ async def chat(
     agent = await _get_agent_or_404(db, agent_id, current_user.tenant_id)
     agent_cfg = get_agent_config(agent_id)
     soul_text, model = _load_persona(agent_cfg)
-    mem = await memory_summary(tenant_id, agent_id)
+    is_casual_chat = _is_casual_chat(data.message)
 
-    # Day 13: Fetch Letta Tier 3 persona blocks (graceful degradation: {} if unavailable)
-    letta_blocks = await get_letta_blocks(agent.letta_agent_id) if agent.letta_agent_id else {}
+    if is_casual_chat:
+        mem = ""
+        letta_blocks = {}
+        episodic_context = ""
+        system_prompt = _build_lightweight_system_prompt(current_user)
+    else:
+        mem = await memory_summary(tenant_id, agent_id)
 
-    # Day 16: Retrieve semantically relevant past turns from Qdrant episodic memory.
-    # Synchronous (needed before prompt build), timeout-guarded (1.5s → [] on failure).
-    # Returns [] on first chat (collection empty) or Qdrant unavailable — safe default.
-    episodic_results = await retrieve_episodic_context(agent_id=agent_id, query=data.message)
-    episodic_context = format_episodic_context(episodic_results)
+        # Day 13: Fetch Letta Tier 3 persona blocks (graceful degradation: {} if unavailable)
+        letta_blocks = await get_letta_blocks(agent.letta_agent_id) if agent.letta_agent_id else {}
 
-    # Day 73: KG recall — prepend known facts to episodic context
-    try:
-        from services.kg_extractor import recall_for_prompt as _kg_recall
-        _kg_ctx = await _kg_recall(tenant_id=tenant_id, user_text=data.message)
-        if _kg_ctx:
-            episodic_context = _kg_ctx + episodic_context
-    except Exception:
-        pass
+        # Day 16: Retrieve semantically relevant past turns from Qdrant episodic memory.
+        # Synchronous (needed before prompt build), timeout-guarded (1.5s → [] on failure).
+        # Returns [] on first chat (collection empty) or Qdrant unavailable — safe default.
+        episodic_results = await retrieve_episodic_context(agent_id=agent_id, query=data.message)
+        episodic_context = format_episodic_context(episodic_results)
 
-    system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks, episodic_context, current_user)
+        # Day 73: KG recall — prepend known facts to episodic context
+        try:
+            from services.kg_extractor import recall_for_prompt as _kg_recall
+            _kg_ctx = await _kg_recall(tenant_id=tenant_id, user_text=data.message)
+            if _kg_ctx:
+                episodic_context = _kg_ctx + episodic_context
+        except Exception:
+            pass
+
+        system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks, episodic_context, current_user)
 
     conversation, history = await _get_or_create_conversation(
         db, data, agent, current_user
     )
 
     # Day 45 — fold cached summary if available (Innovation #1)
-    history, prepend_summary = await _apply_cached_summary(
-        str(conversation.id), history
-    )
+    if is_casual_chat:
+        prepend_summary = None
+    else:
+        history, prepend_summary = await _apply_cached_summary(
+            str(conversation.id), history
+        )
     messages = _build_messages(system_prompt, history, data.message, prepend_summary=prepend_summary)
 
     # Build tools spec from agent's declared tools in agents.json
@@ -215,7 +243,11 @@ async def chat(
         messages=messages,
         tools_spec=tools_spec,
         tool_ctx=tool_ctx,
-        options={"num_predict": MAX_TOKENS, "temperature": 0, "num_ctx": NUM_CTX},
+        options={
+            "num_predict": 96 if is_casual_chat else MAX_TOKENS,
+            "temperature": 0,
+            "num_ctx": 1024 if is_casual_chat else NUM_CTX,
+        },
     )
     logger.info("chat.reasoning_trace", trace=reasoning_trace)
 
@@ -249,7 +281,7 @@ async def chat(
     _t.add_done_callback(_background_tasks.discard)
 
     # Day 14: Background knowledge extraction — updates Letta knowledge block with new facts
-    if agent.letta_agent_id:
+    if agent.letta_agent_id and not is_casual_chat:
         _t = asyncio.create_task(
             maybe_update_knowledge_block(
                 letta_agent_id=agent.letta_agent_id,
@@ -263,19 +295,20 @@ async def chat(
 
     # Day 15: Background CAI critique-revise — generates preference pairs for DPO training
     # M1.3: Beta tenants get 100% CAI sampling via tenant.settings
-    _cai_sample_rate = tenant.settings.get("cai_sampling_rate", 0.5)
-    if tenant.settings.get("cai_auto_loop"):
-        _cai_sample_rate = 1.0
-    _t = asyncio.create_task(
-        run_cai_pipeline(
-            user_message=data.message,
-            assistant_response=assistant_content,
-            source_message_id=assistant_msg.id,
-            sample_rate=_cai_sample_rate,
+    if not is_casual_chat:
+        _cai_sample_rate = tenant.settings.get("cai_sampling_rate", 0.5)
+        if tenant.settings.get("cai_auto_loop"):
+            _cai_sample_rate = 1.0
+        _t = asyncio.create_task(
+            run_cai_pipeline(
+                user_message=data.message,
+                assistant_response=assistant_content,
+                source_message_id=assistant_msg.id,
+                sample_rate=_cai_sample_rate,
+            )
         )
-    )
-    _background_tasks.add(_t)
-    _t.add_done_callback(_background_tasks.discard)
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
 
     logger.info(
         "chat.response",
@@ -344,8 +377,12 @@ async def chat_stream(
         agent = await _get_agent_or_404(db, agent_id, current_user.tenant_id)
         agent_cfg = get_agent_config(agent_id)
         soul_text, model = _load_persona(agent_cfg)
-        mem = await memory_summary(tenant_id, agent_id)
-        system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, current_user=current_user)
+        is_casual_chat = _is_casual_chat(data.message)
+        if is_casual_chat:
+            system_prompt = _build_lightweight_system_prompt(current_user)
+        else:
+            mem = await memory_summary(tenant_id, agent_id)
+            system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, current_user=current_user)
 
         conversation, history = await _get_or_create_conversation(
             db, data, agent, current_user
@@ -377,9 +414,12 @@ async def chat_stream(
     # DB session closes here — before streaming starts
 
     # Day 45 — fold cached summary if available (Innovation #1)
-    history, prepend_summary = await _apply_cached_summary(
-        str(conversation_id), history
-    )
+    if is_casual_chat:
+        prepend_summary = None
+    else:
+        history, prepend_summary = await _apply_cached_summary(
+            str(conversation_id), history
+        )
     messages = _build_messages(
         system_prompt,
         history,  # history loaded before session closed
@@ -471,6 +511,8 @@ async def chat_stream(
         tool_iter = 0
         # Cap of 4 tool round-trips before we force a final stream (matches sync director)
         STREAM_TOOL_MAX = 4
+        predict_tokens = 96 if is_casual_chat else MAX_TOKENS
+        ctx_window = 1024 if is_casual_chat else NUM_CTX
         # Day 75 Sprint 2: track tool calls for adaptive citation surface in done event
         stream_tool_calls_acc: list[dict] = []
         # Day 65 — pre-generate UUID for assistant message so it can be included
@@ -492,7 +534,7 @@ async def chat_stream(
                             model=model,
                             messages=run_messages,
                             tools=tools_spec_stream,
-                            options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX, "temperature": 0},
+                            options={"num_predict": predict_tokens, "num_ctx": ctx_window, "temperature": 0},
                         )
                     msg = tool_resp.get("message", {}) or {}
                     tcs = msg.get("tool_calls") or []
@@ -626,7 +668,7 @@ async def chat_stream(
                 stream_iter = _stream_oc.chat_stream(
                     model=model,
                     messages=run_messages,
-                    options={"num_predict": MAX_TOKENS, "num_ctx": NUM_CTX},
+                    options={"num_predict": predict_tokens, "num_ctx": ctx_window},
                 ).__aiter__()
 
                 while True:
@@ -668,37 +710,39 @@ async def chat_stream(
             yield _sse(_done_payload(full_text))
 
             # M1.3: CAI auto-loop for streaming endpoint (was missing)
-            _cai_sample_rate_stream = tenant_for_stream.settings.get("cai_sampling_rate", 0.5)
-            if tenant_for_stream.settings.get("cai_auto_loop"):
-                _cai_sample_rate_stream = 1.0
-            _t = asyncio.create_task(
-                run_cai_pipeline(
-                    user_message=data.message,
-                    assistant_response=full_text,
-                    source_message_id=assistant_msg_id,
-                    sample_rate=_cai_sample_rate_stream,
-                )
-            )
-            _background_tasks.add(_t)
-            _t.add_done_callback(_background_tasks.discard)
-
-            # Day 73: KG extraction — learn facts from every response
-            try:
-                from services.kg_extractor import extract_and_store as _kg_extract
-                _kg_t = asyncio.create_task(
-                    _kg_extract(
-                        tenant_id=tenant_id,
-                        conversation_id=str(conversation_id),
-                        assistant_text=full_text,
-                        user_text=data.message,
-                        ollama_url=settings.OLLAMA_URL,
-                        model=settings.DEFAULT_MODEL,
+            if not is_casual_chat:
+                _cai_sample_rate_stream = tenant_for_stream.settings.get("cai_sampling_rate", 0.5)
+                if tenant_for_stream.settings.get("cai_auto_loop"):
+                    _cai_sample_rate_stream = 1.0
+                _t = asyncio.create_task(
+                    run_cai_pipeline(
+                        user_message=data.message,
+                        assistant_response=full_text,
+                        source_message_id=assistant_msg_id,
+                        sample_rate=_cai_sample_rate_stream,
                     )
                 )
-                _background_tasks.add(_kg_t)
-                _kg_t.add_done_callback(_background_tasks.discard)
-            except Exception as _kg_exc:
-                logger.debug("chat.kg_skip", error=str(_kg_exc)[:60])
+                _background_tasks.add(_t)
+                _t.add_done_callback(_background_tasks.discard)
+
+            # Day 73: KG extraction — learn facts from meaningful responses.
+            if not is_casual_chat:
+                try:
+                    from services.kg_extractor import extract_and_store as _kg_extract
+                    _kg_t = asyncio.create_task(
+                        _kg_extract(
+                            tenant_id=tenant_id,
+                            conversation_id=str(conversation_id),
+                            assistant_text=full_text,
+                            user_text=data.message,
+                            ollama_url=settings.OLLAMA_URL,
+                            model=settings.DEFAULT_MODEL,
+                        )
+                    )
+                    _background_tasks.add(_kg_t)
+                    _kg_t.add_done_callback(_background_tasks.discard)
+                except Exception as _kg_exc:
+                    logger.debug("chat.kg_skip", error=str(_kg_exc)[:60])
 
             # Day 53 — telemetry: engine, TTFB, sustained throughput.
             _stream_total_s = asyncio.get_event_loop().time() - _stream_t0
