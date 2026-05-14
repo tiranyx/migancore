@@ -124,6 +124,8 @@ async def process_conversation(
 
 
 async def main():
+    import sys
+    sys.path.insert(0, "/opt/ado/api")
     parser = argparse.ArgumentParser()
     parser.add_argument("--ollama_url", default="http://localhost:11434")
     parser.add_argument("--model", default="qwen2.5:7b-instruct-q4_K_M")
