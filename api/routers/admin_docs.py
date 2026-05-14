@@ -6,7 +6,7 @@ journal, and lessons. NO duplicate DB; markdown files remain authoritative.
 
 Tabs supported (classification by filename pattern):
   - vision     : SOUL, DIRECTION_LOCK, NORTHSTAR, THEOLOGY, PRD, ARCHITECTURE
-  - backlog    : SPRINT_*, DAY*_PROGRESS, M*_PROGRESS, ROADMAP, BACKLOG_*
+  - backlog    : SPRINT_*, DAY*_PROGRESS, M*_PROGRESS, ROADMAP, BACKLOG_*, MODULE_*
   - journal    : *FOUNDER_JOURNAL*, *HANDOFF*, *DAILY*, AGENT_SYNC/*
   - lessons    : LESSONS_*, *MASTER*, *REVIEW*
 
@@ -33,7 +33,21 @@ from config import settings
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/v1/admin/docs", tags=["admin-docs"])
 
-DOCS_ROOT = Path(os.getenv("ADMIN_DOCS_ROOT", "/app/docs"))
+_DOCS_ROOT_CANDIDATES = (
+    Path(os.getenv("ADMIN_DOCS_ROOT", "")).expanduser() if os.getenv("ADMIN_DOCS_ROOT") else None,
+    Path("/app/docs"),
+    Path("/opt/ado/docs"),
+    Path(__file__).resolve().parents[2] / "docs",
+)
+
+
+def _docs_root() -> Path:
+    """Return the first available docs root across local and VPS layouts."""
+    for candidate in _DOCS_ROOT_CANDIDATES:
+        if candidate and candidate.exists() and candidate.is_dir():
+            return candidate.resolve()
+    configured = os.getenv("ADMIN_DOCS_ROOT", "/app/docs")
+    return Path(configured).resolve()
 
 # Tab classification rules — order matters (first match wins)
 _TAB_RULES = [
@@ -49,7 +63,8 @@ _TAB_RULES = [
     ("backlog", [
         "SPRINT_", "SPRINT2", "SPRINT3", "SPRINT4", "SPRINT5", "SPRINT6", "SPRINT7", "SPRINT8", "SPRINT9", "06_SPRINT_ROADMAP", "DAY",
         "_PROGRESS", "M15", "M16", "M17",
-        "ROADMAP", "BACKLOG_ALIGNMENT", "SPRINT_DAY",
+        "ROADMAP", "BACKLOG_ALIGNMENT", "MODULE_", "TOOL_MODULE",
+        "GENERATOR", "ARTIFACT_BUILDER", "SPRINT_DAY",
         "STATUS_DAY", "BULAN", "CYCLE",
     ]),
     ("journal", [
@@ -112,8 +127,9 @@ def _safe_resolve(rel_path: str) -> Path:
     """Resolve rel_path under DOCS_ROOT, reject traversal."""
     if not rel_path or ".." in rel_path:
         raise HTTPException(status_code=400, detail="Invalid path")
-    full = (DOCS_ROOT / rel_path).resolve()
-    if not str(full).startswith(str(DOCS_ROOT.resolve())):
+    root = _docs_root()
+    full = (root / rel_path).resolve()
+    if not str(full).startswith(str(root)):
         raise HTTPException(status_code=400, detail="Path traversal denied")
     if not full.exists():
         raise HTTPException(status_code=404, detail=f"Not found: {rel_path}")
@@ -129,19 +145,20 @@ async def list_docs(
     search: Optional[str] = Query(None, max_length=100),
 ):
     """List all .md docs, optionally filtered by tab and search query."""
-    if not DOCS_ROOT.exists():
-        raise HTTPException(status_code=500, detail=f"Docs root not found: {DOCS_ROOT}")
+    root = _docs_root()
+    if not root.exists():
+        raise HTTPException(status_code=500, detail=f"Docs root not found: {root}")
 
     by_tab: dict[str, int] = {}
     docs: list[DocEntry] = []
     s = (search or "").lower()
 
-    for path in sorted(DOCS_ROOT.rglob("*.md")):
+    for path in sorted(root.rglob("*.md")):
         try:
             st = path.stat()
         except OSError:
             continue
-        rel = str(path.relative_to(DOCS_ROOT))
+        rel = str(path.relative_to(root))
         name = path.name
         t = _classify(name)
         by_tab[t] = by_tab.get(t, 0) + 1
@@ -186,13 +203,14 @@ async def get_doc(path: str = Query(..., min_length=1)):
 @router.get("/stats", dependencies=[Depends(_require_admin)])
 async def stats():
     """Quick counts per tab + most-recent in each."""
-    if not DOCS_ROOT.exists():
-        raise HTTPException(status_code=500, detail=f"Docs root not found: {DOCS_ROOT}")
+    root = _docs_root()
+    if not root.exists():
+        raise HTTPException(status_code=500, detail=f"Docs root not found: {root}")
 
     by_tab: dict[str, int] = {}
     recent: dict[str, dict] = {}
 
-    for path in DOCS_ROOT.rglob("*.md"):
+    for path in root.rglob("*.md"):
         try:
             st = path.stat()
         except OSError:
@@ -203,13 +221,13 @@ async def stats():
         if prev is None or st.st_mtime > prev["mtime"]:
             recent[t] = {
                 "name": path.name,
-                "path": str(path.relative_to(DOCS_ROOT)),
+                "path": str(path.relative_to(root)),
                 "mtime": st.st_mtime,
             }
     total = sum(by_tab.values())
     return {
         "total": total,
-        "docs_root": str(DOCS_ROOT),
+        "docs_root": str(root),
         "by_tab": by_tab,
         "recent_per_tab": recent,
     }
