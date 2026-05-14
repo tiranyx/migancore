@@ -86,6 +86,10 @@ def main() -> int:
     failures += check("backlog page served", status == 200, args.frontend)
     failures += check("backlog panel markers", all(m in html for m in markers), ", ".join(markers))
 
+    status, sandbox_html = fetch_text(f"{args.frontend.rsplit('/', 1)[0]}/sandbox.html")
+    failures += check("sandbox page served", status == 200, f"{args.frontend.rsplit('/', 1)[0]}/sandbox.html")
+    failures += check("sandbox nav has backlog", 'href="/backlog.html"' in sandbox_html, "href=/backlog.html")
+
     if not args.admin_key:
         failures += check("admin key available", False, "set ADMIN_SECRET_KEY")
     else:
