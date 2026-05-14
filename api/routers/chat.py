@@ -187,25 +187,42 @@ async def chat(
         episodic_context = ""
         system_prompt = _build_lightweight_system_prompt(current_user)
     else:
-        mem = await memory_summary(tenant_id, agent_id)
+        # Day 74 — parallelize the 4 context fetches (was serial, ~200-1500ms p99).
+        # Each task degrades gracefully to its safe-empty default on exception.
+        async def _safe_mem():
+            try:
+                return await memory_summary(tenant_id, agent_id)
+            except Exception as e:
+                logger.warning("ctx.mem_fail", error=str(e)[:120])
+                return ""
 
-        # Day 13: Fetch Letta Tier 3 persona blocks (graceful degradation: {} if unavailable)
-        letta_blocks = await get_letta_blocks(agent.letta_agent_id) if agent.letta_agent_id else {}
+        async def _safe_letta():
+            if not agent.letta_agent_id:
+                return {}
+            try:
+                return await get_letta_blocks(agent.letta_agent_id)
+            except Exception as e:
+                logger.warning("ctx.letta_fail", error=str(e)[:120])
+                return {}
 
-        # Day 16: Retrieve semantically relevant past turns from Qdrant episodic memory.
-        # Synchronous (needed before prompt build), timeout-guarded (1.5s → [] on failure).
-        # Returns [] on first chat (collection empty) or Qdrant unavailable — safe default.
-        episodic_results = await retrieve_episodic_context(agent_id=agent_id, query=data.message)
-        episodic_context = format_episodic_context(episodic_results)
+        async def _safe_episodic():
+            try:
+                # retrieve_episodic_context already has internal timeout + try/except
+                return await retrieve_episodic_context(agent_id=agent_id, query=data.message)
+            except Exception:
+                return []
 
-        # Day 73: KG recall — prepend known facts to episodic context
-        try:
-            from services.kg_extractor import recall_for_prompt as _kg_recall
-            _kg_ctx = await _kg_recall(tenant_id=tenant_id, user_text=data.message)
-            if _kg_ctx:
-                episodic_context = _kg_ctx + episodic_context
-        except Exception:
-            pass
+        async def _safe_kg():
+            try:
+                from services.kg_extractor import recall_for_prompt as _kg_recall
+                return await _kg_recall(tenant_id=tenant_id, user_text=data.message) or ""
+            except Exception:
+                return ""
+
+        mem, letta_blocks, episodic_results, _kg_ctx = await asyncio.gather(
+            _safe_mem(), _safe_letta(), _safe_episodic(), _safe_kg(),
+        )
+        episodic_context = (_kg_ctx or "") + format_episodic_context(episodic_results)
 
         system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, letta_blocks, episodic_context, current_user)
 
@@ -279,6 +296,47 @@ async def chat(
         tenant_plan=tenant.plan,
         tool_policies=tool_policies,
     )
+
+    # Day 74 — response cache check (was dead code until now). Hits on repeat
+    # FAQ-style queries return in ~5-50ms instead of running Ollama (5-30s).
+    # Skipped automatically for: long queries, conversations with history,
+    # tool-likely queries (calculate/search/etc), or when cache disabled.
+    cached_response = None
+    _resp_cache_mod = None
+    try:
+        from services import response_cache as _resp_cache_mod
+        if _resp_cache_mod.is_cacheable(data.message, has_history=bool(history)):
+            cached_response = await _resp_cache_mod.get_cached(system_prompt, data.message)
+    except Exception as e:
+        logger.warning("response_cache.check_fail", error=str(e)[:120])
+
+    if cached_response:
+        # Cache hit — persist assistant message + return without Ollama
+        assistant_msg = Message(
+            conversation_id=conversation.id,
+            tenant_id=current_user.tenant_id,
+            role="assistant",
+            content=cached_response,
+        )
+        db.add(assistant_msg)
+        conversation.message_count = len(history) + 2
+        conversation.last_message_at = datetime.now(timezone.utc)
+        await db.commit()
+        logger.info(
+            "chat.response_cache_hit",
+            agent_id=agent_id,
+            conversation_id=str(conversation.id),
+            response_len=len(cached_response),
+        )
+        return ChatResponse(
+            agent_id=agent_id,
+            conversation_id=str(conversation.id),
+            response=cached_response,
+            model_used="cache:migancore",
+            tool_calls_made=0,
+            sources=[],
+        )
+
     # Day 73 — Lazy tool routing: send only relevant schemas instead of all 42.
     # Keyword-first (O(n), <1ms) → semantic fallback (~50ms). Reduces prompt
     # overhead from ~6000 tokens → ~1200 tokens on average. (Lesson #131)
@@ -302,6 +360,17 @@ async def chat(
         },
     )
     logger.info("chat.reasoning_trace", trace=reasoning_trace)
+
+    # Day 74 — write to response cache if no tools used (tool outputs vary by
+    # external state; pure-LLM answers are deterministic and worth caching).
+    if (cached_response is None
+            and not all_tool_calls
+            and _resp_cache_mod is not None
+            and _resp_cache_mod.is_cacheable(data.message, has_history=bool(history))):
+        try:
+            await _resp_cache_mod.set_cached(system_prompt, data.message, assistant_content)
+        except Exception as e:
+            logger.warning("response_cache.set_fail", error=str(e)[:120])
 
     # Persist assistant message with tool call metadata
     assistant_msg = Message(
