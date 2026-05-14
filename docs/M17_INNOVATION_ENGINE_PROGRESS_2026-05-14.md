@@ -59,6 +59,30 @@ This layer sits on top of Cognitive Synthesis and Dev Organ:
 - `rg` confirms Innovation Engine references in runtime prompt, SOUL, docs,
   README, AGENT_SYNC, and dataset.
 
+## Commit, Deploy, QA
+
+- Committed and pushed as `f410c93`:
+  `feat(cognition): add innovation engine doctrine`.
+- Concurrent agent work added `8fa5736` after the M1.7 commit:
+  `test(day73): live QA script — tool_router + onamix 6-test suite`.
+- VPS `/opt/ado` had local runtime diffs in `config/agents.json`,
+  `config/skills.json`, and `docker-compose.yml`; Codex stashed them before
+  pull and re-applied them after pull so Claude's in-progress Day 73 tool work
+  was not lost.
+- Rebuilt and restarted API with `BUILD_DAY=M1.7`.
+- Production health passed:
+  `status=healthy`, `version=0.5.16`, `model=migancore:0.7c`,
+  `commit_sha=8fa5736`, `day=M1.7`.
+- Runtime prompt verification passed:
+  `/app/routers/chat.py` contains `[INNOVATION ENGINE - MANDATORY]`.
+- Container validation passed:
+  `python -m py_compile /app/routers/chat.py` with
+  `PYTHONPYCACHEPREFIX=/tmp`.
+- Container config validation passed:
+  `/app/config/agents.json` and `/app/config/skills.json` are valid JSON.
+- Startup log scan showed `Application startup complete` and no
+  `contracts.boot.error` or traceback.
+
 ## Next Steps
 
 1. Add Innovation Engine eval prompts to the eval suite.
@@ -67,4 +91,3 @@ This layer sits on top of Cognitive Synthesis and Dev Organ:
 3. Connect strong Innovation Engine outputs into future SFT/eval harvesting.
 4. Add a small `propose_tool` or `toolify_workflow` path if Claude's new
    `propose_improvement` does not cover tool proposals.
-
