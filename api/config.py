@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     DISTILL_MARGIN_THRESHOLD: float = 2.0      # Only keep pairs with judge_diff >= this
 
     # MiganForge — Training Loop (Day 72e)
-    DEFAULT_MODEL: str = "migancore:0.4"       # Current production model
+    DEFAULT_MODEL: str = "migancore:0.8"       # Current production model (Organic Sprint)
     TRAINING_OUTPUT_DIR: str = "/opt/ado/data/training"
     TRAINING_EVAL_DIR: str = "/opt/ado/data/eval"
     TRAINING_MIN_DPO_PAIRS: int = 30           # Minimum pairs before training
