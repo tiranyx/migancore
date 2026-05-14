@@ -153,6 +153,7 @@ services:
     volumes:
       - /etc/ado/keys:/etc/ado/keys:ro
       - ./config:/app/config:ro
+      - ./docs:/app/docs:ro                      # Day 74: SSOT Backlog docs browser
       - fastembed_cache:/app/.cache/fastembed   # Persist model downloads across rebuilds
       - ./data/workspace:/app/workspace         # Day 24: sandboxed file system for agents
       - ./eval:/app/eval                       # Day 39: identity eval scripts + persona set
