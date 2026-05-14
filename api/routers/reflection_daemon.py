@@ -22,12 +22,18 @@ import asyncio
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import re
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
+from deps.db import get_db
+from models.proposal import DevOrganProposal
+from services.dev_organ import classify_risk
 
 logger = structlog.get_logger()
 
@@ -229,6 +235,40 @@ CORE_BRAIN_ID = "cb3ebd3b-4c31-4af7-8470-25c2011c0974"
 SYSTEM_TENANT = "00000000-0000-0000-0000-000000000000"
 
 
+def _proposal_from_reflection_text(reflection_key: str, reflection_text: str) -> dict | None:
+    """Convert a reflection's upgrade line into a creator-review proposal."""
+    match = re.search(
+        r"Usul upgrade apa(?:\*\*)?\s*[-—:]\s*(.+)",
+        reflection_text or "",
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    upgrade = re.sub(r"\s+", " ", match.group(1)).strip(" -*—:\t\r\n")
+    if not upgrade or upgrade.lower() in {"-", "—", "cukup", "tidak ada", "none", "n/a"}:
+        return None
+
+    title = f"Reflection upgrade: {upgrade[:140]}"
+    return {
+        "title": title,
+        "problem": (
+            "Daily reflection produced an upgrade idea that should enter "
+            "creator review before any implementation."
+        ),
+        "hypothesis": upgrade,
+        "touched_paths": ["docs/SPRINT_DAY73_CODEX_OPTIMIZATION_LOG_2026-05-14.md"],
+        "tests": [],
+        "rollback_plan": "Reject this proposal or leave it in proposed stage; no live code is changed by synthesis.",
+        "source": "eval_failure",
+        "created_by": "reflection_daemon",
+        "metadata": {
+            "reflection_key": reflection_key,
+            "synthesis_mode": "reflection_to_proposal",
+        },
+    }
+
+
 @router.post("/trigger", dependencies=[Depends(_require_admin)])
 async def trigger_reflection(body: ReflectionTriggerRequest):
     """Manually trigger reflection cycle. Future: cron job calls this."""
@@ -320,3 +360,59 @@ async def latest_reflection(limit: int = 5, agent_id: Optional[str] = None):
         })
     reflections.sort(key=lambda r: -r["timestamp"])
     return {"count": len(reflections), "reflections": reflections[:limit]}
+
+
+@router.post("/propose-upgrade", dependencies=[Depends(_require_admin)])
+async def propose_upgrade_from_latest_reflection(
+    agent_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Turn the latest reflection's upgrade idea into a pending proposal.
+
+    This is deliberately proposal-only. It does not approve, train, patch, or deploy.
+    """
+    latest = await latest_reflection(limit=5, agent_id=agent_id)
+    for reflection in latest["reflections"]:
+        payload = _proposal_from_reflection_text(reflection["key"], reflection["content"])
+        if not payload:
+            continue
+
+        existing = (
+            await db.execute(
+                select(DevOrganProposal).where(
+                    DevOrganProposal.created_by == "reflection_daemon",
+                    DevOrganProposal.metadata_["reflection_key"].as_string() == reflection["key"],
+                )
+            )
+        ).scalars().first()
+        if existing:
+            return {
+                "status": "already_exists",
+                "proposal": existing.to_dict(),
+            }
+
+        risk = classify_risk(payload["touched_paths"]).value
+        row = DevOrganProposal(
+            title=payload["title"],
+            problem=payload["problem"],
+            hypothesis=payload["hypothesis"],
+            touched_paths=payload["touched_paths"],
+            tests=payload["tests"],
+            rollback_plan=payload["rollback_plan"],
+            source=payload["source"],
+            risk_level=risk,
+            stage="proposed",
+            gate_results=[],
+            metadata_=payload["metadata"],
+            created_by=payload["created_by"],
+        )
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+        logger.info("reflection.proposal.created", proposal_id=str(row.id), reflection_key=reflection["key"])
+        return {
+            "status": "created",
+            "proposal": row.to_dict(),
+        }
+
+    return {"status": "skipped", "reason": "no actionable upgrade line found"}

@@ -144,3 +144,20 @@ Codex added a read-only readiness check for proposals:
 
 This gives Fahmi a first quality report before deciding whether Migan should
 iterate, test deeper, or reject the proposal.
+
+## Day73 Gate Runner v2 + Reflection Synthesis
+
+Codex extended the proposal education loop carefully:
+
+- `RUN CHECK` now also records a real `syntax` gate for touched Python files
+  by compiling them without execution.
+- `RUN TESTS` is separate and only runs allowlisted `python -m pytest ...`
+  commands from `proposal.tests`; shell operators, absolute paths, parent
+  traversal, and non-test paths are rejected.
+- Reflections can now become proposals via
+  `POST /v1/admin/reflection/propose-upgrade`.
+- The Refleksi tab exposes `MAKE PROPOSAL`, which converts the latest
+  actionable "Usul upgrade apa" line into a pending creator-review proposal.
+
+Safety boundary: reflection synthesis does not approve, patch, train, or
+deploy. It only turns Migan's journal idea into an item Fahmi can review.

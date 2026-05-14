@@ -161,3 +161,43 @@ def test_readiness_quick_gates_fail_for_secret_and_missing_rollback():
     assert by_name["rollback_ready"].passed is False
     assert by_name["secret_scan"].passed is False
     assert by_name["data_boundary"].passed is False
+
+
+def test_readiness_safe_gates_compile_python_files(tmp_path, monkeypatch):
+    module = tmp_path / "api" / "routers" / "example.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.setattr(sandbox, "_APP_ROOT", tmp_path)
+
+    proposal = DummyProposal()
+    proposal.touched_paths = ["api/routers/example.py"]
+    gates = sandbox._readiness_gate_results(proposal, run_unit_tests=False)
+    by_name = {gate.name: gate for gate in gates}
+
+    assert by_name["syntax"].passed is True
+    assert "unit_tests" not in by_name
+
+
+def test_readiness_safe_gates_fail_python_syntax(tmp_path, monkeypatch):
+    module = tmp_path / "api" / "routers" / "broken.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("def nope(:\n", encoding="utf-8")
+    monkeypatch.setattr(sandbox, "_APP_ROOT", tmp_path)
+
+    proposal = DummyProposal()
+    proposal.touched_paths = ["api/routers/broken.py"]
+    gates = sandbox._readiness_gate_results(proposal, run_unit_tests=False)
+    by_name = {gate.name: gate for gate in gates}
+
+    assert by_name["syntax"].passed is False
+    assert "broken.py" in by_name["syntax"].detail
+
+
+def test_safe_pytest_command_allows_only_pytest_paths():
+    ok = sandbox._safe_pytest_command("python -m pytest tests/test_sandbox_auth.py -q")
+    bad_shell = sandbox._safe_pytest_command("python -m pytest tests/test_sandbox_auth.py -q; rm -rf /")
+    bad_path = sandbox._safe_pytest_command("python -m pytest ../secrets -q")
+
+    assert ok == ["python", "-m", "pytest", "tests/test_sandbox_auth.py", "-q"]
+    assert bad_shell is None
+    assert bad_path is None

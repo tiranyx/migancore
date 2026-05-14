@@ -79,6 +79,9 @@ def main() -> int:
         "/v1/sandbox/proposals",
         "renderLifecycle",
         "runReadiness",
+        "RUN TESTS",
+        "proposeReflectionUpgrade",
+        "MAKE PROPOSAL",
     ]
     failures += check("backlog page served", status == 200, args.frontend)
     failures += check("backlog panel markers", all(m in html for m in markers), ", ".join(markers))

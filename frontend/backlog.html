@@ -501,12 +501,30 @@ async function renderRefleksi() {
     feed.innerHTML = `
       <h2>🌱 Refleksi Harian</h2>
       <div class="feed-sub">Growth journal — ${items.length} entry · prompt: belajar / gagal / perlu alat / usul upgrade</div>
+      <div class="actions" style="margin-bottom:1rem">
+        <button class="btn" onclick="proposeReflectionUpgrade()">MAKE PROPOSAL</button>
+      </div>
       ${cards}
     `;
     const ct = document.getElementById("ct-refleksi");
     if (ct) ct.textContent = items.length;
   } catch (err) {
     feed.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function proposeReflectionUpgrade() {
+  try {
+    const r = await fetch(`${API}/v1/admin/reflection/propose-upgrade`, {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    alert(`Reflection proposal: ${data.status}`);
+    await renderProposals();
+  } catch (err) {
+    alert(`Gagal membuat proposal dari refleksi: ${err.message}`);
   }
 }
 
@@ -554,6 +572,7 @@ async function renderProposals() {
       const actions = isDecided ? "" : `
         <div class="actions">
           <button class="btn" onclick="runReadiness('${p.id}')">RUN CHECK</button>
+          <button class="btn" onclick="runReadiness('${p.id}', true)">RUN TESTS</button>
           <button class="btn approve" onclick="setVerdict('${p.id}', 'approved')">✓ APPROVE</button>
           <button class="btn reject" onclick="setVerdict('${p.id}', 'rejected')">✗ REJECT</button>
         </div>
@@ -620,9 +639,10 @@ async function setVerdict(proposalId, verdict) {
   }
 }
 
-async function runReadiness(proposalId) {
+async function runReadiness(proposalId, runUnitTests = false) {
   try {
-    const r = await fetch(`${API}/v1/sandbox/proposals/${proposalId}/readiness`, {
+    const suffix = runUnitTests ? "?run_unit_tests=true" : "";
+    const r = await fetch(`${API}/v1/sandbox/proposals/${proposalId}/readiness${suffix}`, {
       method: "POST",
       headers: { "X-Admin-Key": adminKey },
     });

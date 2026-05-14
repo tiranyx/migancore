@@ -25,7 +25,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+import os
+from pathlib import Path
 import secrets
+import shlex
+import subprocess
 from typing import Optional
 
 import structlog
@@ -48,6 +52,8 @@ from services.dev_organ import (
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/sandbox", tags=["sandbox"])
+_APP_ROOT = Path(os.getenv("MIGANCORE_APP_ROOT", "/app")).resolve()
+_PYTEST_TIMEOUT_SECONDS = int(os.getenv("SANDBOX_GATE_PYTEST_TIMEOUT", "90"))
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +186,152 @@ _DATA_BOUNDARY_MARKERS = (
 )
 
 
-def _readiness_gate_results(proposal: DevOrganProposal) -> list[GateResult]:
+def _safe_repo_path(path: str) -> Path | None:
+    """Resolve a proposal path inside the application root only."""
+    normalized = (path or "").replace("\\", "/").strip().lstrip("/")
+    if not normalized or normalized.startswith("../") or "/../" in normalized:
+        return None
+    candidate = (_APP_ROOT / normalized).resolve()
+    try:
+        candidate.relative_to(_APP_ROOT)
+    except ValueError:
+        return None
+    return candidate
+
+
+def _syntax_gate_result(proposal: DevOrganProposal) -> GateResult:
+    """Compile touched Python files without executing them."""
+    python_paths = [p for p in (proposal.touched_paths or []) if str(p).endswith(".py")]
+    if not python_paths:
+        return GateResult(
+            name="syntax",
+            passed=True,
+            detail="No Python files touched.",
+        )
+
+    checked: list[str] = []
+    failures: list[str] = []
+    for path in python_paths:
+        resolved = _safe_repo_path(str(path))
+        if resolved is None:
+            failures.append(f"{path}: unsafe path")
+            continue
+        if not resolved.exists():
+            failures.append(f"{path}: file not found")
+            continue
+        try:
+            source = resolved.read_text(encoding="utf-8")
+            compile(source, str(resolved), "exec")
+            checked.append(str(path))
+        except Exception as exc:
+            failures.append(f"{path}: {exc.__class__.__name__}: {exc}")
+
+    if failures:
+        return GateResult(
+            name="syntax",
+            passed=False,
+            detail="; ".join(failures)[:800],
+        )
+
+    return GateResult(
+        name="syntax",
+        passed=True,
+        detail=f"Compiled {len(checked)} Python file(s): {', '.join(checked)[:500]}",
+    )
+
+
+def _safe_pytest_command(command: str) -> list[str] | None:
+    """Allow only bounded pytest commands against repo test paths."""
+    try:
+        parts = shlex.split(command or "", posix=True)
+    except ValueError:
+        return None
+
+    if len(parts) < 3 or parts[:3] != ["python", "-m", "pytest"]:
+        return None
+
+    allowed_flags_with_values = {"-k", "-m", "--maxfail", "--tb"}
+    allowed_single_flags = {"-q", "-s", "-x", "--disable-warnings", "--quiet", "--verbose", "-v"}
+    test_targets = 0
+    i = 3
+    while i < len(parts):
+        part = parts[i]
+        if any(ch in part for ch in (";", "&", "|", "`", "$", ">", "<")):
+            return None
+        if part in allowed_single_flags:
+            i += 1
+            continue
+        if part in allowed_flags_with_values:
+            if i + 1 >= len(parts):
+                return None
+            if any(ch in parts[i + 1] for ch in (";", "&", "|", "`", "$", ">", "<")):
+                return None
+            i += 2
+            continue
+        normalized = part.replace("\\", "/")
+        if normalized.startswith(("-", "../", "/")) or "/../" in normalized:
+            return None
+        if not (
+            normalized.startswith("tests/")
+            or normalized.startswith("api/tests/")
+            or normalized == "tests"
+            or normalized == "api/tests"
+        ):
+            return None
+        test_targets += 1
+        i += 1
+
+    return parts if test_targets else None
+
+
+def _unit_tests_gate_result(proposal: DevOrganProposal) -> GateResult:
+    allowed = [_safe_pytest_command(cmd) for cmd in (proposal.tests or [])]
+    commands = [cmd for cmd in allowed if cmd]
+    if not commands:
+        return GateResult(
+            name="unit_tests",
+            passed=False,
+            detail="No allowed pytest command in proposal.tests.",
+        )
+
+    details: list[str] = []
+    for cmd in commands:
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=str(_APP_ROOT),
+                capture_output=True,
+                text=True,
+                timeout=_PYTEST_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return GateResult(
+                name="unit_tests",
+                passed=False,
+                detail=f"Timed out after {_PYTEST_TIMEOUT_SECONDS}s: {' '.join(cmd)}",
+            )
+        excerpt = ((completed.stdout or "") + "\n" + (completed.stderr or "")).strip()
+        details.append(f"{' '.join(cmd)} -> exit {completed.returncode}; {excerpt[-500:]}")
+        if completed.returncode != 0:
+            return GateResult(
+                name="unit_tests",
+                passed=False,
+                detail=" | ".join(details)[-1000:],
+            )
+
+    return GateResult(
+        name="unit_tests",
+        passed=True,
+        detail=" | ".join(details)[-1000:],
+    )
+
+
+def _readiness_gate_results(
+    proposal: DevOrganProposal,
+    *,
+    run_unit_tests: bool = False,
+) -> list[GateResult]:
     """Compute non-destructive readiness gates.
 
     This is a sanity/pre-test pass only. It intentionally does not mark
@@ -202,7 +353,7 @@ def _readiness_gate_results(proposal: DevOrganProposal) -> list[GateResult]:
     boundary_hit = next((m for m in _DATA_BOUNDARY_MARKERS if m in joined_paths), None)
     risk = RiskLevel(proposal.risk_level)
 
-    return [
+    gates = [
         GateResult(
             name="rollback_ready",
             passed=rollback_ok,
@@ -228,6 +379,10 @@ def _readiness_gate_results(proposal: DevOrganProposal) -> list[GateResult]:
             detail="Sandbox API reachable; readiness check executed successfully.",
         ),
     ]
+    gates.append(_syntax_gate_result(proposal))
+    if run_unit_tests:
+        gates.append(_unit_tests_gate_result(proposal))
+    return gates
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +552,7 @@ async def set_verdict(
 @router.post("/proposals/{proposal_id}/readiness")
 async def run_readiness(
     proposal_id: uuid.UUID,
+    run_unit_tests: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(_require_admin),
 ):
@@ -406,7 +562,7 @@ async def run_readiness(
     if proposal.stage in ("deployed", "rolled_back"):
         raise HTTPException(status_code=409, detail=f"Proposal already in stage '{proposal.stage}'")
 
-    gate_results = _readiness_gate_results(proposal)
+    gate_results = _readiness_gate_results(proposal, run_unit_tests=run_unit_tests)
     existing = {
         str(g.get("name")): g
         for g in (proposal.gate_results or [])
