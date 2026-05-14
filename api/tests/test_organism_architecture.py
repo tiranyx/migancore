@@ -1,4 +1,7 @@
-from api.services.organism_architecture import ORGANISM_LAYERS, organism_status
+try:
+    from api.services.organism_architecture import ORGANISM_LAYERS, organism_status
+except ModuleNotFoundError:  # Docker image copies api/ contents to /app.
+    from services.organism_architecture import ORGANISM_LAYERS, organism_status
 
 
 def test_organism_layers_cover_fahmi_architecture_terms():

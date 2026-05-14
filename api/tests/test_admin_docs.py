@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from api.routers import admin_docs
+try:
+    from api.routers import admin_docs
+except ModuleNotFoundError:  # Docker image copies api/ contents to /app.
+    from routers import admin_docs
 
 
 def test_docs_root_uses_first_existing_candidate(tmp_path, monkeypatch):
