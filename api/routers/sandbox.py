@@ -49,6 +49,7 @@ from services.dev_organ import (
     evaluate_promotion,
     required_gates,
 )
+from services.inspiration_intake import synthesize_inspiration
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/sandbox", tags=["sandbox"])
@@ -99,6 +100,15 @@ class ProposalCreate(BaseModel):
     )
     metadata: dict = Field(default_factory=dict)
     created_by: str = Field(default="core_brain", max_length=128)
+
+
+class InspirationCreate(BaseModel):
+    url: str = Field(default="", max_length=500)
+    notes: str = Field(default="", max_length=2000)
+
+    def model_post_init(self, __context) -> None:
+        if not (self.url.strip() or self.notes.strip()):
+            raise ValueError("url or notes is required")
 
 
 class VerdictUpdate(BaseModel):
@@ -506,6 +516,47 @@ async def submit_proposal(
     await db.refresh(row)
 
     logger.info("sandbox.proposal.created", proposal_id=str(row.id), title=row.title, risk=risk)
+    return _proposal_to_response(row)
+
+
+@router.post("/inspiration", status_code=status.HTTP_201_CREATED)
+async def submit_inspiration(
+    body: InspirationCreate,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(_require_admin),
+):
+    """Convert a creator inspiration link/idea into a proposal.
+
+    No browsing, code execution, training, GPU job, or deploy happens here.
+    The result is a normal pending proposal for Fahmi review.
+    """
+    payload = synthesize_inspiration(url=body.url, notes=body.notes)
+    risk = classify_risk(payload["touched_paths"]).value
+
+    row = DevOrganProposal(
+        title=payload["title"],
+        problem=payload["problem"],
+        hypothesis=payload["hypothesis"],
+        touched_paths=payload["touched_paths"],
+        tests=payload["tests"],
+        rollback_plan=payload["rollback_plan"],
+        source=payload["source"],
+        risk_level=risk,
+        stage="proposed",
+        gate_results=[],
+        metadata_=payload["metadata"],
+        created_by=payload["created_by"],
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+
+    logger.info(
+        "sandbox.inspiration.created",
+        proposal_id=str(row.id),
+        module_type=payload["metadata"]["module_type"],
+        source_url=payload["metadata"].get("source_url", "")[:120],
+    )
     return _proposal_to_response(row)
 
 

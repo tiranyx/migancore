@@ -201,3 +201,14 @@ def test_safe_pytest_command_allows_only_pytest_paths():
     assert ok == ["python", "-m", "pytest", "tests/test_sandbox_auth.py", "-q"]
     assert bad_shell is None
     assert bad_path is None
+
+
+def test_inspiration_create_body_requires_url_or_notes():
+    with pytest.raises(ValidationError):
+        sandbox.InspirationCreate()
+
+
+def test_inspiration_create_accepts_ltx_url():
+    body = sandbox.InspirationCreate(url="https://github.com/Lightricks/LTX-2")
+
+    assert body.url == "https://github.com/Lightricks/LTX-2"

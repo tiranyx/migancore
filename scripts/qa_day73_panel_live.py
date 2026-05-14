@@ -82,6 +82,9 @@ def main() -> int:
         "RUN TESTS",
         "proposeReflectionUpgrade",
         "MAKE PROPOSAL",
+        "Inspiration Intake",
+        "/v1/sandbox/inspiration",
+        "submitInspiration",
     ]
     failures += check("backlog page served", status == 200, args.frontend)
     failures += check("backlog panel markers", all(m in html for m in markers), ", ".join(markers))

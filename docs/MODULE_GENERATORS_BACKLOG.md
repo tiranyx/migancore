@@ -29,6 +29,20 @@ Observe -> synthesize -> create proposal -> run gates -> build sandbox module ->
 No module should bypass proposal review. Heavy GPU modules are especially
 proposal-only until cost, hardware, model license, and rollback are clear.
 
+## Day 74 Sprint: Inspiration Intake
+
+Shipped direction:
+
+- Add an intake surface in the Proposal tab.
+- Fahmi can paste a repo, paper, product, or raw idea.
+- MiganCore synthesizes it into a normal Dev Organ proposal.
+- The proposal includes module type, suggested gates, target files, tests,
+  rollback plan, source URL, and creator notes.
+- No external code is executed. No browsing is required. No GPU job starts.
+
+This is the learning habit we want: inspiration becomes structured curriculum,
+not random tool-chasing.
+
 ## Module 1: Image Generator
 
 Goal:

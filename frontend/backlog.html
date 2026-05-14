@@ -609,6 +609,15 @@ async function renderProposals() {
     feed.innerHTML = `
       <h2>📥 Proposal Migan</h2>
       <div class="feed-sub">${items.length} antri review · auto_train_watchdog dalam mode <code>proposal</code> — Fahmi yang putuskan, bukan GPU otomatis</div>
+      <div class="feed-card proposal">
+        <div class="title">Inspiration Intake</div>
+        <div class="body">Tempel link repo/paper/demo atau ide modul. Migan akan ubah jadi proposal belajar yang bisa digate.</div>
+        <input class="search-box" id="inspiration-url" placeholder="https://github.com/Lightricks/LTX-2" style="margin-top:0.7rem">
+        <textarea class="search-box" id="inspiration-notes" placeholder="Catatan Fahmi: capability apa yang menarik?" style="min-height:70px;resize:vertical"></textarea>
+        <div class="actions">
+          <button class="btn approve" onclick="submitInspiration()">SYNTHESIZE</button>
+        </div>
+      </div>
       ${pendingCards}
       ${decidedCards}
     `;
@@ -616,6 +625,29 @@ async function renderProposals() {
     if (ct) ct.textContent = items.length;
   } catch (err) {
     feed.innerHTML = `<div class="error">Failed: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function submitInspiration() {
+  const url = (document.getElementById("inspiration-url")?.value || "").trim();
+  const notes = (document.getElementById("inspiration-notes")?.value || "").trim();
+  if (!url && !notes) {
+    alert("Isi link atau catatan inspirasi dulu.");
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/v1/sandbox/inspiration`, {
+      method: "POST",
+      headers: {
+        "X-Admin-Key": adminKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url, notes }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    await renderProposals();
+  } catch (err) {
+    alert(`Gagal synthesize inspiration: ${err.message}`);
   }
 }
 
