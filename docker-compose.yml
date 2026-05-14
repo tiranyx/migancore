@@ -101,8 +101,8 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
       OLLAMA_URL: http://ollama:11434
-      DEFAULT_MODEL: migancore:0.7e
-      OLLAMA_DEFAULT_MODEL: migancore:0.7e
+      DEFAULT_MODEL: migancore:0.7c
+      OLLAMA_DEFAULT_MODEL: migancore:0.7c
       LETTA_URL: http://letta:8283
       LETTA_PASSWORD: ${LETTA_PASSWORD}
       ADMIN_SECRET_KEY: ${ADMIN_SECRET_KEY}

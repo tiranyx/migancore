@@ -215,7 +215,8 @@ def _is_casual_chat(message: str) -> bool:
     """Adaptive trigger: detect casual/greeting messages that need no tool.
 
     Short query (<60 chars) starting with greeting/ack → skip tools.
-    Brain responds with own voice (memory_write still in CORE for recall save).
+    Brain responds with own voice. Return no tools at all so the chat router
+    uses plain generation and avoids the tool-call round trip.
     """
     msg_stripped = message.lower().strip()
     if len(msg_stripped) > 60:
@@ -252,14 +253,13 @@ async def route_tools(
     # Day 73 Codex audit — Pass 0a: casual chat short-circuit
     # Greetings/acks ("halo", "makasih", "ok") don't need tools. Brain own voice.
     if _is_casual_chat(message):
-        core_only = [t for t in available_tools if t in CORE_TOOLS]
         logger.info(
             "tool_router.casual_skip",
             query_len=len(message),
             available=len(available_tools),
-            kept=len(core_only),
+            kept=0,
         )
-        return core_only
+        return []
 
     # Day 75 — Pass 0b: concept query short-circuit
     # Definition/explanation queries don't need tools (brain knows from KB + training).

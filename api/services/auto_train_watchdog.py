@@ -48,6 +48,8 @@ CHECK_INTERVAL_S      = 3 * 3600 # check every 3 hours
 # never auto-triggers Vast.ai. Fahmi reviews + manually approves training.
 # Override via env AUTO_TRAIN_MODE=auto (original behavior) or off (skip loop entirely).
 AUTO_TRAIN_MODE = os.getenv("AUTO_TRAIN_MODE", "proposal").lower()
+if AUTO_TRAIN_MODE not in {"proposal", "auto", "off"}:
+    AUTO_TRAIN_MODE = "proposal"
 
 # Vast.ai config
 VAST_API            = "https://console.vast.ai/api/v0"
@@ -225,6 +227,27 @@ async def _create_proposal(cycle_id: str, status: str, detail: str) -> None:
             await db.commit()
     except Exception as exc:
         logger.warning("auto_train.proposal_failed", error=str(exc)[:80])
+
+
+async def _has_pending_training_proposal() -> bool:
+    """Return True when a prior watchdog proposal is still awaiting review."""
+    try:
+        from sqlalchemy import text
+        from deps.db import get_admin_db
+        async with get_admin_db() as db:
+            result = await db.execute(
+                text("""
+                    SELECT COUNT(*)
+                    FROM dev_organ_proposals
+                    WHERE proposal_type = 'training'
+                      AND source_component = 'auto_train_watchdog'
+                      AND stage IN ('pending_review', 'pending', 'proposed')
+                """)
+            )
+            return (result.scalar() or 0) > 0
+    except Exception as exc:
+        logger.warning("auto_train.pending_check_failed", error=str(exc)[:80])
+        return False
 
 
 async def _trigger_training_run(dataset_path: str) -> bool:
@@ -480,6 +503,10 @@ async def watchdog_loop() -> None:
                             _log("Training launch failed — will retry next check")
                 else:
                     # proposal mode: log + queue, do not auto-train
+                    if await _has_pending_training_proposal():
+                        _log("PROPOSAL skipped: pending auto-training proposal already exists")
+                        await asyncio.sleep(CHECK_INTERVAL_S)
+                        continue
                     cycle_id = f"prop_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}"
                     detail = (
                         f"Thresholds met: real_pairs={real_pairs} "
