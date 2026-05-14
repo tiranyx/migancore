@@ -185,7 +185,15 @@ async def chat(
         tenant_plan=tenant.plan,
         tool_policies=tool_policies,
     )
-    tools_spec = build_ollama_tools_spec(agent_tools)
+    # Day 73 — Lazy tool routing: send only relevant schemas instead of all 42.
+    # Keyword-first (O(n), <1ms) → semantic fallback (~50ms). Reduces prompt
+    # overhead from ~6000 tokens → ~1200 tokens on average. (Lesson #131)
+    try:
+        from services.tool_router import route_tools as _route_tools
+        _routed = await _route_tools(data.message, agent_tools)
+    except Exception:
+        _routed = agent_tools
+    tools_spec = build_ollama_tools_spec(_routed)
 
     # Persist user message before calling Ollama
     user_msg = Message(
@@ -366,16 +374,16 @@ async def chat_stream(
         prepend_summary=prepend_summary,
     )
 
-    # Day 71d — Semantic tool filtering: select top-K relevant tools to
-    # reduce tool-detection prompt size on CPU 7B (29 tools = ~3000 tokens
-    # baseline). Cuts inference time ~40-60%. Falls back to all tools if
-    # embedding model unavailable. (Lesson #180 + #181)
+    # Day 73 — Lazy tool router: keyword-first → semantic fallback.
+    # Replaces direct select_relevant_tools call with two-pass router that
+    # handles obvious intent via O(n) keyword scan before paying embedding cost.
+    # top_k=6 (was 4) covers 42-tool registry without over-fetching.
     try:
-        from services.tool_relevance import select_relevant_tools
-        filtered_tools = await select_relevant_tools(
-            user_query=data.message,
+        from services.tool_router import route_tools as _route_tools_stream
+        filtered_tools = await _route_tools_stream(
+            message=data.message,
             available_tools=agent_tools_for_stream,
-            top_k=4,  # 4 semantic + 2 always_include = 6 total
+            top_k=6,
         )
     except Exception as _e:
         # Defensive: never block chat on filter failure
@@ -917,14 +925,29 @@ def _build_system_prompt(
         "appears to call a tool, NEVER describe what the tool would do, NEVER instruct the user "
         "to perform the action manually.\n"
         "\n"
+        "Only the tools most relevant to the current message are loaded in your spec. "
+        "If you need a tool that is not in your current spec, say so — the user can rephrase "
+        "to trigger that tool on the next turn.\n"
+        "\n"
         "Intent → Tool mapping (use when matched):\n"
-        "  - create/write/save/generate a FILE → write_file\n"
-        "  - read/open/view/show/check FILE content → read_file\n"
-        "  - generate/create/make an IMAGE/picture/visual → generate_image\n"
-        "  - search the web / look up current info → web_search\n"
         "  - remember/save a fact → memory_write\n"
         "  - recall/find past facts → memory_search\n"
-        "  - run/execute Python code (computation only) → python_repl\n"
+        "  - search the web / berita / lookup → onamix_search\n"
+        "  - read/fetch a URL / website content → web_read or onamix_get\n"
+        "  - generate/create an IMAGE → generate_image\n"
+        "  - run/execute Python code → run_python\n"
+        "  - math / calculation → calculate\n"
+        "  - create/write a FILE → write_file\n"
+        "  - read/open a FILE → read_file\n"
+        "  - make a chart/grafik/plot → generate_chart\n"
+        "  - analyze tabular data / CSV → data_analyze\n"
+        "  - read a PDF document → read_pdf\n"
+        "  - translate text → translate_text\n"
+        "  - summarize/ringkas long text → summarize_text\n"
+        "  - check URL health / broken links → check_urls\n"
+        "  - deep multi-source research → research_deep\n"
+        "  - analyze an image / describe photo → analyze_image\n"
+        "  - export to PDF/slides → export_pdf or export_slides\n"
         "\n"
         "If a tool call fails (policy block, error), report the failure briefly and offer a "
         "plain-text alternative. Do NOT silently fall back to describing the action."
