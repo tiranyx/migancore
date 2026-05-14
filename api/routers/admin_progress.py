@@ -86,7 +86,7 @@ _SPRINTS: list[dict] = [
         "id": "sprint-2",
         "name": "Code Lab + Reflection + Pencernaan v2",
         "day_start": 74, "day_end": 80,
-        "status": "running", "progress": 35,
+        "status": "running", "progress": 50,
         "deliverables": [
             "Code Lab Pyodide sandbox (write→exec→observe→learn)",
             "Scoring layer: rasa sakit/senang → nafs bucket",

@@ -97,6 +97,10 @@ class ChatResponse(BaseModel):
     response: str
     model_used: str
     tool_calls_made: int = 0  # How many tool calls were executed this turn
+    # Day 75 Sprint 2: adaptive citation surface
+    # ADAPTIVE rule (per Fahmi feedback): chips only for factual/recall responses
+    # Empty for casual/short responses or when no knowledge tools used.
+    sources: list[dict] = []
 
 
 class ConversationSummary(BaseModel):
@@ -281,12 +285,21 @@ async def chat(
         tool_calls=len(all_tool_calls),
     )
 
+    # Day 75 Sprint 2: extract adaptive citation sources
+    try:
+        from services.citation_extractor import extract_sources
+        sources = extract_sources(all_tool_calls, assistant_content)
+    except Exception as cite_err:
+        logger.warning("chat.citation_extract_failed", error=str(cite_err))
+        sources = []
+
     return ChatResponse(
         agent_id=agent_id,
         conversation_id=str(conversation.id),
         response=assistant_content,
         model_used=model,
         tool_calls_made=len(all_tool_calls),
+        sources=sources,
     )
 
 
@@ -436,11 +449,30 @@ async def chat_stream(
 
         full_response: list[str] = []
         chunk_count = 0
+        # Day 75 Sprint 2: accumulator for adaptive citation extraction (used in done events)
+        stream_tool_calls_acc: list[dict] = []
+
+        def _done_payload(full_text: str = "") -> dict:
+            """Build done event payload with adaptive citation sources."""
+            try:
+                from services.citation_extractor import extract_sources
+                _sources = extract_sources(stream_tool_calls_acc, full_text or "")
+            except Exception:
+                _sources = []
+            return {
+                "type": "done",
+                "conversation_id": str(conversation_id),
+                "message_id": str(assistant_msg_id),
+                "sources": _sources,
+            }
+
         # Day 39 — work on a mutable copy of messages so tool turns get appended
         run_messages = list(messages)
         tool_iter = 0
         # Cap of 4 tool round-trips before we force a final stream (matches sync director)
         STREAM_TOOL_MAX = 4
+        # Day 75 Sprint 2: track tool calls for adaptive citation surface in done event
+        stream_tool_calls_acc: list[dict] = []
         # Day 65 — pre-generate UUID for assistant message so it can be included
         # in the `done` SSE event; frontend uses it for thumbs-up/down feedback.
         assistant_msg_id = uuid.uuid4()
@@ -485,7 +517,7 @@ async def chat_stream(
                                 message_count=len(history) + 2,
                                 message_id=assistant_msg_id,
                             )
-                            yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
+                            yield _sse(_done_payload(full_text))
                             logger.info("chat.stream.done_via_toolcall", chunks=chunk_count, len=len(full_text), tool_iters=tool_iter)
                             # M1.3: CAI auto-loop — MUST run before return
                             _cai_sample_rate_tool = tenant_for_stream.settings.get("cai_sampling_rate", 0.5)
@@ -510,7 +542,7 @@ async def chat_stream(
                             break
                         # Already spent tool iters but got no content/calls — finish
                         full_text = ""
-                        yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
+                        yield _sse(_done_payload(full_text))
                         logger.warning("chat.stream.done_empty_after_tools", tool_iters=tool_iter)
                         return
 
@@ -536,6 +568,13 @@ async def chat_stream(
                             res = await executor.execute(tname, targs)
                             ok = bool(res.get("success", True))
                             payload = res.get("result") if ok else res.get("error")
+                            # Day 75 Sprint 2: track for citation extractor
+                            stream_tool_calls_acc.append({
+                                "skill_id": tname,
+                                "arguments": targs,
+                                "result": res,
+                                "iteration": tool_iter,
+                            })
                             yield _sse({
                                 "type": "tool_result",
                                 "tool": tname,
@@ -626,7 +665,7 @@ async def chat_stream(
                 message_id=assistant_msg_id,
             )
 
-            yield _sse({"type": "done", "conversation_id": str(conversation_id), "message_id": str(assistant_msg_id)})
+            yield _sse(_done_payload(full_text))
 
             # M1.3: CAI auto-loop for streaming endpoint (was missing)
             _cai_sample_rate_stream = tenant_for_stream.settings.get("cai_sampling_rate", 0.5)

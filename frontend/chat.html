@@ -1258,7 +1258,7 @@ function startStream(agentId, message, convId, {
             const ev = JSON.parse(line.slice(6));
             if (ev.type === 'start') onStart?.(ev.conversation_id);
             if (ev.type === 'chunk') onChunk?.(ev.content || '');
-            if (ev.type === 'done') onDone?.(ev.conversation_id, ev.message_id || null);
+            if (ev.type === 'done') onDone?.(ev.conversation_id, ev.message_id || null, ev.sources || []);
             if (ev.type === 'error') onError?.(ev.message || 'Stream error');
             // Day 40 — tool execution events from hybrid stream endpoint
             if (ev.type === 'tool_start') onToolStart?.(ev.tools || []);
@@ -2116,7 +2116,8 @@ function Msg({
     toolCount,
     error,
     tools,
-    attachments
+    attachments,
+    sources
   } = msg;
   const label = role === 'user' ? 'YOU' : 'MC';
   const isError = !!error || (content || '').startsWith('⚠');
@@ -2208,7 +2209,25 @@ function Msg({
       border: '1px solid var(--border)',
       display: 'block'
     }
-  })))), linkifyContent(content), role === 'assistant' && !streaming && !isError && content && convId && /*#__PURE__*/React.createElement("div", {
+  })))), linkifyContent(content), role === 'assistant' && !streaming && Array.isArray(sources) && sources.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap'
+    }
+  }, sources.map((s, i) => /*#__PURE__*/React.createElement("a", {
+    key: 'src' + i,
+    href: s.url || '#',
+    target: s.url ? '_blank' : '_self',
+    rel: 'noopener noreferrer',
+    style: {
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 10,
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(255,255,255,0.10)',
+      fontSize: '0.65rem', color: 'var(--text-dim)',
+      textDecoration: 'none', cursor: s.url ? 'pointer' : 'default'
+    },
+    title: s.detail || ''
+  }, s.icon, ' ', (s.label || '').slice(0, 48)))), role === 'assistant' && !streaming && !isError && content && convId && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 6,
@@ -2633,12 +2652,13 @@ function ChatScreen({
           content: m.content + chunk
         } : m));
       },
-      onDone: (cid, serverMsgId) => {
+      onDone: (cid, serverMsgId, sources) => {
         setMsgs(p => p.map(m => m.id === targetMsgId ? {
           ...m,
           streaming: false,
           error: false,
-          serverId: serverMsgId || null
+          serverId: serverMsgId || null,
+          sources: sources || []
         } : m));
         setConsecErrors(0); // Day 52 Fix: success → reset error counter
         setBusy(false);
