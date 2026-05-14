@@ -8,7 +8,7 @@
 # - Added stop sequences for cleaner output
 # - num_ctx increased to 8192 for longer context
 
-FROM /opt/ado/data/ollama/models/migancore_0.7c_q4_k_m.gguf
+FROM migancore:0.7c
 
 TEMPLATE """{{if .System}}<|im_start|>system
 {{.System}}<|im_end|>
