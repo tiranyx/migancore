@@ -153,7 +153,7 @@ def _safe_resolve(rel_path: str) -> Path:
 
 @router.get("", response_model=DocListResponse, dependencies=[Depends(_require_admin)])
 async def list_docs(
-    tab: Optional[str] = Query(None, regex="^(vision|backlog|journal|lessons|other)$"),
+    tab: Optional[str] = Query(None, pattern="^(vision|backlog|journal|lessons|other)$"),
     limit: int = Query(500, le=2000),
     search: Optional[str] = Query(None, max_length=100),
 ):
