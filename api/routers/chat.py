@@ -670,15 +670,36 @@ async def chat_stream(
             # straight to the stream branch.
             if tools_spec_stream:
                 from services.tool_executor import ToolExecutor
+                import os as _os, httpx as _httpx
+                _tool_call_timeout_s = float(_os.getenv("OLLAMA_TOOL_CALL_TIMEOUT_S", "90"))
+                _tool_call_httpx_timeout = _httpx.Timeout(
+                    _tool_call_timeout_s, connect=5.0, read=_tool_call_timeout_s
+                )
                 executor = ToolExecutor(tool_ctx_stream)
                 while tool_iter < STREAM_TOOL_MAX:
-                    async with OllamaClient() as oc:
-                        tool_resp = await oc.chat_with_tools(
-                            model=model,
-                            messages=run_messages,
-                            tools=tools_spec_stream,
-                            options={"num_predict": predict_tokens, "num_ctx": ctx_window, "temperature": 0},
+                    try:
+                        async with OllamaClient(timeout=_tool_call_httpx_timeout) as oc:
+                            tool_resp = await oc.chat_with_tools(
+                                model=model,
+                                messages=run_messages,
+                                tools=tools_spec_stream,
+                                options={"num_predict": predict_tokens, "num_ctx": ctx_window, "temperature": 0},
+                            )
+                    except OllamaError as _tc_exc:
+                        # Day 74 — graceful fallback: when tool-call mode times out
+                        # or errors (CPU 7B + tool reasoning often >90s on URL prompts),
+                        # bail out of the tool loop and let Phase B (plain stream)
+                        # answer from brain's own knowledge. User gets SOME response
+                        # instead of an error event.
+                        logger.warning(
+                            "chat.stream.tool_call_failed_falling_back",
+                            error=str(_tc_exc)[:160],
+                            tool_iter=tool_iter,
                         )
+                        # Strip tool spec from subsequent messages — drop to plain gen
+                        # Also strip tool roles from history since brain never saw resolution
+                        run_messages = [m for m in run_messages if m.get("role") != "tool"]
+                        break
                     msg = tool_resp.get("message", {}) or {}
                     tcs = msg.get("tool_calls") or []
                     content_now = (msg.get("content") or "").strip()

@@ -85,16 +85,28 @@ async def reason_node(state: AgentState) -> dict:
     trace.append(f"reason[{iteration}] model={model} tools={use_tools}")
     logger.info("director.reason", iteration=iteration, model=model, tools=use_tools)
 
-    async with OllamaClient() as client:
-        if use_tools:
-            try:
+    # Day 74 — tighter tool-call timeout so we bail to plain chat fast.
+    # Tool-call mode on CPU 7B with 8 tools often hangs 3+ min on URL prompts;
+    # 90s is the empirical knee. Override via env.
+    import os as _os
+    import httpx as _httpx
+    _tool_call_timeout_s = float(_os.getenv("OLLAMA_TOOL_CALL_TIMEOUT_S", "90"))
+    _tool_call_timeout = _httpx.Timeout(
+        _tool_call_timeout_s, connect=5.0, read=_tool_call_timeout_s
+    )
+
+    if use_tools:
+        try:
+            async with OllamaClient(timeout=_tool_call_timeout) as client:
                 resp = await client.chat_with_tools(model, messages, tools_spec, options)
-            except Exception as exc:
-                # Ollama version may not support tool calling (e.g. 404)
-                # Fallback to plain chat without tools
-                logger.warning("director.tools_unsupported", error=str(exc), fallback="plain_chat")
+        except Exception as exc:
+            # Tool-call may timeout or Ollama may not support it (e.g. 404).
+            # Fall back to plain chat without tools — brain answers from training.
+            logger.warning("director.tools_failed", error=str(exc)[:160], fallback="plain_chat")
+            async with OllamaClient() as client:
                 resp = await client.chat(model, messages, options=options)
-        else:
+    else:
+        async with OllamaClient() as client:
             resp = await client.chat(model, messages, options=options)
 
     assistant = resp.get("message", {})

@@ -40,6 +40,15 @@ ALWAYS_INCLUDE = {'memory_write', 'memory_search'}
 # Top-K from semantic match (excluding ALWAYS_INCLUDE)
 DEFAULT_TOP_K = 4
 
+# Day 74 — minimum cosine similarity to even pass a tool to the brain.
+# Below this, the brain answers from its own knowledge (per biomimetic
+# doctrine: tools are vitamin, not oxygen). Empirically 0.56 was the
+# top score on a URL-bearing prompt that triggered 180s tool-call
+# timeouts — well below this threshold, so no tool should have been
+# offered. Tunable via env.
+import os as _os
+RELEVANCE_THRESHOLD = float(_os.getenv("TOOL_RELEVANCE_THRESHOLD", "0.60"))
+
 # Pre-computed embeddings cache: dict[tool_name, list[float]]
 _tool_embeddings: dict[str, list[float]] = {}
 _embeddings_ready = False
@@ -158,7 +167,24 @@ async def select_relevant_tools(
         scored.append((score, tool))
 
     scored.sort(key=lambda x: -x[0])
-    top_tools = [tool for _score, tool in scored[:top_k]]
+
+    # Day 74 — only offer tools whose score exceeds RELEVANCE_THRESHOLD.
+    # If best score < threshold, return ONLY the always-include set so brain
+    # answers from its own knowledge instead of getting stuck reasoning over
+    # uncertain tool choices on CPU 7B (root cause of 180s tool-call timeouts).
+    top_score = scored[0][0] if scored else 0.0
+    if top_score < RELEVANCE_THRESHOLD:
+        always_present = [t for t in ALWAYS_INCLUDE if t in available_tools]
+        logger.info(
+            "tool_relevance.low_confidence_skip",
+            query_len=len(user_query),
+            top_score=f"{top_score:.3f}",
+            threshold=RELEVANCE_THRESHOLD,
+            kept=len(always_present),
+        )
+        return always_present
+
+    top_tools = [tool for _score, tool in scored[:top_k] if _score >= RELEVANCE_THRESHOLD]
 
     # Combine: ALWAYS_INCLUDE (filtered to available) + top-K
     always_present = [t for t in ALWAYS_INCLUDE if t in available_tools]
@@ -170,6 +196,7 @@ async def select_relevant_tools(
         available=len(available_tools),
         selected=len(result),
         top_scores=[f"{s:.3f}" for s, _t in scored[:3]],
+        threshold=RELEVANCE_THRESHOLD,
     )
     return result
 
