@@ -51,6 +51,7 @@ from services.config_loader import load_skills_config
 from services.memory import memory_write, memory_list
 from services.tool_policy import ToolPolicyChecker, validate_python_code, PolicyViolation
 from services.tools_cognitive import COGNITIVE_TOOLS
+from services.tools_advanced import ADVANCED_TOOLS
 
 logger = structlog.get_logger()
 
@@ -1899,6 +1900,8 @@ TOOL_REGISTRY: dict[str, HandlerFn] = {
     "onamix_multi": _onamix_multi,
     # Day 67 — Cognitive Tools
     **COGNITIVE_TOOLS,
+    # Day 73 — Advanced Tools (chart, pdf, research, data, translate)
+    **ADVANCED_TOOLS,
 }
 
 
