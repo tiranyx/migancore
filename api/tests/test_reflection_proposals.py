@@ -1,4 +1,4 @@
-from api.routers import reflection_daemon
+from routers import reflection_daemon
 
 
 def test_extract_upgrade_proposal_from_reflection_line():

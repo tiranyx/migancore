@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from api.routers import sandbox
+from routers import sandbox
 
 
 def test_proposal_submit_requires_admin_key(monkeypatch):

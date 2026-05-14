@@ -1,4 +1,4 @@
-from api.services.dev_organ import (
+from services.dev_organ import (
     GateResult,
     ImprovementProposal,
     PromotionDecision,
