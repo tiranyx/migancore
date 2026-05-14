@@ -97,6 +97,31 @@ def _build_lightweight_system_prompt(current_user: Any = None) -> str:
     )
 
 
+def _casual_reflex_response(message: str, current_user: Any = None) -> str | None:
+    """Instant reflex for very small social turns.
+
+    This is the "brainstem" path: greetings/thanks/acks should feel alive
+    without waking the full 7B cortex. Keep it short and non-factual.
+    """
+    msg = message.lower().strip()
+    if not _is_casual_chat(message):
+        return None
+
+    creator = bool(getattr(current_user, "is_creator", False))
+    name = "Fahmi" if creator else None
+    suffix = f", {name}" if name else ""
+
+    if any(k in msg for k in ("makasih", "terima kasih", "thanks", "thank you", "thx")):
+        return f"Sama-sama{suffix}. Aku standby kalau mau lanjut."
+    if msg in {"ok", "oke", "siap", "iya", "ya", "mantap", "keren"} or msg.startswith(("ok ", "oke ")):
+        return f"Siap{suffix}."
+    if any(k in msg for k in ("apa kabar", "how are you", "gimana kabar")):
+        return f"Aku stabil dan siap belajar bareng{suffix}. Ada yang mau kita bangun hari ini?"
+    if any(k in msg for k in ("halo", "hai", "hello", "hey", "hi", "selamat")):
+        return f"Halo{suffix}. Aku di sini."
+    return f"Siap{suffix}."
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -208,6 +233,43 @@ async def chat(
 
     # Day 11: Enforce tenant message quota
     await _check_tenant_message_quota(db, tenant)
+    reflex_response = _casual_reflex_response(data.message, current_user)
+
+    # Persist user message before calling Ollama
+    user_msg = Message(
+        conversation_id=conversation.id,
+        tenant_id=current_user.tenant_id,
+        role="user",
+        content=data.message,
+    )
+    db.add(user_msg)
+    await db.flush()
+
+    if reflex_response:
+        assistant_msg = Message(
+            conversation_id=conversation.id,
+            tenant_id=current_user.tenant_id,
+            role="assistant",
+            content=reflex_response,
+        )
+        db.add(assistant_msg)
+        conversation.message_count = len(history) + 2
+        conversation.last_message_at = datetime.now(timezone.utc)
+        await db.commit()
+        logger.info(
+            "chat.reflex_response",
+            agent_id=agent_id,
+            conversation_id=str(conversation.id),
+            response_len=len(reflex_response),
+        )
+        return ChatResponse(
+            agent_id=agent_id,
+            conversation_id=str(conversation.id),
+            response=reflex_response,
+            model_used="reflex:migancore",
+            tool_calls_made=0,
+            sources=[],
+        )
 
     tool_policies = await load_tool_policies(db, tenant_id)
 
@@ -226,16 +288,6 @@ async def chat(
     except Exception:
         _routed = agent_tools
     tools_spec = build_ollama_tools_spec(_routed)
-
-    # Persist user message before calling Ollama
-    user_msg = Message(
-        conversation_id=conversation.id,
-        tenant_id=current_user.tenant_id,
-        role="user",
-        content=data.message,
-    )
-    db.add(user_msg)
-    await db.flush()
 
     # Run LangGraph director (or plain chat if no tools)
     assistant_content, all_tool_calls, reasoning_trace = await run_director(
@@ -518,6 +570,26 @@ async def chat_stream(
         # Day 65 — pre-generate UUID for assistant message so it can be included
         # in the `done` SSE event; frontend uses it for thumbs-up/down feedback.
         assistant_msg_id = uuid.uuid4()
+
+        reflex_response = _casual_reflex_response(data.message, current_user)
+        if reflex_response:
+            full_response.append(reflex_response)
+            chunk_count = 1
+            yield _sse({"type": "chunk", "content": reflex_response})
+            await _persist_assistant_message(
+                conversation_id=conversation_id,
+                tenant_id=tenant_id,
+                content=reflex_response,
+                message_count=len(history) + 2,
+                message_id=assistant_msg_id,
+            )
+            yield _sse(_done_payload(reflex_response))
+            logger.info(
+                "chat.stream.reflex_response",
+                conversation_id=str(conversation_id),
+                response_len=len(reflex_response),
+            )
+            return
 
         try:
             # Day 39 — Phase A: tool execution loop (non-streamed). Continues only as
