@@ -22,5 +22,15 @@ def test_organism_status_exposes_safe_next_steps():
 
     assert status["doctrine"] == "digital_organism_architecture"
     assert status["promotion_rule"] == "proposal_gated"
+    assert "partial" in status["status_legend"]
     assert status["layers"][0]["id"] == "jiwa"
     assert all(layer["next_step"] for layer in status["layers"])
+
+
+def test_each_organism_layer_maps_live_status_and_backlog():
+    allowed = {"live", "partial", "planned", "blocked"}
+
+    for layer in ORGANISM_LAYERS:
+        assert layer["implementation_status"] in allowed
+        assert layer["live_components"]
+        assert layer["backlog_refs"]

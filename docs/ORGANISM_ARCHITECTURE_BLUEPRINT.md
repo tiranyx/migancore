@@ -44,6 +44,12 @@ Machine-readable status is available at:
 GET /v1/system/organism
 ```
 
+Implementation mapping is tracked in:
+
+```text
+docs/ORGANISM_IMPLEMENTATION_MAPPING.md
+```
+
 ## Layer Contracts
 
 ### 1. Jiwa
