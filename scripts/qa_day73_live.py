@@ -1,12 +1,12 @@
-"""Day 73 live QA — verify tool_router + onamix end-to-end inside running container.
+"""Day 73 live QA — verify tool_router + onamix end-to-end.
 
 Usage:
-    docker exec ado-api-1 python3 /app/scripts/qa_day73_live.py
+    cd /opt/ado && PYTHONPATH=api python3 scripts/qa_day73_live.py
 """
 import asyncio
 import sys
 
-sys.path.insert(0, "/app")
+sys.path.insert(0, "api")
 
 from services.tool_executor import _onamix_search, ToolContext  # noqa: E402
 from services.tool_router import route_tools  # noqa: E402

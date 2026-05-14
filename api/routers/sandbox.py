@@ -15,7 +15,8 @@ Endpoints:
 
 Auth:
   - List/Get/Stats: X-Admin-Key header (same as admin router)
-  - Submit (POST): X-Admin-Key or agent JWT with 'sandbox.propose' scope
+  - Submit (POST): X-Admin-Key required. Brain submissions use the internal
+    propose_improvement tool, which attaches the admin key server-side.
   - Verdict (PATCH): X-Admin-Key only — creator action
   - Gates (POST): X-Admin-Key only
 """
@@ -60,10 +61,18 @@ def _require_admin(x_admin_key: str = Header(default="", alias="X-Admin-Key")) -
 
 
 def _allow_propose(x_admin_key: str = Header(default="", alias="X-Admin-Key")) -> bool:
-    """Returns True if admin key; False means caller must have agent JWT (not enforced here yet)."""
-    if settings.ADMIN_SECRET_KEY and x_admin_key == settings.ADMIN_SECRET_KEY:
-        return True
-    return True   # M1.7: open to brain submissions; tighten in M1.8 with JWT scope check
+    """Authorize proposal creation.
+
+    M1.7 originally left proposal submission open so the brain could create
+    rows before scoped agent JWTs existed. Now the brain uses the internal
+    propose_improvement tool with the server-side admin key, so public POSTs
+    should not be accepted.
+    """
+    if not settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Admin not configured")
+    if x_admin_key != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    return True
 
 
 # ---------------------------------------------------------------------------

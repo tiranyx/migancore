@@ -103,3 +103,16 @@ same deployment mistake does not repeat:
 
 Also updated `scripts/qa_day73_live.py`: casual chat QA now expects zero tools,
 matching the reflex doctrine.
+
+## Day73 Proposal Queue Security Follow-up
+
+Codex tightened `POST /v1/sandbox/proposals` after the Jurnal & Proposal panel
+went live:
+
+- Public unauthenticated proposal creation now returns `401`.
+- Brain-created proposals still work through the internal `propose_improvement`
+  tool because it attaches `X-Admin-Key` server-side.
+- Added `api/tests/test_sandbox_auth.py` to lock this behavior.
+
+Reason: proposal mode should mean "Migan asks Fahmi", not "the internet can
+write into Fahmi's review queue".
