@@ -133,9 +133,12 @@ async def get_feedback_stats(
     )
     # Count preference pairs that still have AWAITING placeholders
     # (thumbs_up → rejected=__AWAITING_REJECTED__, thumbs_down → chosen=__AWAITING_CHOSEN__)
+    # preference_pairs is GLOBAL (no tenant_id), so we join via feedback_events.
     awaiting = await session.scalar(
-        select(func.count()).where(
-            PreferencePair.tenant_id == tenant_id,
+        select(func.count()).select_from(PreferencePair).join(
+            FeedbackEvent, FeedbackEvent.preference_pair_id == PreferencePair.id
+        ).where(
+            FeedbackEvent.tenant_id == tenant_id,
             (PreferencePair.chosen.like("__AWAITING_CHOSEN__%"))
             | (PreferencePair.rejected.like("__AWAITING_REJECTED__%")),
         )
