@@ -3,7 +3,7 @@
 Day 76 — Comprehensive Test & Validation Script
 """
 
-import sys, time, asyncio, json, random, inspect
+import sys, time, asyncio, json, random
 sys.path.insert(0, '.')
 
 from core.cognitive.mode_selector import ModeSelector
@@ -84,7 +84,7 @@ async def run_all_tests():
         test('Coding instruction exists', 'coding' in _THINKING_MODE_INSTRUCTIONS, 'INTEGRATION')
         test('Cognitive instruction exists', 'kognitif' in _THINKING_MODE_INSTRUCTIONS, 'INTEGRATION')
         if ChatResponse is not None:
-            fields = [f.name for f in inspect.fields(ChatResponse)]
+            fields = list(getattr(ChatResponse, 'model_fields', {}).keys())
             test('ChatResponse has thinking_mode', 'thinking_mode' in fields, 'INTEGRATION')
             test('ChatResponse has mode_confidence', 'mode_confidence' in fields, 'INTEGRATION')
         else:

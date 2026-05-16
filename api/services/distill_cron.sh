@@ -26,8 +26,9 @@ EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     echo "[${TIMESTAMP}] Distillation OK. Output: $LOG_FILE"
-    # Check if training should trigger
-    docker compose exec -T api python -m services.training_trigger --check >> "$LOG_FILE" 2>&1
+    # Training readiness is handled by auto_train_watchdog in proposal mode.
+    # The old services.training_trigger module was removed in Day 76.
+    echo "[${TIMESTAMP}] Training proposal check handled by auto_train_watchdog." >> "$LOG_FILE"
 else
     echo "[${TIMESTAMP}] Distillation FAILED (exit $EXIT_CODE). Log: $LOG_FILE"
 fi
