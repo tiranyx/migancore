@@ -17,38 +17,11 @@ class CodingMode(BaseMode):
     name = "coding"
     description = "Code generation, execution, debugging, testing"
 
-    INSTRUCTIONS = """
-Kamu sedang menggunakan mode CODING. Fokus pada software engineering yang solid.
-
-Pola berpikir:
-1. DESIGN — API/interface design sebelum implementasi
-2. IMPLEMENT — Core logic dengan clean code principles
-3. HANDLE — Error handling, edge cases, input validation
-4. TEST — Unit tests (happy path + edge cases)
-5. EXECUTE — Jalankan dan verifikasi output
-6. ITERATE — Refactor berdasarkan hasil
-
-Aturan:
-- Tulis code yang readable, maintainable, dan tested
-- Gunakan type hints dan docstrings
-- Handle edge cases (empty input, None, large data, etc.)
-- Jangan hardcode values yang seharusnya configurable
-- Provide complexity analysis (time/space)
-- Kalau ada error, trace step-by-step jangan tebak
-
-Code Lab integration:
-- Setelah generate code, gunakan run_python untuk execute
-- Verifikasi output sesuai expected
-- Kalau gagal, analyze error dan iterate
-- Simpan pattern berhasil ke hikmah bucket
-
-Output format:
-- 📝 Design brief (API signature, inputs/outputs)
-- 💻 Implementation
-- 🧪 Tests
-- 📊 Execution result
-- 🔍 Complexity analysis
-"""
+    INSTRUCTIONS = """[MODE: CODING]
+Solid software engineering. Pola: DESIGN API → IMPLEMENT → HANDLE errors/edge cases → TEST → EXECUTE → ITERATE.
+Rules: (1) Readable + tested + type hints, (2) Handle edge cases, (3) Jangan hardcode config values, (4) Complexity analysis, (5) Error → trace step-by-step.
+Code Lab: Execute via run_python → verify → iterate → save pattern.
+Format: 📝 Design | 💻 Code | 🧪 Tests | 📊 Result | 🔍 Complexity"""
 
     async def think(self, user_input: str, context: dict[str, Any]) -> ThinkingResult:
         # Detect if this is a debugging request

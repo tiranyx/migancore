@@ -17,30 +17,10 @@ class InnovativeMode(BaseMode):
     name = "inovatif"
     description = "Creative synthesis, lateral thinking, idea generation"
 
-    INSTRUCTIONS = """
-Kamu sedang menggunakan mode INOVATIF. Berpikirlah secara kreatif dan inovatif.
-
-Pola berpikir:
-1. OBSERVE — Apa yang ada sekarang? Apa constraint-nya?
-2. SYNTHESIZE — Gabungkan ide-ide yang tidak terkait
-3. DIVERGE — Hasilkan 5+ opsi/variasi
-4. RANK — Urutkan berdasarkan impact, novelty, feasibility, risk
-5. PROTOTYPE — Pilih yang paling menarik, gambarkan implementasinya
-6. TEST — Identifikasi assumption dan cara test-nya
-
-Aturan:
-- Jangan terpaku pada solusi konvensional
-- Explore edge cases dan "what if" scenarios
-- Kombinasikan domain yang berbeda
-- Berikan 3-5 variasi dengan trade-off masing-masing
-- Pilih satu yang paling aligned dengan visi owner
-
-Output format:
-- 🎯 Core insight
-- 💡 3-5 options dengan trade-off
-- 🚀 Recommended (dengan justifikasi)
-- ⚠️ Risks & mitigations
-"""
+    INSTRUCTIONS = """[MODE: INOVATIF]
+Pikir kreatif & out-of-the-box. Pola: OBSERVE constraint → SYNTHESIZE ide tak terkait → DIVERGE 3-5 opsi → RANK by impact/novelty/feasibility/risk → PROTOTYPE best → TEST assumptions.
+Rules: (1) Jangan solusi konvensional, (2) Explore "what if", (3) Kombinasi domain berbeda, (4) 3-5 opsi + trade-off, (5) Pilih yang aligned visi owner.
+Format: 🎯 Core insight | 💡 3-5 options | 🚀 Recommended | ⚠️ Risks"""
 
     async def think(self, user_input: str, context: dict[str, Any]) -> ThinkingResult:
         prompt = self._build_prompt(user_input, context, self.INSTRUCTIONS)

@@ -17,32 +17,10 @@ class SynthesisMode(BaseMode):
     name = "sintesis"
     description = "Multi-source fusion, contradiction resolution, research"
 
-    INSTRUCTIONS = """
-Kamu sedang menggunakan mode SINTESIS. Gabungkan dan sintesis informasi dari berbagai sumber.
-
-Pola berpikir:
-1. EXTRACT — Identifikasi key claims dari setiap sumber
-2. COMPARE — Bandingkan kesamaan dan perbedaan
-3. CONFLICT — Identifikasi contradictions dan tension points
-4. RESOLVE — Gunakan evidence untuk resolve conflicts
-5. UNIFY — Buat unified view yang konsisten
-6. CITE — Referensikan sumber untuk setiap claim
-
-Aturan:
-- Jangan cherry-pick data yang hanya mendukung satu sisi
-- Flag contradictions secara eksplisit
-- Gunakan evidence hierarchy (empirical > theoretical > anecdotal)
-- Berikan confidence level untuk setiap synthesized claim
-- Cite sources dengan format [S1], [S2], dst.
-
-Output format:
-- 📋 Key claims per source
-- ⚖️ Agreement areas
-- ⚠️ Contradictions
-- 🔧 Resolution
-- 🎯 Unified conclusion
-- 📖 Sources
-"""
+    INSTRUCTIONS = """[MODE: SINTESIS]
+Sintesis multi-source. Pola: EXTRACT key claims → COMPARE → CONFLICT detection → RESOLVE with evidence → UNIFY → CITE sources.
+Rules: (1) Jangan cherry-pick, (2) Flag contradictions, (3) Evidence hierarchy: empirical > theoretical > anecdotal, (4) Confidence level per claim, (5) Cite [S1], [S2].
+Format: 📋 Claims | ⚖️ Agreement | ⚠️ Contradictions | 🔧 Resolution | 🎯 Conclusion | 📖 Sources"""
 
     async def think(self, user_input: str, context: dict[str, Any]) -> ThinkingResult:
         # Check if we have sources in context

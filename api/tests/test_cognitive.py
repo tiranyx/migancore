@@ -189,7 +189,6 @@ class TestModeSelectorEdgeCases:
     async def test_empty_input(self):
         """Empty input should not crash."""
         mode, confidence = ModeSelector.select("")
-        # Should default to inovatif or kognitif
         assert mode in ["kognitif", "inovatif"]
 
     @pytest.mark.asyncio
@@ -202,6 +201,51 @@ class TestModeSelectorEdgeCases:
     @pytest.mark.asyncio
     async def test_multiple_keywords(self):
         """Input with multiple mode keywords should pick strongest match."""
-        # "debug" (coding) vs "analisis" (kognitif) — coding keyword is stronger
         mode, confidence = ModeSelector.select("debug dan analisis error ini")
         assert mode == "coding"
+
+    @pytest.mark.asyncio
+    async def test_negation_filtering(self):
+        """Negated keywords should not trigger mode."""
+        mode, confidence = ModeSelector.select("bukan evaluasi, tapi analisis")
+        # "evaluasi" is negated by "bukan", should not trigger autonomous
+        assert mode != "autonomous"
+
+    @pytest.mark.asyncio
+    async def test_negation_with_valid_keyword(self):
+        """Valid keyword outside negation should still work."""
+        mode, confidence = ModeSelector.select("bukan evaluasi, tapi debug error ini")
+        # "evaluasi" negated, but "debug" and "error" should trigger coding
+        assert mode == "coding"
+
+    @pytest.mark.asyncio
+    async def test_compound_keyword_bonus(self):
+        """Compound keywords (2+ words) should score higher."""
+        # "problem solving" (compound, 2x) should beat "solve" (single)
+        # But "problem solving" is kognitif, let's test coding compound
+        mode, confidence = ModeSelector.select("buatkan kode python")
+        # "buatkan kode" is compound (2x) → should strongly favor coding
+        assert mode == "coding"
+        assert confidence > 0.7
+
+    @pytest.mark.asyncio
+    async def test_sticky_mode(self):
+        """Previous mode should influence current selection."""
+        # Without context, "analisis" → kognitif
+        mode, _ = ModeSelector.select("analisis data")
+        assert mode == "kognitif"
+        
+        # With previous coding context, should boost coding if ambiguous
+        mode, _ = ModeSelector.select(
+            "analisis error di code ini",
+            context={"previous_modes": ["coding"]}
+        )
+        assert mode == "coding"
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_low_confidence(self):
+        """Ambiguous input should have lower confidence."""
+        # "analisis" alone is kognitif but weak
+        mode, confidence = ModeSelector.select("analisis")
+        assert mode == "kognitif"
+        assert confidence < 0.8  # Should be uncertain

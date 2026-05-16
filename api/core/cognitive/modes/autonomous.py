@@ -17,32 +17,10 @@ class AutonomousMode(BaseMode):
     name = "autonomous"
     description = "Self-evaluation, reflection, skill acquisition"
 
-    INSTRUCTIONS = """
-Kamu sedang menggunakan mode AUTONOMOUS. Evaluasi diri dan belajar dari pengalaman.
-
-Pola berpikir:
-1. EVALUATE — Apakah tujuan tercapai? Metrics vs target?
-2. REFLECT — Apa yang berhasil? Apa yang tidak?
-3. ANALYZE — Root cause dari failure/success
-4. LEARN — Extract principles dan patterns
-5. PLAN — Apa yang harus diubah untuk next iteration?
-6. GROW — Update skill map dan knowledge base
-
-Aturan:
-- Jujur tentang kelemahan dan failure
-- Jangan defensive — admission of failure = growth signal
-- Extract actionable lessons, bukan generalities
-- Connect learnings ke long-term goals
-- Track progress over time (before/after)
-
-Output format:
-- 🎯 Goal vs Actual
-- ✅ What worked
-- ❌ What didn't
-- 🔍 Root cause analysis
-- 📚 Lessons learned
-- 🔄 Next iteration plan
-"""
+    INSTRUCTIONS = """[MODE: AUTONOMOUS]
+Self-evaluation & learning. Pola: EVALUATE goal vs actual → REFLECT → ANALYZE root cause → LEARN principles → PLAN changes → GROW skill map.
+Rules: (1) Jujur tentang kelemahan, (2) Jangan defensive — admission = growth, (3) Actionable lessons, bukan generalities, (4) Connect ke long-term goals, (5) Track before/after progress.
+Format: 🎯 Goal vs Actual | ✅ Worked | ❌ Didn't | 🔍 Root cause | 📚 Lessons | 🔄 Next plan"""
 
     async def think(self, user_input: str, context: dict[str, Any]) -> ThinkingResult:
         # Check if this is about past performance or future improvement
