@@ -207,7 +207,7 @@ def create_modelfile(version: str, gguf_path: Path, template: str = "qwen") -> s
     modelfile = f"""FROM {gguf_path}
 
 # System prompt
-SYSTEM """{system_prompt}"""
+SYSTEM \"{system_prompt}\"
 
 # Parameters
 PARAMETER temperature 0.7
