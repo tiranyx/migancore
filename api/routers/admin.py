@@ -820,7 +820,7 @@ async def test_mode_detection(
         raise HTTPException(status_code=401, detail="Invalid admin key")
     
     from core.cognitive.mode_selector import ModeSelector
-    from core.cognitive import _THINKING_MODE_INSTRUCTIONS
+    from routers.chat import _THINKING_MODE_INSTRUCTIONS
     
     mode, confidence = ModeSelector.select(message)
     instruction = _THINKING_MODE_INSTRUCTIONS.get(mode, "")
