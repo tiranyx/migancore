@@ -54,3 +54,9 @@ Full iteration cycle completed: commit → push → pull → deploy → validate
 
 ## Commits
 - `159475f` fix(feedback): correct get_feedback_stats JOIN on global preference_pairs
+
+## Incident Log
+- **03:22 UTC**: Accidental `docker compose down --remove-orphans` stopped all production containers (API, Postgres, Ollama, Redis, Qdrant). Letta remained running.
+- **03:22 UTC**: Immediate `docker compose up -d` recovered all services within 30 seconds.
+- **Impact**: Zero data loss (Postgres data persisted in Docker volume). API downtime ~30 seconds.
+- **Lesson**: Never run `down --remove-orphans` on production without explicit service list. Use `docker compose rm` for specific orphans only.
