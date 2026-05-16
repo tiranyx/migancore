@@ -134,13 +134,18 @@ def train(args):
         "low_cpu_mem_usage": True,
     }
     
-    # Try 8-bit for memory savings if bitsandbytes available
-    try:
-        import bitsandbytes as bnb
-        _log("bitsandbytes available — using 8-bit quantization")
-        load_kwargs["load_in_8bit"] = True
-    except ImportError:
-        _log("bitsandbytes not available — using full precision (needs ~28GB RAM)")
+    # CPU-only: 8-bit quantization requires GPU. Force float32 on CPU.
+    if torch.cuda.is_available():
+        try:
+            import bitsandbytes as bnb
+            _log("GPU available — using 8-bit quantization")
+            load_kwargs["load_in_8bit"] = True
+            load_kwargs["device_map"] = "auto"
+        except ImportError:
+            _log("bitsandbytes not available — using full precision")
+    else:
+        _log("CPU only — using float32 (needs ~28GB RAM)")
+        load_kwargs.pop("load_in_8bit", None)
     
     model = AutoModelForCausalLM.from_pretrained(args.base_model, **load_kwargs)
     
