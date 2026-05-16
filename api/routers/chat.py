@@ -44,6 +44,29 @@ from services.fact_extractor import maybe_update_knowledge_block
 from services.vector_memory import index_turn_pair
 from services.vector_retrieval import retrieve_episodic_context, format_episodic_context
 
+# Foundation v2.0 imports
+from core.identity.enforcer import IdentityEnforcer, _get_identity_enforcer
+from core.event_bus import event_bus
+from core.cognitive import ModeSelector, CognitiveEngine
+
+# Foundation v2.0 — Thinking Mode Injection
+_THINKING_MODE_INSTRUCTIONS: dict[str, str] = {
+    "kognitif": "\n[MODE: KOGNITIF] Berpikirlah secara analitis. Tunjukkan reasoning step-by-step sebelum jawaban final.",
+    "inovatif": "\n[MODE: INOVATIF] Berpikirlah secara kreatif. Hasilkan 3-5 opsi dengan trade-off, lalu pilih yang terbaik.",
+    "sintesis": "\n[MODE: SINTESIS] Sintesis informasi dari berbagai sumber. Resolve contradictions, berikan unified view.",
+    "coding": "\n[MODE: CODING] Focus pada software engineering. Design dulu, implement, handle errors, test, iterate.",
+    "autonomous": "\n[MODE: AUTONOMOUS] Evaluasi dan refleksi. Jujur tentang kelemahan. Extract actionable lessons.",
+}
+
+# Foundation v2.0 — Cognitive Engine (lazy init)
+_cognitive_engine: CognitiveEngine | None = None
+
+def _get_cognitive_engine() -> CognitiveEngine:
+    global _cognitive_engine
+    if _cognitive_engine is None:
+        _cognitive_engine = CognitiveEngine()
+    return _cognitive_engine
+
 
 async def _check_tenant_message_quota(db: AsyncSession, tenant: Tenant) -> None:
     """Check and increment tenant daily message quota.
@@ -70,6 +93,67 @@ async def _check_tenant_message_quota(db: AsyncSession, tenant: Tenant) -> None:
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/v1/agents", tags=["chat"])
+
+
+async def _enforce_identity(response: str, user_question: str, is_streaming: bool = False) -> tuple[str, dict]:
+    """Post-process assistant response through identity enforcement.
+    
+    Returns (response, metadata) where metadata contains check results.
+    If enforcement fails, returns fallback response.
+    """
+    if not settings.IDENTITY_ENFORCEMENT_ENABLED:
+        return response, {"enforced": False, "reason": "disabled"}
+    
+    enforcer = _get_identity_enforcer()
+    is_identity_q = any(kw in user_question.lower() for kw in [
+        "siapa kamu", "who are you", "pencipta", "creator", "tujuan", "purpose",
+        "chatgpt", "claude", "gemini", "openai", "siapa owner", "siapa founder",
+    ])
+    
+    check = enforcer.check(response, context={"is_identity_question": is_identity_q, "user_question": user_question})
+    
+    if check.passed:
+        return response, {
+            "enforced": True,
+            "passed": True,
+            "score": check.score,
+        }
+    
+    # Failed — use fallback
+    fallback = enforcer.get_fallback_response(context={"user_question": user_question})
+    logger.warning(
+        "identity.enforcement_fallback",
+        violations=check.violations,
+        score=check.score,
+        is_identity_question=is_identity_q,
+        original_preview=response[:120],
+    )
+    
+    # Publish event for monitoring
+    try:
+        await event_bus.publish(
+            "mighan:eval:gate:failed",
+            {
+                "test_name": "identity_enforcement",
+                "score": check.score,
+                "threshold": 0.7,
+                "violations": check.violations,
+                "original_preview": response[:200],
+                "fallback_preview": fallback[:200],
+                "is_identity_question": is_identity_q,
+            },
+            source="identity_enforcer",
+        )
+    except Exception:
+        pass
+    
+    return fallback, {
+        "enforced": True,
+        "passed": False,
+        "score": check.score,
+        "violations": check.violations,
+        "fallback": True,
+    }
 
 # Context window management (Day 20)
 MAX_HISTORY_LOAD = 10          # Messages fetched from DB (trimmed further below)
@@ -143,6 +227,9 @@ class ChatResponse(BaseModel):
     # ADAPTIVE rule (per Fahmi feedback): chips only for factual/recall responses
     # Empty for casual/short responses or when no knowledge tools used.
     sources: list[dict] = []
+    # Foundation v2.0 — Thinking mode metadata
+    thinking_mode: str = ""
+    mode_confidence: float = 0.0
 
 
 class ConversationSummary(BaseModel):
@@ -237,6 +324,21 @@ async def chat(
         history, prepend_summary = await _apply_cached_summary(
             str(conversation.id), history
         )
+    # Foundation v2.0 — Thinking Mode Detection & Injection
+    detected_mode = "kognitif"
+    mode_confidence = 0.0
+    if settings.THINKING_MODES_ENABLED and not is_casual_chat:
+        detected_mode, mode_confidence = ModeSelector.select(data.message, context={
+            "has_sources": bool(episodic_context or mem),
+            "has_error_output": any(kw in data.message.lower() for kw in ["error", "bug", "traceback", "exception"]),
+            "is_retrospective": any(kw in data.message.lower() for kw in ["evaluasi", "refleksi", "retro", "review"]),
+        })
+        mode_instruction = _THINKING_MODE_INSTRUCTIONS.get(detected_mode, "")
+        if mode_instruction:
+            # Inject mode instruction into system prompt
+            system_prompt = system_prompt + mode_instruction
+            logger.info("chat.thinking_mode_injected", mode=detected_mode, confidence=mode_confidence)
+
     messages = _build_messages(system_prompt, history, data.message, prepend_summary=prepend_summary)
 
     # Build tools spec from agent's declared tools in agents.json
@@ -262,6 +364,15 @@ async def chat(
     db.add(user_msg)
     await db.flush()
 
+    # Foundation v2.0 — Publish conversation event (non-blocking)
+    if settings.EVENT_BUS_ENABLED:
+        asyncio.create_task(event_bus.conversation_new(
+            conversation_id=str(conversation.id),
+            tenant_id=tenant_id,
+            user_message=data.message,
+            agent_id=agent_id,
+        ))
+
     if reflex_response:
         assistant_msg = Message(
             conversation_id=conversation.id,
@@ -286,6 +397,8 @@ async def chat(
             model_used="reflex:migancore",
             tool_calls_made=0,
             sources=[],
+            thinking_mode="reflex",
+            mode_confidence=1.0,
         )
 
     tool_policies = await load_tool_policies(db, tenant_id)
@@ -337,6 +450,8 @@ async def chat(
             model_used="cache:migancore",
             tool_calls_made=0,
             sources=[],
+            thinking_mode="cache",
+            mode_confidence=1.0,
         )
 
     # Day 73 — Lazy tool routing: send only relevant schemas instead of all 42.
@@ -362,6 +477,13 @@ async def chat(
         },
     )
     logger.info("chat.reasoning_trace", trace=reasoning_trace)
+
+    # Foundation v2.0 — Identity enforcement (HATI)
+    if settings.IDENTITY_ENFORCEMENT_ENABLED and not is_casual_chat:
+        assistant_content, identity_meta = await _enforce_identity(
+            assistant_content, data.message, is_streaming=False
+        )
+        logger.info("chat.identity_enforced", **identity_meta)
 
     # Day 74 — write to response cache if no tools used (tool outputs vary by
     # external state; pure-LLM answers are deterministic and worth caching).
@@ -456,6 +578,8 @@ async def chat(
         model_used=model,
         tool_calls_made=len(all_tool_calls),
         sources=sources,
+        thinking_mode=detected_mode,
+        mode_confidence=mode_confidence,
     )
 
 
@@ -507,6 +631,20 @@ async def chat_stream(
             mem = await memory_summary(tenant_id, agent_id)
             system_prompt = _build_system_prompt(agent, soul_text, agent_cfg, mem, current_user=current_user)
 
+        # Foundation v2.0 — Thinking Mode Detection & Injection (streaming)
+        stream_detected_mode = "kognitif"
+        stream_mode_confidence = 0.0
+        if settings.THINKING_MODES_ENABLED and not is_casual_chat:
+            stream_detected_mode, stream_mode_confidence = ModeSelector.select(data.message, context={
+                "has_sources": bool(mem),
+                "has_error_output": any(kw in data.message.lower() for kw in ["error", "bug", "traceback", "exception"]),
+                "is_retrospective": any(kw in data.message.lower() for kw in ["evaluasi", "refleksi", "retro", "review"]),
+            })
+            mode_instruction = _THINKING_MODE_INSTRUCTIONS.get(stream_detected_mode, "")
+            if mode_instruction:
+                system_prompt = system_prompt + mode_instruction
+                logger.info("chat.thinking_mode_injected_stream", mode=stream_detected_mode, confidence=stream_mode_confidence)
+
         conversation, history = await _get_or_create_conversation(
             db, data, agent, current_user
         )
@@ -534,6 +672,14 @@ async def chat_stream(
         )
         db.add(user_msg)
         await db.commit()
+        # Foundation v2.0 — Publish conversation event (non-blocking)
+        if settings.EVENT_BUS_ENABLED:
+            asyncio.create_task(event_bus.conversation_new(
+                conversation_id=str(conversation_id),
+                tenant_id=tenant_id,
+                user_message=data.message,
+                agent_id=agent_id,
+            ))
     # DB session closes here — before streaming starts
 
     # Day 45 — fold cached summary if available (Innovation #1)
@@ -627,6 +773,8 @@ async def chat_stream(
                 "conversation_id": str(conversation_id),
                 "message_id": str(assistant_msg_id),
                 "sources": _sources,
+                "thinking_mode": stream_detected_mode,
+                "mode_confidence": stream_mode_confidence,
             }
 
         # Day 39 — work on a mutable copy of messages so tool turns get appended
@@ -863,6 +1011,19 @@ async def chat_stream(
                         break
 
             full_text = "".join(full_response)
+
+            # Foundation v2.0 — Identity enforcement for streaming (persist only)
+            # NOTE: User sees original stream; we correct what gets persisted.
+            # Full pre-stream enforcement requires Cognitive Loop (Phase 5).
+            _identity_meta_stream = {}
+            if settings.IDENTITY_ENFORCEMENT_ENABLED and not is_casual_chat:
+                _corrected_text, _identity_meta_stream = await _enforce_identity(
+                    full_text, data.message, is_streaming=True
+                )
+                if not _identity_meta_stream.get("passed", True):
+                    # Only correct persisted text; user already saw original
+                    full_text = _corrected_text
+                    logger.warning("chat.identity_corrected_stream", **_identity_meta_stream)
 
             # Day 74 — empty-stream guard. If Phase B yielded 0 chunks (Ollama
             # busy from prior cancelled tool-call, model offload race, or a

@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     # Admin
     ADMIN_SECRET_KEY: str = ""  # X-Admin-Key header value; empty = admin disabled
 
+    # Foundation v2.0 — Feature Flags
+    # SYARAF: Event bus
+    EVENT_BUS_ENABLED: bool = True
+    # HATI: Identity runtime enforcement
+    IDENTITY_ENFORCEMENT_ENABLED: bool = True
+    # OTAK: Cognitive loop (PERCEIVE→PLAN→REASON→ACT→REFLECT)
+    COGNITIVE_LOOP_ENABLED: bool = False  # Gradual rollout
+    # ORGAN: Code Lab sandbox (Pyodide)
+    CODE_LAB_ENABLED: bool = False  # Requires pyodide-node setup
+    # ALGORITMA: Thinking mode selector
+    THINKING_MODES_ENABLED: bool = True   # Day 76: Mode detection active
+
     # External APIs — Tool Expansion (Day 24)
     FAL_KEY: Optional[str] = None          # fal.ai API key for image/video generation
     WORKSPACE_DIR: str = "/app/workspace"  # Sandboxed file system for read_file/write_file
