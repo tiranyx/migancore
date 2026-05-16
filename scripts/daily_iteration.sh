@@ -59,7 +59,7 @@ log "  KG relations: $KG_RELATIONS"
 
 # 5. Check dataset growth
 SFT_PAIRS=$(wc -l < "$PROJECT_DIR/training_data/identity_sft_200_ORGANIC.jsonl" 2>/dev/null | xargs || echo "0")
-DPO_PAIRS=$(wc -l < "$PROJECT_DIR/training_data/dpo_export.jsonl" 2>/dev/null | xargs || echo "0")
+DPO_PAIRS=$(wc -l < "$PROJECT_DIR/data/training_new/dpo_export.jsonl" 2>/dev/null | xargs || echo "0")
 log "  SFT dataset: $SFT_PAIRS pairs"
 log "  DPO dataset: $DPO_PAIRS pairs"
 
