@@ -312,5 +312,10 @@ async def run_all_tests():
     print('=' * 60)
     return failed == 0
 
-success = asyncio.run(run_all_tests())
-sys.exit(0 if success else 1)
+def test_day76_validation_suite():
+    assert asyncio.run(run_all_tests())
+
+
+if __name__ == "__main__":
+    success = asyncio.run(run_all_tests())
+    sys.exit(0 if success else 1)
