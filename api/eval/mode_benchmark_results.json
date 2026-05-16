@@ -1,0 +1,61 @@
+{
+  "total": 95,
+  "correct": 91,
+  "partial": 2,
+  "wrong": 2,
+  "accuracy": 0.968,
+  "elapsed_ms": 1.680612564086914,
+  "by_mode": {
+    "coding": {
+      "total": 24,
+      "correct": 22,
+      "partial": 1,
+      "wrong": 1,
+      "accuracy": 0.938
+    },
+    "inovatif": {
+      "total": 18,
+      "correct": 18,
+      "partial": 0,
+      "wrong": 0,
+      "accuracy": 1.0
+    },
+    "sintesis": {
+      "total": 16,
+      "correct": 16,
+      "partial": 0,
+      "wrong": 0,
+      "accuracy": 1.0
+    },
+    "autonomous": {
+      "total": 14,
+      "correct": 13,
+      "partial": 0,
+      "wrong": 1,
+      "accuracy": 0.929
+    },
+    "kognitif": {
+      "total": 23,
+      "correct": 22,
+      "partial": 1,
+      "wrong": 0,
+      "accuracy": 0.978
+    }
+  },
+  "failures": [
+    {
+      "input": "buatkan ide kode untuk fitur baru",
+      "expected": "coding",
+      "detected": "inovatif",
+      "confidence": 0.8,
+      "description": "mixed: create + code + idea"
+    },
+    {
+      "input": "evaluasi code review kemarin",
+      "expected": "autonomous",
+      "detected": "coding",
+      "confidence": 0.8,
+      "description": "mixed: eval + code"
+    }
+  ]
+}

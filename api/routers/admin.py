@@ -771,3 +771,65 @@ async def admin_clone_dry_run(
     manager = CloneManager()
     result = await manager.clone(req)
     return result.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Day 76 — Thinking Mode Metrics
+# ---------------------------------------------------------------------------
+
+@router.get("/mode-stats")
+async def get_mode_stats(
+    hours: int = Query(24, ge=1, le=168),
+    admin_key: str = Header("", alias="X-Admin-Key"),
+):
+    """Get thinking mode detection statistics.
+    
+    Returns:
+        - Mode distribution (which modes were detected)
+        - Average confidence per mode
+        - Override rate (user vs auto-detected)
+        - Detection latency stats
+    """
+    if not settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Admin not configured")
+    if not secrets.compare_digest(admin_key, settings.ADMIN_SECRET_KEY):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    from core.cognitive.metrics import mode_metrics
+    
+    stats = await mode_metrics.get_stats(hours=hours)
+    return {
+        "status": "ok",
+        "period_hours": hours,
+        **stats,
+    }
+
+
+@router.get("/mode-test")
+async def test_mode_detection(
+    message: str = Query(..., min_length=1),
+    admin_key: str = Header("", alias="X-Admin-Key"),
+):
+    """Test mode detection on a sample message (no side effects).
+    
+    Useful for debugging mode selection logic without sending to LLM.
+    """
+    if not settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Admin not configured")
+    if not secrets.compare_digest(admin_key, settings.ADMIN_SECRET_KEY):
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+    
+    from core.cognitive.mode_selector import ModeSelector
+    from core.cognitive import _THINKING_MODE_INSTRUCTIONS
+    
+    mode, confidence = ModeSelector.select(message)
+    instruction = _THINKING_MODE_INSTRUCTIONS.get(mode, "")
+    
+    return {
+        "status": "ok",
+        "input": message,
+        "detected_mode": mode,
+        "confidence": confidence,
+        "instruction_length": len(instruction),
+        "instruction_preview": instruction[:200] + "..." if len(instruction) > 200 else instruction,
+    }

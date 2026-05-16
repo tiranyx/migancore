@@ -48,6 +48,7 @@ from services.vector_retrieval import retrieve_episodic_context, format_episodic
 from core.identity.enforcer import IdentityEnforcer, _get_identity_enforcer
 from core.event_bus import event_bus
 from core.cognitive import ModeSelector, CognitiveEngine
+from core.cognitive.metrics import mode_metrics
 
 # Foundation v2.0 — Thinking Mode Injection
 _THINKING_MODE_INSTRUCTIONS: dict[str, str] = {
@@ -332,12 +333,21 @@ async def chat(
             "has_sources": bool(episodic_context or mem),
             "has_error_output": any(kw in data.message.lower() for kw in ["error", "bug", "traceback", "exception"]),
             "is_retrospective": any(kw in data.message.lower() for kw in ["evaluasi", "refleksi", "retro", "review"]),
+            "previous_modes": [],  # TODO: load from conversation history
         })
         mode_instruction = _THINKING_MODE_INSTRUCTIONS.get(detected_mode, "")
         if mode_instruction:
             # Inject mode instruction into system prompt
             system_prompt = system_prompt + mode_instruction
             logger.info("chat.thinking_mode_injected", mode=detected_mode, confidence=mode_confidence)
+        
+        # Record metrics (non-blocking)
+        asyncio.create_task(mode_metrics.record_detection(
+            mode=detected_mode,
+            confidence=mode_confidence,
+            user_input=data.message,
+            has_history=bool(history),
+        ))
 
     messages = _build_messages(system_prompt, history, data.message, prepend_summary=prepend_summary)
 
@@ -644,6 +654,14 @@ async def chat_stream(
             if mode_instruction:
                 system_prompt = system_prompt + mode_instruction
                 logger.info("chat.thinking_mode_injected_stream", mode=stream_detected_mode, confidence=stream_mode_confidence)
+            
+            # Record metrics (non-blocking)
+            asyncio.create_task(mode_metrics.record_detection(
+                mode=stream_detected_mode,
+                confidence=stream_mode_confidence,
+                user_input=data.message,
+                has_history=bool(history),
+            ))
 
         conversation, history = await _get_or_create_conversation(
             db, data, agent, current_user

@@ -1,0 +1,71 @@
+# MiganForge RunPod Training Configuration
+# Day 76 — Cloud GPU training setup
+#
+# Usage:
+#   1. Upload this config to RunPod serverless or pod
+#   2. Mount training data from VPS (rsync or S3)
+#   3. Run: python -m training.dpo_trainer --config runpod_config.yaml
+
+project_name: "miganforge-day76"
+base_model: "Qwen/Qwen2.5-7B-Instruct"
+
+# Output paths
+output_dir: "/workspace/training_output"
+dpo_data: "/workspace/data/dpo_export.jsonl"
+identity_data: "/workspace/data/identity_sft_1k.jsonl"
+merged_model_dir: "/workspace/training_output/merged_model"
+
+# Training hyperparameters
+epochs: 1
+batch_size: 2
+gradient_accumulation_steps: 8
+learning_rate: 5.0e-5
+warmup_ratio: 0.03
+max_seq_length: 2048
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+
+# QLoRA settings (memory efficient)
+use_qlora: true
+quantization: "4bit"  # nf4
+compute_dtype: "bfloat16"
+
+# DPO specific
+beta: 0.1  # DPO temperature
+label_smoothing: 0.0
+
+# SFT specific (identity anchoring)
+identity_epochs: 2
+identity_learning_rate: 2.0e-5
+
+# Logging & checkpointing
+logging_steps: 10
+save_steps: 100
+eval_steps: 100
+save_total_limit: 3
+
+# Hardware
+# RunPod GPU requirements:
+#   - Minimum: RTX 3090 (24GB) or A10G (24GB)
+#   - Recommended: A100 40GB or H100 80GB
+#   - Estimated time on A100 40GB: ~2-3 hours for 1 epoch
+#
+# Environment setup:
+#   pip install torch transformers peft trl accelerate bitsandbytes
+#   huggingface-cli login  # for model download
+
+# Post-training
+merge_and_upload: true
+upload_to_hf: false  # Set to true + set HF_TOKEN to upload
+hf_repo_id: "tiranyx/migancore-adapter"
+
+# Evaluation
+run_eval: true
+benchmark_path: "/workspace/eval/benchmark.py"
+identity_gate_path: "/workspace/eval/identity_gate.py"
+
+# Ollama deploy (after eval passes)
+ollama_deploy: false
+ollama_host: "72.62.125.6:11434"
+quant_type: "Q4_K_M"
