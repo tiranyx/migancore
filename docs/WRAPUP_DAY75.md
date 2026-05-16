@@ -60,3 +60,19 @@ Full iteration cycle completed: commit → push → pull → deploy → validate
 - **03:22 UTC**: Immediate `docker compose up -d` recovered all services within 30 seconds.
 - **Impact**: Zero data loss (Postgres data persisted in Docker volume). API downtime ~30 seconds.
 - **Lesson**: Never run `down --remove-orphans` on production without explicit service list. Use `docker compose rm` for specific orphans only.
+
+## Post-Deploy Optimizations
+- **Cron scripts**: Fixed executable permissions on `daily_harvest.sh` and `daily_iteration.sh`
+- **DPO path fix**: Corrected `dpo_export.jsonl` path from `training_data/` to `data/training_new/` (1002 pairs available)
+- **E2E test**: Verified feedback pipeline end-to-end — 2 new pairs created and worker processed successfully
+- **Orphan cleanup**: Removed test containers (ado-api_test-1, ado-postgres_test-1, ado-redis_test-1, ado-qdrant_test-1)
+
+## Current Production State (03:30 UTC)
+- All 6 containers healthy and running
+- 50 preference pairs (48 real + 2 test)
+- 110 KG entities, 126 KG relations
+- 200 SFT pairs ready for training
+- 1002 DPO pairs available at `/opt/ado/data/training_new/dpo_export.jsonl`
+- Feedback worker active, processing every 10 minutes
+- Daily iteration cron: 06:00 daily
+- Auto eval cron: 04:00 daily
