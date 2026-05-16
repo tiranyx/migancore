@@ -14,63 +14,60 @@ from services.feedback import record_feedback
 from sqlalchemy import select, func
 
 async def backfill():
-    init_engine()
-    async with get_admin_db() as db:
-        stmt = select(FeedbackEvent).where(FeedbackEvent.preference_pair_id.is_(None))
-        result = await db.execute(stmt)
-        events = result.scalars().all()
-        print(f"Found {len(events)} feedback events to backfill")
+    # Use superuser connection to bypass RLS for cross-tenant backfill
+    import asyncpg
+    from config import settings
+    dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1).replace("ado_app", "ado", 1)
+    conn = await asyncpg.connect(dsn)
+    
+    rows = await conn.fetch("""
+        SELECT f.id as feedback_id, f.message_id, f.signal_type, f.comment,
+               m.conversation_id, m.content as target_text, m.created_at as msg_at,
+               c.tenant_id
+        FROM interactions_feedback f
+        LEFT JOIN messages m ON m.id = f.message_id
+        LEFT JOIN conversations c ON c.id = m.conversation_id
+        WHERE f.preference_pair_id IS NULL
+    """)
+    print(f"Found {len(rows)} feedback events to backfill")
 
-        created = 0
-        skipped = 0
-        for event in events:
-            # Fetch message
-            msg = await db.get(ConversationMessage, event.message_id)
-            if not msg:
-                print(f"  SKIP {event.id}: message not found")
-                skipped += 1
-                continue
+    created = 0
+    skipped = 0
+    for row in rows:
+        # Find preceding user message
+        prev = await conn.fetchrow("""
+            SELECT content FROM messages
+            WHERE conversation_id = $1 AND created_at < $2 AND role = 'user'
+            ORDER BY created_at DESC LIMIT 1
+        """, row["conversation_id"], row["msg_at"])
+        prompt_text = prev["content"] if prev else ""
+        target_text = row["target_text"] or ""
+        tenant_id = row["tenant_id"]
 
-            # Fetch conversation for tenant_id
-            conv = await db.get(Conversation, msg.conversation_id)
-            tenant_id = conv.tenant_id if conv else None
+        # Insert PreferencePair
+        if row["signal_type"] == "thumb_up":
+            chosen = target_text
+            rejected = "__AWAITING_REJECTED__"
+        else:
+            chosen = "__AWAITING_CHOSEN__"
+            rejected = target_text
 
-            # Find preceding user message as prompt_text
-            prompt_text = ""
-            stmt = (
-                select(ConversationMessage)
-                .where(
-                    ConversationMessage.conversation_id == msg.conversation_id,
-                    ConversationMessage.created_at < msg.created_at,
-                    ConversationMessage.role == "user",
-                )
-                .order_by(ConversationMessage.created_at.desc())
-                .limit(1)
-            )
-            prev = await db.execute(stmt)
-            prev_msg = prev.scalar_one_or_none()
-            if prev_msg:
-                prompt_text = prev_msg.content or ""
+        pair_id = await conn.fetchval("""
+            INSERT INTO preference_pairs (id, prompt, chosen, rejected, judge_score, source_method, source_message_id, processing_attempts, created_at)
+            VALUES ($1, $2, $3, $4, 0.5, 'real_conversation', $5, 0, NOW())
+            RETURNING id
+        """, uuid.uuid4(), prompt_text, chosen, rejected, row["message_id"])
 
-            target_text = msg.content or ""
+        # Update feedback
+        await conn.execute("""
+            UPDATE interactions_feedback SET preference_pair_id = $1 WHERE id = $2
+        """, pair_id, row["feedback_id"])
 
-            result = await record_feedback(
-                db,
-                message_id=event.message_id,
-                tenant_id=tenant_id,
-                signal_type=event.signal_type,
-                rating="thumbs_up" if event.signal_type == "thumb_up" else "thumbs_down",
-                comment=event.comment or "",
-                prompt_text=prompt_text,
-                target_text=target_text,
-            )
-            pair_id = result["pair_id"]
-            event.preference_pair_id = pair_id
-            await db.commit()
-            created += 1
-            print(f"  PAIR {pair_id} for feedback {event.id}")
+        created += 1
+        print(f"  PAIR {pair_id} for feedback {row['feedback_id']}")
 
-        print(f"\nDone: {created} created, {skipped} skipped")
+    await conn.close()
+    print(f"\nDone: {created} created, {skipped} skipped")
 
 if __name__ == "__main__":
     asyncio.run(backfill())

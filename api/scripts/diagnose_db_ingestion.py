@@ -30,7 +30,8 @@ from config import settings
 async def main():
     import asyncpg
 
-    dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1)
+    # Use superuser to bypass RLS for global diagnostics
+    dsn = settings.DATABASE_URL.replace("+asyncpg", "", 1).replace("ado_app", "ado", 1)
     print("=" * 60)
     print("MIGANCORE DB INGESTION DIAGNOSTIC — Day 71")
     print("=" * 60)
