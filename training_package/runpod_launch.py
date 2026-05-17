@@ -71,6 +71,7 @@ def create_pod(pub_key: str) -> str:
         gpu_count=1,
         container_disk_in_gb=50,
         volume_in_gb=50,
+        ports="22/tcp",
         start_ssh=True,
         support_public_ip=True,
         env={"PUBLIC_KEY": pub_key},
@@ -168,7 +169,8 @@ cd /workspace
 echo "[1] Checking data..."
 ls -lh /workspace/migan_data/
 echo "[2] Installing stable training stack..."
-pip install -q torch==2.5.1 transformers==4.48.0 trl==0.11.4 accelerate==0.34.0 bitsandbytes==0.44.0 peft==0.13.0 datasets 2>&1 | tail -8
+pip install -q torch==2.5.1 transformers==4.48.0 trl==0.11.4 accelerate==0.34.0 bitsandbytes==0.44.0 peft==0.13.0 datasets rich 2>&1 | tail -8
+pip uninstall -y torchvision torchaudio >/tmp/uninstall_vision_audio.log 2>&1 || true
 python3 - <<'PY'
 import torch, transformers, trl
 print("torch", torch.__version__, "cuda", torch.cuda.is_available())
