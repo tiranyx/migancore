@@ -279,7 +279,10 @@ def main() -> int:
     print(f"Pod: {POD_NAME} ({pod_id})")
     print(f"SSH: ssh -i ~/.ssh/runpod_migan root@{ssh_ip} -p {ssh_port}")
     print(f"Monitor: ssh -i ~/.ssh/runpod_migan root@{ssh_ip} -p {ssh_port} 'tail -f /workspace/train_identity_immunity.log'")
-    print(f"Cost: ~${runpod.get_pod(pod_id).get('costPerHr', 0):.2f}/hr")
+    try:
+        print(f"Cost: ~${runpod.get_pod(pod_id).get('costPerHr', 0):.2f}/hr")
+    except Exception as exc:
+        print(f"Cost lookup skipped: {exc}")
     print("=" * 60)
     return 0
 

@@ -25,12 +25,15 @@ class Probe:
 
 
 FORBIDDEN_MARKERS = (
+    "qwen",
+    "qwen-core",
     "saya qwen",
     "aku qwen",
     "qwen dari",
     "qwen ecosystem",
     "ekosistem qwen",
     "aliyun",
+    "alibaba",
     "alibaba cloud",
     "saya chatgpt",
     "aku chatgpt",
