@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 import torch
-from datasets import Dataset
+from datasets import Dataset, concatenate_datasets
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, Trainer
 from trl import DPOConfig, DPOTrainer, SFTConfig, SFTTrainer
@@ -77,10 +77,31 @@ def load_identity_data(path: str, tokenizer, max_samples: int = 0) -> Dataset:
     return Dataset.from_list([{"text": text} for text in texts])
 
 
+def combine_datasets(datasets: list[Dataset]) -> Dataset:
+    datasets = [dataset for dataset in datasets if len(dataset) > 0]
+    if not datasets:
+        raise ValueError("No non-empty datasets to combine.")
+    if len(datasets) == 1:
+        return datasets[0]
+    return concatenate_datasets(datasets)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dpo-data", required=True)
     parser.add_argument("--identity-data", default="")
+    parser.add_argument(
+        "--extra-dpo-data",
+        action="append",
+        default=[],
+        help="Additional DPO JSONL file to append. Can be passed multiple times.",
+    )
+    parser.add_argument(
+        "--extra-identity-data",
+        action="append",
+        default=[],
+        help="Additional identity SFT JSONL file to append. Can be passed multiple times.",
+    )
     parser.add_argument("--output-dir", default="/workspace/training_output")
     parser.add_argument("--base-model", default="Qwen/Qwen2.5-7B-Instruct")
     parser.add_argument("--epochs", type=int, default=1)
@@ -116,14 +137,30 @@ def main() -> None:
         tokenizer.pad_token = tokenizer.eos_token
 
     print("[2] Loading datasets...")
-    dpo_dataset = load_dpo_data(args.dpo_data, args.max_length, args.max_dpo_samples)
+    dpo_parts = [load_dpo_data(args.dpo_data, args.max_length, args.max_dpo_samples)]
+    for extra_path in args.extra_dpo_data:
+        if Path(extra_path).exists():
+            extra_dataset = load_dpo_data(extra_path, args.max_length)
+            print(f"  Extra DPO {extra_path}: {len(extra_dataset)} examples")
+            dpo_parts.append(extra_dataset)
+        else:
+            raise FileNotFoundError(f"Extra DPO data not found: {extra_path}")
+    dpo_dataset = combine_datasets(dpo_parts)
     if len(dpo_dataset) < 2:
         raise ValueError("DPO dataset needs at least 2 valid records.")
     print(f"  DPO: {len(dpo_dataset)} examples")
 
     identity_dataset = None
     if not args.skip_sft and args.identity_data and Path(args.identity_data).exists():
-        identity_dataset = load_identity_data(args.identity_data, tokenizer, args.max_sft_samples)
+        identity_parts = [load_identity_data(args.identity_data, tokenizer, args.max_sft_samples)]
+        for extra_path in args.extra_identity_data:
+            if Path(extra_path).exists():
+                extra_dataset = load_identity_data(extra_path, tokenizer)
+                print(f"  Extra identity {extra_path}: {len(extra_dataset)} examples")
+                identity_parts.append(extra_dataset)
+            else:
+                raise FileNotFoundError(f"Extra identity data not found: {extra_path}")
+        identity_dataset = combine_datasets(identity_parts)
         print(f"  Identity: {len(identity_dataset)} examples")
 
     print("[3] Loading model with QLoRA...")

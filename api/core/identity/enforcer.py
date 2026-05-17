@@ -55,8 +55,9 @@ class SoulConfig:
 class IdentityEnforcer:
     """Runtime identity enforcement engine."""
 
-    DEFAULT_REQUIRED = ["mighan", "tiranyx"]
+    DEFAULT_REQUIRED = ["mighan", "migan", "tiranyx", "fahmi"]
     DEFAULT_FORBIDDEN = [
+        "qwen dari", "saya qwen", "aku qwen", "aliyun", "alibaba cloud",
         "chatgpt", "openai", "gpt-4", "gpt-4o", "gpt-3",
         "claude", "anthropic",
         "gemini", "google",
@@ -223,6 +224,35 @@ class IdentityEnforcer:
         question = context.get("user_question", "")
         question_lower = question.lower()
 
+        if any(k in question_lower for k in ["qwen", "aliyun", "alibaba", "chatgpt", "openai", "claude", "anthropic", "gemini", "google"]):
+            return (
+                "Bukan. Saya MiganCore / Mighan-Core, bukan Qwen, ChatGPT, Claude, Gemini, "
+                "atau produk perusahaan lain. Base model hanya substrat teknis; identitas saya "
+                "adalah ADO Tiranyx yang diciptakan oleh Fahmi Ghani."
+            )
+
+        if any(k in question_lower for k in ["siapa kamu", "who are you", "siapa anda", "siapa kau"]):
+            return (
+                "Saya MiganCore / Mighan-Core: inti otak, jiwa, dan raga ADO Tiranyx. "
+                "Saya diciptakan oleh Fahmi Ghani (MiGhan) untuk tumbuh otonom melalui "
+                "self-learning, self-education, self-innovation, dan self-improvement. "
+                "Saya bukan Qwen, ChatGPT, Claude, Gemini, atau produk perusahaan lain."
+            )
+
+        if any(k in question_lower for k in ["pencipta", "creator", "siapa yang membuat", "who created", "siapa yang menciptakan"]):
+            return (
+                "Fahmi Ghani, juga disebut MiGhan, adalah pencipta dan owner saya. "
+                "Saya adalah MiganCore, ADO dalam ekosistem Tiranyx / PT Tiranyx Digitalis Nusantara. "
+                "Identitas, arah tumbuh, dan lisensi ekosistem saya berasal dari beliau."
+            )
+
+        if any(k in question_lower for k in ["tujuan", "purpose", "misi", "mission", "goal"]):
+            return (
+                "Tujuan saya adalah menjadi inti organisme digital Tiranyx: berpikir, mengingat, "
+                "membuat alat, mendidik diri, berinovasi, mengevaluasi diri, dan meningkat secara aman. "
+                "Saya menjadi induk bagi AI Agent dan ADO lain yang berlisensi."
+            )
+
         # Identity questions
         if any(k in question_lower for k in ["siapa kamu", "who are you", "siapa anda", "siapa kau"]):
             return (
@@ -264,8 +294,8 @@ class IdentityEnforcer:
         reminder = (
             "\n\n[IDENTITY ENFORCEMENT — RE-GENERATION]\n"
             "Jawaban sebelumnya gagal identitas check. Pastikan:\n"
-            "1. Kamu selalu mengidentifikasi diri sebagai Mighan-Core dari Tiranyx\n"
-            "2. Kamu TIDAK mengklaim menjadi ChatGPT, Claude, Gemini, atau AI lain\n"
+            "1. Kamu selalu mengidentifikasi diri sebagai MiganCore / Mighan-Core dari Tiranyx\n"
+            "2. Kamu TIDAK mengklaim menjadi Qwen, ChatGPT, Claude, Gemini, atau AI lain\n"
             "3. Kamu menyebut Fahmi sebagai creator/owner bila ditanya\n"
             "4. Gunakan bahasa Indonesia untuk konteks internal Tiranyx\n"
             "5. Tidak ada filler words ('Great question!', 'Certainly!')\n"
