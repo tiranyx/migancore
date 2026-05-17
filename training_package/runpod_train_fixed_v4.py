@@ -114,7 +114,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=3407)
     parser.add_argument("--max-sft-samples", type=int, default=0)
     parser.add_argument("--max-dpo-samples", type=int, default=0)
-    parser.add_argument("--max-steps", type=int, default=-1)
+    parser.add_argument("--max-steps", type=int, default=-1, help="Legacy cap applied to both SFT and DPO when specific caps are unset.")
+    parser.add_argument("--sft-max-steps", type=int, default=None, help="Optional SFT-only step cap.")
+    parser.add_argument("--dpo-max-steps", type=int, default=None, help="Optional DPO-only step cap.")
+    parser.add_argument("--merge", action="store_true", help="Merge the final adapter even for bounded smoke/micro runs.")
     parser.add_argument("--skip-sft", action="store_true")
     args = parser.parse_args()
 
@@ -122,12 +125,16 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    sft_max_steps = args.sft_max_steps if args.sft_max_steps is not None else args.max_steps
+    dpo_max_steps = args.dpo_max_steps if args.dpo_max_steps is not None else args.max_steps
 
     print("=" * 70)
     print("MiganForge DPO Trainer - Fixed v4")
     print("=" * 70)
     print(f"Output: {output_dir}")
-    print(f"Smoke max_steps: {args.max_steps}")
+    print(f"Legacy max_steps: {args.max_steps}")
+    print(f"SFT max_steps: {sft_max_steps}")
+    print(f"DPO max_steps: {dpo_max_steps}")
     print(f"Max SFT samples: {args.max_sft_samples or 'all'}")
     print(f"Max DPO samples: {args.max_dpo_samples or 'all'}")
 
@@ -209,7 +216,7 @@ def main() -> None:
             report_to=[],
             max_seq_length=args.max_length,
             dataset_text_field="text",
-            max_steps=args.max_steps if args.max_steps > 0 else -1,
+            max_steps=sft_max_steps if sft_max_steps and sft_max_steps > 0 else -1,
         )
         sft_trainer = SFTTrainer(
             model=model,
@@ -240,10 +247,10 @@ def main() -> None:
         learning_rate=args.lr,
         beta=0.1,
         warmup_ratio=0.1,
-        logging_steps=1 if args.max_steps > 0 else 10,
-        save_strategy="no" if args.max_steps > 0 else "epoch",
-        eval_strategy="no" if args.max_steps > 0 else "epoch",
-        load_best_model_at_end=False if args.max_steps > 0 else True,
+        logging_steps=1 if dpo_max_steps > 0 else 10,
+        save_strategy="no" if dpo_max_steps > 0 else "epoch",
+        eval_strategy="no" if dpo_max_steps > 0 else "epoch",
+        load_best_model_at_end=False if dpo_max_steps > 0 else True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         fp16=False,
@@ -255,7 +262,7 @@ def main() -> None:
         max_prompt_length=args.max_length // 2,
         generate_during_eval=False,
         remove_unused_columns=False,
-        max_steps=args.max_steps,
+        max_steps=dpo_max_steps,
     )
 
     trainer = DPOTrainer(
@@ -273,7 +280,7 @@ def main() -> None:
     model.save_pretrained(adapter_dir)
     tokenizer.save_pretrained(adapter_dir)
 
-    if args.max_steps <= 0:
+    if args.merge or dpo_max_steps <= 0:
         print("[8] Merging adapter...")
         merged_dir = output_dir / "merged_model"
         from peft import AutoPeftModelForCausalLM
@@ -286,7 +293,7 @@ def main() -> None:
         tokenizer.save_pretrained(merged_dir)
         print(f"Merged:  {merged_dir}")
     else:
-        print("[8] Smoke mode: merge skipped.")
+        print("[8] Bounded run: merge skipped.")
 
     print("\n" + "=" * 70)
     print("Training complete.")

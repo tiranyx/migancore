@@ -3,10 +3,12 @@
 
 Usage:
     RUNPOD_API_KEY=... python -m training_package.runpod_launch --mode smoke
+    RUNPOD_API_KEY=... python -m training_package.runpod_launch --mode micro
     RUNPOD_API_KEY=... python -m training_package.runpod_launch --mode full --dpo-data training_data/dpo_export.jsonl
 
 The default smoke mode spends a small amount of GPU time on the immunity data
-only. Full mode requires a real DPO export and appends the immunity DPO file.
+only. Micro mode is the first behavior-quality run. Full mode requires a real
+DPO export and appends the immunity DPO file.
 """
 
 from __future__ import annotations
@@ -20,14 +22,7 @@ import time
 import runpod
 
 
-API_KEY = os.environ.get("RUNPOD_API_KEY", "")
-if not API_KEY:
-    print("ERROR: Set RUNPOD_API_KEY env var")
-    sys.exit(1)
-
-runpod.api_key = API_KEY
-
-POD_NAME = "migancore-identity-immunity"
+POD_NAME = "migancore-identity-immunity-ssh"
 GPU_TYPE_ID = "NVIDIA RTX A6000"
 CLOUD_TYPE = "ALL"
 IMAGE_NAME = "runpod/pytorch:2.2.0-py3.10-cuda12.1.1-devel-ubuntu22.04"
@@ -191,6 +186,10 @@ def start_training(ssh_ip: str, ssh_port: int, mode: str) -> bool:
         dpo_path = "/workspace/migan_data/identity_immunity_dpo.jsonl"
         output_dir = "/workspace/training_output_identity_smoke"
         extra_args = "--max-sft-samples 80 --max-dpo-samples 28 --max-steps 8 --batch-size 1 --grad-accum 1 --max-length 1024"
+    elif mode == "micro":
+        dpo_path = "/workspace/migan_data/identity_immunity_dpo.jsonl"
+        output_dir = "/workspace/training_output_identity_micro"
+        extra_args = "--sft-max-steps 180 --dpo-max-steps 120 --merge --batch-size 1 --grad-accum 2 --max-length 1536 --lr 8e-6"
     else:
         dpo_path = "/workspace/migan_data/dpo_export.jsonl"
         output_dir = "/workspace/training_output_v5_identity_immunity"
@@ -203,6 +202,7 @@ if [ ! -f "{dpo_path}" ]; then
     echo "Missing DPO data: {dpo_path}" >&2
     exit 2
 fi
+rm -rf {output_dir}
 nohup python3 /workspace/migan_data/runpod_train_fixed_v4.py \\
   --dpo-data {dpo_path} \\
   --identity-data /workspace/migan_data/identity_sft.jsonl \\
@@ -226,7 +226,7 @@ ps aux | grep runpod_train_fixed_v4 | grep -v grep
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["smoke", "full"], default="smoke")
+    parser.add_argument("--mode", choices=["smoke", "micro", "full"], default="smoke")
     parser.add_argument("--dpo-data", default="", help="Real DPO export required for full mode.")
     args = parser.parse_args()
 
@@ -237,6 +237,12 @@ def main() -> int:
     print("=" * 60)
     print("RunPod Training Launcher v3 - identity immunity")
     print("=" * 60)
+
+    api_key = os.environ.get("RUNPOD_API_KEY", "")
+    if not api_key:
+        print("ERROR: Set RUNPOD_API_KEY env var")
+        return 1
+    runpod.api_key = api_key
 
     pub_key = get_or_create_ssh_key()
     pod = find_pod()
