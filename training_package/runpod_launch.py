@@ -23,7 +23,7 @@ import runpod
 
 
 POD_NAME = "migancore-identity-immunity-ssh"
-GPU_TYPE_ID = "NVIDIA RTX A6000"
+GPU_TYPE_IDS = ("NVIDIA RTX A6000", "NVIDIA A40")
 CLOUD_TYPE = "ALL"
 IMAGE_NAME = "runpod/pytorch:2.2.0-py3.10-cuda12.1.1-devel-ubuntu22.04"
 
@@ -57,22 +57,29 @@ def find_pod() -> dict | None:
 
 
 def create_pod(pub_key: str) -> str:
-    print(f"[RunPod] Creating pod '{POD_NAME}' with GPU {GPU_TYPE_ID}...")
-    pod = runpod.create_pod(
-        name=POD_NAME,
-        image_name=IMAGE_NAME,
-        gpu_type_id=GPU_TYPE_ID,
-        cloud_type=CLOUD_TYPE,
-        gpu_count=1,
-        container_disk_in_gb=50,
-        volume_in_gb=50,
-        ports="22/tcp",
-        start_ssh=True,
-        support_public_ip=True,
-        env={"PUBLIC_KEY": pub_key},
-    )
-    print(f"[RunPod] Pod created: {pod['id']}")
-    return pod["id"]
+    last_error: Exception | None = None
+    for gpu_type_id in GPU_TYPE_IDS:
+        print(f"[RunPod] Creating pod '{POD_NAME}' with GPU {gpu_type_id}...")
+        try:
+            pod = runpod.create_pod(
+                name=POD_NAME,
+                image_name=IMAGE_NAME,
+                gpu_type_id=gpu_type_id,
+                cloud_type=CLOUD_TYPE,
+                gpu_count=1,
+                container_disk_in_gb=50,
+                volume_in_gb=50,
+                ports="22/tcp",
+                start_ssh=True,
+                support_public_ip=True,
+                env={"PUBLIC_KEY": pub_key},
+            )
+            print(f"[RunPod] Pod created: {pod['id']} ({gpu_type_id})")
+            return pod["id"]
+        except Exception as exc:
+            last_error = exc
+            print(f"[RunPod] GPU unavailable ({gpu_type_id}): {exc}")
+    raise RuntimeError(f"No configured RunPod GPU type is available. Last error: {last_error}")
 
 
 def wait_for_ssh(pod_id: str, max_wait_sec: int = 900) -> tuple[str, int]:
