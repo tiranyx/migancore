@@ -251,8 +251,12 @@ def main() -> int:
         status = pod.get("desiredStatus", "unknown")
         print(f"[RunPod] Found existing pod: {POD_NAME} ({pod_id}), status={status}")
         if status != "RUNNING":
-            runpod.resume_pod(pod_id, gpu_count=1)
-            time.sleep(30)
+            try:
+                runpod.resume_pod(pod_id, gpu_count=1)
+                time.sleep(30)
+            except Exception as exc:
+                print(f"[RunPod] Resume failed ({exc}); creating a fresh pod instead.")
+                pod_id = create_pod(pub_key)
     else:
         pod_id = create_pod(pub_key)
 
